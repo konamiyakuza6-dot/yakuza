@@ -349,7 +349,7 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                 <AppLogo onMenuClick={handleMenuClick} />
                 <div className='powered-by-deriv-header' ref={whatsappDropdownRef}>
                     <img
-                        src='/assets/images/dinsider.jpg'
+                        src='/makoti-logo.jpg'
                         alt='MAKOTI TRADERS logo'
                         className='powered-by-deriv-header__logo'
                     />
