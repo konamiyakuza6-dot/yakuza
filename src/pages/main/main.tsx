@@ -20,7 +20,6 @@ import {
     LabelPairedPlayCaptionBoldIcon,
 } from '@deriv/quill-icons/LabelPaired';
 import { LegacyChartsIcon, LegacyIndicatorsIcon } from '@deriv/quill-icons/Legacy';
-import { requestOidcAuthentication } from '@deriv-com/auth-client';
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import RunPanel from '../../components/run-panel';
@@ -29,7 +28,7 @@ import ChartModal from '../chart/chart-modal';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
 import OverUnder from '../OverUnder'; 
-import MakotiMagic from './MakotiMagic'; // Adjusted to relative path
+import MakotiMagic from './MakotiMagic'; // Ensure this points to MakotiMagic.jsx in the same folder
 import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -126,7 +125,7 @@ const AppWrapper = observer(() => {
                             <TradingBots />
                         </div>
                         
-                        <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Over/Under Tool' /></>} id='over_under'>
+                        <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Over/Under' /></>} id='over_under'>
                             <OverUnder />
                         </div>
 
@@ -154,6 +153,7 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
+                {/* Prevent Run panel from showing in custom tools */}
                 {active_tab !== 8 && hash[active_tab] !== 'over_under' && hash[active_tab] !== 'makoti_magic' && (
                     <div className='main__run-strategy-wrapper'>
                         {active_tab !== 3 && <RunStrategy />}
