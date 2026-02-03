@@ -23,6 +23,7 @@ import {
     LabelPairedObjectsColumnCaptionRegularIcon,
     LabelPairedPuzzlePieceTwoCaptionBoldIcon,
     LabelPairedPlayCaptionBoldIcon,
+    LabelPairedMagicWandCaptionBoldIcon, // Imported a magic icon for the new tool
 } from '@deriv/quill-icons/LabelPaired';
 import { LegacyChartsIcon, LegacyIndicatorsIcon } from '@deriv/quill-icons/Legacy';
 import { requestOidcAuthentication } from '@deriv-com/auth-client';
@@ -34,6 +35,7 @@ import ChartModal from '../chart/chart-modal';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
 import OverUnder from '../OverUnder'; 
+import MakotiMagic from '../MakotiMagic'; // <--- FULL IMPORT ADDED
 import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -75,6 +77,7 @@ const AppWrapper = observer(() => {
     const { DASHBOARD, BOT_BUILDER } = DBOT_TABS;
     const init_render = React.useRef(true);
 
+    // ADDED 'makoti_magic' TO THE HASH ARRAY AT INDEX 10
     const hash = [
         'dashboard',
         'bot_builder',
@@ -86,6 +89,7 @@ const AppWrapper = observer(() => {
         'copy_trading',
         'dtrader',
         'tradingview',
+        'makoti_magic', 
     ];
     
     const { isDesktop } = useDevice();
@@ -154,9 +158,13 @@ const AppWrapper = observer(() => {
                             <TradingBots />
                         </div>
                         
-                        {/* THE NEW TAB */}
                         <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Over/Under Tool' /></>} id='over_under'>
                             <OverUnder />
+                        </div>
+
+                        {/* MAKOTI MAGIC FULL TAB ADDED */}
+                        <div label={<><LabelPairedMagicWandCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Makoti Magic' /></>} id='makoti_magic'>
+                            <MakotiMagic />
                         </div>
 
                         <div label={<><LegacyIndicatorsIcon height='16px' width='16px' /><Localize i18n_default_text='Analysis Tool' /></>} id='id-analysis-tool'>
@@ -178,7 +186,8 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {active_tab !== 8 && hash[active_tab] !== 'over_under' && (
+                {/* Ensure run panel and strategy icons don't show when Makoti Magic or OverUnder are active */}
+                {active_tab !== 8 && hash[active_tab] !== 'over_under' && hash[active_tab] !== 'makoti_magic' && (
                     <div className='main__run-strategy-wrapper'>
                         {active_tab !== 3 && <RunStrategy />}
                         <RunPanel />
