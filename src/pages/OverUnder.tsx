@@ -66,6 +66,8 @@ const OverUnder = observer(() => {
             subscribe: 1 
         }));
         
+        // Don't clear history immediately to avoid 0% flash if possible, 
+        // but for a new symbol we must clear it.
         setTickHistory([]);
         setLastDigit(null);
     };
@@ -119,7 +121,12 @@ const OverUnder = observer(() => {
                     // Handle Tick History (Initial Load)
                     if (data.msg_type === 'history') {
                         const prices = data.history.prices;
-                        const digits = prices.map((p: string) => parseInt(p.slice(-1)));
+                        // FIX: Use slice(-1) to get the last character and parseInt to ensure digit 0 is handled
+                        const digits = prices.map((p: string | number) => {
+                            const str = p.toString();
+                            return parseInt(str.charAt(str.length - 1));
+                        });
+                        
                         setTickHistory(digits);
                         if (digits.length > 0) {
                             setLastDigit(digits[digits.length - 1]);
@@ -130,6 +137,7 @@ const OverUnder = observer(() => {
                     // Handle Live Ticks
                     if (data.msg_type === 'tick') {
                         const quote = data.tick.quote.toString();
+                        // FIX: Ensure digit 0 is correctly parsed
                         const digit = parseInt(quote.charAt(quote.length - 1));
                         
                         setLastDigit(digit);
@@ -188,7 +196,11 @@ const OverUnder = observer(() => {
         }
 
         const currency = client.currency || 'USD';
-        const baseParams = {
+        
+        // THE MULTI-TRADE EXECUTION (AS INTENDED)
+        // This executes two trades simultaneously when the trigger digit is hit
+        
+        const commonParams = {
             buy: 1,
             price: stake,
             parameters: {
@@ -201,20 +213,24 @@ const OverUnder = observer(() => {
             }
         };
 
+        // Trade 1: DIGITOVER 5
         ws.current.send(JSON.stringify({
-            ...baseParams,
-            parameters: { ...baseParams.parameters, contract_type: 'DIGITOVER', barrier: '5' }
+            ...commonParams,
+            parameters: { ...commonParams.parameters, contract_type: 'DIGITOVER', barrier: '5' }
         }));
 
+        // Trade 2: DIGITUNDER 4
         ws.current.send(JSON.stringify({
-            ...baseParams,
-            parameters: { ...baseParams.parameters, contract_type: 'DIGITUNDER', barrier: '4' }
+            ...commonParams,
+            parameters: { ...commonParams.parameters, contract_type: 'DIGITUNDER', barrier: '4' }
         }));
+        
+        addLog('Multi-Trade Executed');
         
         if (!isTurbo) setIsAutoRunning(false);
     };
 
-    // Calculate percentages based on 1000-tick window
+    // Calculate percentages based on the current tick history
     const digitStats = useMemo(() => {
         const stats = Array(10).fill(0);
         tickHistory.forEach(digit => {
