@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { observer } from 'mobx-react-lite';
 
-const MakotiMagic = observer(() => {
+const MakotiMagic = () => {
     // Trading States
     const [token, setToken] = useState('');
     const [stake, setStake] = useState(0.35);
@@ -20,7 +19,6 @@ const MakotiMagic = observer(() => {
         const workerBlob = new Blob([`
             let ws;
             let active = false;
-            let lastTickId = null;
             let isWaiting = false;
             let initialStake = 0.35;
             let currentStake = 0.35;
@@ -39,64 +37,52 @@ const MakotiMagic = observer(() => {
                     ws.onmessage = (msg) => {
                         const res = JSON.parse(msg.data);
                         
-                        if (res.error) {
-                            self.postMessage({ type: 'ERROR', data: res.error.message });
-                            return;
-                        }
-
                         if (res.msg_type === 'authorize') {
                             self.postMessage({ type: 'STATUS', data: 'CONNECTED' });
                             ws.send(JSON.stringify({ ticks: '1HZ100V', subscribe: 1 }));
                         }
 
-                        // THE SYNC-LOCK ENGINE
+                        // INJECTION ENGINE
                         if (active && res.msg_type === 'tick' && !isWaiting) {
-                            if (res.tick.id !== lastTickId) {
-                                lastTickId = res.tick.id;
-                                const digit = res.tick.quote.toString().slice(-1);
-                                isWaiting = true;
+                            const digit = res.tick.quote.toString().slice(-1);
+                            isWaiting = true; 
 
-                                setTimeout(() => {
-                                    if(!active) return;
-                                    ws.send(JSON.stringify({
-                                        buy: 1, 
-                                        price: currentStake,
-                                        parameters: {
-                                            amount: currentStake,
-                                            basis: 'stake',
-                                            contract_type: 'DIGITMATCH',
-                                            currency: payload.currency,
-                                            duration: 1,
-                                            duration_unit: 't',
-                                            symbol: '1HZ100V',
-                                            barrier: parseInt(digit)
-                                        },
-                                        subscribe: 1
-                                    }));
-                                }, payload.offset);
-                            }
+                            setTimeout(() => {
+                                if(!active) return;
+                                ws.send(JSON.stringify({
+                                    buy: 1, 
+                                    price: currentStake,
+                                    parameters: {
+                                        amount: currentStake,
+                                        basis: 'stake',
+                                        contract_type: 'DIGITMATCH',
+                                        currency: payload.currency,
+                                        duration: 1,
+                                        duration_unit: 't',
+                                        symbol: '1HZ100V',
+                                        barrier: parseInt(digit)
+                                    }
+                                }));
+                            }, payload.offset);
+
+                            // Auto-release lock after 1.5 seconds if server is slow
+                            // This ensures the bot keeps trading
+                            setTimeout(() => { isWaiting = false; }, 1500);
                         }
 
-                        // RESULT & MARTINGALE LOGIC
+                        if (res.msg_type === 'buy') {
+                            // Trade placed successfully
+                        }
+
                         if (res.msg_type === 'proposal_open_contract' && res.proposal_open_contract.is_sold) {
                             const contract = res.proposal_open_contract;
-                            
                             if (contract.status === 'lost') {
-                                // Martingale for Digit Match (Higher payout means smaller multiplier)
-                                currentStake = (currentStake * 1.15).toFixed(2);
+                                currentStake = (currentStake * 1.12).toFixed(2);
                             } else {
                                 currentStake = initialStake;
                             }
-
-                            isWaiting = false; // Release lock for next tick
-                            self.postMessage({ type: 'RESULT', data: {
-                                id: contract.contract_id,
-                                target: contract.barrier,
-                                exit: contract.exit_tick_display_value.slice(-1),
-                                profit: contract.profit,
-                                status: contract.status.toUpperCase(),
-                                nextStake: currentStake
-                            }});
+                            isWaiting = false; // Fresh release
+                            self.postMessage({ type: 'RESULT', data: contract });
                         }
                     };
                 }
@@ -104,7 +90,6 @@ const MakotiMagic = observer(() => {
                 if (type === 'STOP') {
                     active = false;
                     if(ws) ws.close();
-                    self.postMessage({ type: 'STATUS', data: 'OFFLINE' });
                 }
             };
         `], { type: 'application/javascript' });
@@ -113,13 +98,17 @@ const MakotiMagic = observer(() => {
         workerRef.current.onmessage = (e) => {
             const { type, data } = e.data;
             if (type === 'STATUS') setStatus(data);
-            if (type === 'ERROR') alert(data);
             if (type === 'RESULT') {
-                setResults(prev => [data, ...prev].slice(0, 8));
+                setResults(prev => [{
+                    id: data.contract_id,
+                    target: data.barrier,
+                    exit: data.exit_tick_display_value.slice(-1),
+                    profit: data.profit,
+                    status: data.status.toUpperCase()
+                }, ...prev].slice(0, 5));
                 setTotalPL(v => v + data.profit);
             }
         };
-
         return () => workerRef.current.terminate();
     }, []);
 
@@ -134,103 +123,70 @@ const MakotiMagic = observer(() => {
         } else {
             setIsHunting(false);
             workerRef.current.postMessage({ type: 'STOP' });
+            setStatus('OFFLINE');
         }
     };
 
     return (
-        <div style={ui.container}>
-            <div style={ui.wrapper}>
-                {/* Header Section */}
-                <div style={ui.header}>
-                    <div>
-                        <h1 style={ui.title}>LONDON SURGICAL <span style={{color:'#0f0'}}>V10</span></h1>
-                        <p style={ui.subtitle}>Sync-Lock & Auto-Recovery Enabled</p>
-                    </div>
-                    <div style={{textAlign:'right'}}>
-                        <div style={{...ui.status, color: status === 'CONNECTED' ? '#0f0' : '#f00'}}>{status}</div>
-                        <div style={ui.balance}>${total_pl.toFixed(2)}</div>
-                    </div>
+        <div style={ui.page}>
+            <div style={ui.container}>
+                <h1 style={ui.title}>MAKOTI <span style={{color:'#0f0'}}>LONDON V11</span></h1>
+                
+                <div style={ui.statusRow}>
+                    <span style={{color: status === 'CONNECTED' ? '#0f0' : '#f44'}}>{status}</span>
+                    <span style={ui.pl}>NET: ${total_pl.toFixed(2)}</span>
                 </div>
 
-                {/* Control Panel */}
-                <div style={ui.panel}>
-                    <div style={ui.inputBox}>
-                        <label style={ui.label}>DERIV API TOKEN</label>
-                        <input type="password" value={token} onChange={e => setToken(e.target.value)} style={ui.input} placeholder="a1-xxxxxxx..." />
+                <div style={ui.form}>
+                    <div style={ui.inputGroup}>
+                        <label style={ui.label}>API TOKEN</label>
+                        <input type="password" value={token} onChange={e => setToken(e.target.value)} style={ui.inputLarge} />
                     </div>
 
-                    <div style={ui.grid}>
-                        <div style={ui.inputBox}>
-                            <label style={ui.label}>BASE STAKE</label>
-                            <input type="number" value={stake} onChange={e => setStake(e.target.value)} style={ui.input} />
+                    <div style={ui.row}>
+                        <div style={{flex:1}}>
+                            <label style={ui.label}>STAKE</label>
+                            <input type="number" value={stake} onChange={e => setStake(e.target.value)} style={ui.inputLarge} />
                         </div>
-                        <div style={ui.inputBox}>
-                            <label style={ui.label}>CURRENCY</label>
-                            <select value={currency} onChange={e => setCurrency(e.target.value)} style={ui.input}>
-                                <option value="USD">USD (Demo/Real)</option>
-                                <option value="VRTC">VRTC (Classic Demo)</option>
-                            </select>
-                        </div>
-                        <div style={ui.inputBox}>
-                            <label style={ui.label}>OFFSET ({offset}ms)</label>
-                            <input type="range" min="0" max="100" value={offset} onChange={e => setOffset(e.target.value)} style={ui.range} />
+                        <div style={{flex:1}}>
+                            <label style={ui.label}>OFFSET (ms)</label>
+                            <input type="number" value={offset} onChange={e => setOffset(e.target.value)} style={ui.inputLarge} />
                         </div>
                     </div>
 
                     <button onClick={handleToggle} style={is_hunting ? ui.btnStop : ui.btnStart}>
-                        {is_hunting ? 'SHUTDOWN ENGINE' : 'INITIALIZE SURGICAL STRIKE'}
+                        {is_hunting ? 'STOP ENGINE' : 'START SURGICAL STRIKE'}
                     </button>
                 </div>
 
-                {/* Results Table */}
-                <div style={ui.tableContainer}>
-                    <table style={ui.table}>
-                        <thead>
-                            <tr style={ui.th}>
-                                <th>TARGET</th>
-                                <th>EXIT</th>
-                                <th>STATUS</th>
-                                <th>PROFIT</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {results.map((r, i) => (
-                                <tr key={i} style={ui.tr}>
-                                    <td style={{color:'#fff'}}>{r.target}</td>
-                                    <td style={{color: r.target === r.exit ? '#0f0' : '#f44'}}>{r.exit}</td>
-                                    <td style={{fontSize:'10px'}}>{r.status}</td>
-                                    <td style={{color: r.profit >= 0 ? '#0f0' : '#f44'}}>{r.profit.toFixed(2)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div style={ui.tableArea}>
+                    {results.map((r, i) => (
+                        <div key={i} style={ui.resultCard}>
+                            <div style={{fontSize:'20px'}}>TGT: <b>{r.target}</b> | EXIT: <b style={{color: r.target === r.exit ? '#0f0' : '#f44'}}>{r.exit}</b></div>
+                            <div style={{color: r.profit >= 0 ? '#0f0' : '#f44', fontWeight:'bold'}}>{r.status} (${r.profit.toFixed(2)})</div>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
     );
-});
+};
 
-// STYLES - CYBERPUNK TERMINAL THEME
 const ui = {
-    container: { background: '#050505', color: '#fff', minHeight: '100vh', padding: '20px', fontFamily: 'monospace' },
-    wrapper: { maxWidth: '500px', margin: '0 auto' },
-    header: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '1px solid #1a1a1a', paddingBottom: '10px' },
-    title: { margin: 0, fontSize: '18px', letterSpacing: '1px' },
-    subtitle: { margin: 0, fontSize: '10px', color: '#555' },
-    status: { fontSize: '10px', fontWeight: 'bold' },
-    balance: { fontSize: '24px', fontWeight: 'bold' },
-    panel: { background: '#0a0a0a', padding: '20px', borderRadius: '4px', border: '1px solid #111' },
-    inputBox: { marginBottom: '15px' },
-    label: { fontSize: '9px', color: '#444', marginBottom: '5px', display: 'block' },
-    input: { width: '100%', background: '#000', border: '1px solid #222', color: '#0f0', padding: '10px', boxSizing: 'border-box', outline: 'none' },
-    grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
-    range: { width: '100%', accentColor: '#0f0' },
-    btnStart: { width: '100%', padding: '15px', background: '#0f0', color: '#000', border: 'none', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' },
-    btnStop: { width: '100%', padding: '15px', background: '#300', color: '#f44', border: 'none', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' },
-    tableContainer: { marginTop: '20px' },
-    table: { width: '100%', borderCollapse: 'collapse' },
-    th: { textAlign: 'left', borderBottom: '1px solid #222', color: '#444', fontSize: '10px' },
-    tr: { height: '40px', borderBottom: '1px solid #0a0a0a', textAlign: 'left' }
+    page: { background: '#000', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace', color: '#fff' },
+    container: { width: '90%', maxWidth: '450px', background: '#0a0a0a', padding: '30px', borderRadius: '15px', border: '1px solid #222', textAlign: 'center' },
+    title: { fontSize: '28px', marginBottom: '10px', letterSpacing: '2px' },
+    statusRow: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', padding: '0 10px' },
+    pl: { fontSize: '20px', fontWeight: 'bold' },
+    form: { display: 'flex', flexDirection: 'column', gap: '20px' },
+    inputGroup: { textAlign: 'left' },
+    label: { fontSize: '12px', color: '#555', marginBottom: '8px', display: 'block' },
+    inputLarge: { width: '100%', padding: '15px', background: '#111', border: '1px solid #333', color: '#0f0', fontSize: '18px', boxSizing: 'border-box', borderRadius: '8px' },
+    row: { display: 'flex', gap: '15px' },
+    btnStart: { padding: '20px', background: '#0f0', color: '#000', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' },
+    btnStop: { padding: '20px', background: '#300', color: '#f44', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' },
+    tableArea: { marginTop: '30px', display: 'flex', flexDirection: 'column', gap: '10px' },
+    resultCard: { background: '#111', padding: '15px', borderRadius: '8px', borderLeft: '4px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
 };
 
 export default MakotiMagic;
