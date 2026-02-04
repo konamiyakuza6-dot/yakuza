@@ -32,6 +32,19 @@ const OverUnder = observer(() => {
         setLastDigit(null);
     }, [selectedSymbol]);
 
+    // Keep-alive for WebSocket
+    useEffect(() => {
+        const keep_alive = setInterval(() => {
+            if (api_base?.api?.connection?.readyState === 1) { // 1 is OPEN
+                api_base.api.send({ ping: 1 });
+            }
+        }, 15000); // Every 15 seconds
+
+        return () => {
+            clearInterval(keep_alive);
+        };
+    }, []);
+
     useEffect(() => {
         if (!api_base?.api) return;
 
