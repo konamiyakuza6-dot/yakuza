@@ -45,7 +45,7 @@ const OverUnder = observer(() => {
 
     const addLog = (msg: string) => {
         console.log(`[OverUnder] ${msg}`);
-        setDebugInfo(prev => [msg, ...prev].slice(0, 5));
+        setDebugInfo(prev => [msg, ...prev].slice(0, 10)); // Increased log size
     };
 
     const subscribeToTicks = (symbol: string) => {
@@ -99,6 +99,7 @@ const OverUnder = observer(() => {
                               JSON.parse(localStorage.getItem('accountsList') || '{}')[client.loginid];
                 
                 if (token) {
+                    addLog('Sending Authorize...');
                     ws.current?.send(JSON.stringify({ authorize: token }));
                 }
             };
@@ -112,16 +113,18 @@ const OverUnder = observer(() => {
                             addLog('Authorized!');
                             isAuthorized.current = true;
                             setConnectionStatus(STATUS_AUTHORIZED);
+                        } else {
+                            addLog(`Auth Error: ${data.error.message}`);
                         }
                     }
 
                     if (data.msg_type === 'history') {
                         const prices = data.history.prices;
-                        // Improved parsing: Take the absolute last character of the stringified price
                         const digits = prices.map((p: string | number) => {
                             const str = p.toString();
-                            const lastChar = str.charAt(str.length - 1);
-                            return parseInt(lastChar, 10);
+                            // FIX: Use regex to get the very last digit regardless of decimals
+                            const match = str.match(/(\d)$/);
+                            return match ? parseInt(match[1], 10) : 0;
                         });
                         
                         setTickHistory(digits);
@@ -133,9 +136,9 @@ const OverUnder = observer(() => {
 
                     if (data.msg_type === 'tick') {
                         const quote = data.tick.quote.toString();
-                        // Improved parsing: Take the absolute last character of the quote string
-                        const lastChar = quote.charAt(quote.length - 1);
-                        const digit = parseInt(lastChar, 10);
+                        // FIX: Use regex to get the very last digit
+                        const match = quote.match(/(\d)$/);
+                        const digit = match ? parseInt(match[1], 10) : 0;
                         
                         setLastDigit(digit);
                         setTickHistory(prev => {
@@ -146,8 +149,13 @@ const OverUnder = observer(() => {
                             return newHistory;
                         });
 
-                        if (isAutoRunning && digit === entryDigit) {
-                            executeMultiTrade();
+                        // Check trigger
+                        if (isAutoRunning) {
+                            // Using local variable for entryDigit to ensure we use the latest value
+                            if (digit === Number(entryDigit)) {
+                                addLog(`Trigger Hit: ${digit}`);
+                                executeMultiTrade();
+                            }
                         }
                     }
 
@@ -184,8 +192,14 @@ const OverUnder = observer(() => {
     }, [selectedSymbol]);
 
     const executeMultiTrade = () => {
-        if (!ws.current || ws.current.readyState !== WebSocket.OPEN || !isAuthorized.current) {
-            if (!isAuthorized.current && journal?.pushMessage) {
+        if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+            addLog('Cannot trade: WS not open');
+            return;
+        }
+        
+        if (!isAuthorized.current) {
+            addLog('Cannot trade: Not authorized');
+            if (journal?.pushMessage) {
                 journal.pushMessage({ message: '⚠️ Login required to trade.', type: 'error' });
             }
             setIsAutoRunning(false);
@@ -195,9 +209,9 @@ const OverUnder = observer(() => {
         const currency = client.currency || 'USD';
         const commonParams = {
             buy: 1,
-            price: stake,
+            price: Number(stake),
             parameters: {
-                amount: stake,
+                amount: Number(stake),
                 basis: 'stake',
                 currency: currency,
                 duration: 1,
@@ -206,19 +220,26 @@ const OverUnder = observer(() => {
             }
         };
 
+        addLog(`Executing trades with stake: ${stake}`);
+
+        // Trade 1: DIGITOVER 5
         ws.current.send(JSON.stringify({
             ...commonParams,
             parameters: { ...commonParams.parameters, contract_type: 'DIGITOVER', barrier: '5' }
         }));
 
+        // Trade 2: DIGITUNDER 4
         ws.current.send(JSON.stringify({
             ...commonParams,
             parameters: { ...commonParams.parameters, contract_type: 'DIGITUNDER', barrier: '4' }
         }));
         
-        addLog('Multi-Trade Executed');
+        addLog('Multi-Trade Sent');
         
-        if (!isTurbo) setIsAutoRunning(false);
+        if (!isTurbo) {
+            setIsAutoRunning(false);
+            addLog('Auto-run stopped (Turbo OFF)');
+        }
     };
 
     const digitStats = useMemo(() => {
@@ -231,7 +252,6 @@ const OverUnder = observer(() => {
         return stats;
     }, [tickHistory]);
 
-    // UI Logic for bar colors
     const { maxIdx, minIdx } = useMemo(() => {
         let maxVal = -1;
         let minVal = Infinity;
@@ -267,10 +287,9 @@ const OverUnder = observer(() => {
                 {digitStats.map((count, i) => {
                     const percentage = ((count / totalTicksCount) * 100).toFixed(1);
                     
-                    // Determine bar color
-                    let barColor = 'red'; // Default
-                    if (i === maxIdx) barColor = '#00ff00'; // Highest (Green)
-                    if (i === minIdx) barColor = '#000000'; // Lowest (Black)
+                    let barColor = 'red';
+                    if (i === maxIdx) barColor = '#00ff00';
+                    if (i === minIdx) barColor = '#000000';
 
                     return (
                         <div key={i} className={`digit-card ${lastDigit === i ? 'active' : ''}`}>
@@ -314,7 +333,7 @@ const OverUnder = observer(() => {
                     <label>Trigger</label>
                     <div className="entry-config">
                         <input className="ui-input digit-entry" type="number" min="0" max="9" value={entryDigit} onChange={(e) => setEntryDigit(Number(e.target.value))} />
-                        <div className={`status-led ${lastDigit === entryDigit ? 'glow' : ''}`}></div>
+                        <div className={`status-led ${lastDigit === Number(entryDigit) ? 'glow' : ''}`}></div>
                     </div>
                 </div>
 
@@ -328,9 +347,9 @@ const OverUnder = observer(() => {
                 </div>
             </div>
             
-            <div style={{marginTop: '20px', padding: '10px', background: '#111', borderRadius: '8px', fontSize: '10px', color: '#666'}}>
-                <div style={{fontWeight: 'bold', marginBottom: '5px'}}>DEBUG LOG:</div>
-                {debugInfo.map((log, i) => <div key={i}>• {log}</div>)}
+            <div style={{marginTop: '20px', padding: '10px', background: '#111', borderRadius: '8px', fontSize: '10px', color: '#ccc', maxHeight: '150px', overflowY: 'auto'}}>
+                <div style={{fontWeight: 'bold', marginBottom: '5px', color: '#fff'}}>REAL-TIME MONITOR:</div>
+                {debugInfo.map((log, i) => <div key={i} style={{borderBottom: '1px solid #222', padding: '2px 0'}}>• {log}</div>)}
             </div>
         </div>
     );
