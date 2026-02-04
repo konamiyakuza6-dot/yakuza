@@ -8,7 +8,7 @@ import './over-under.scss';
 
 const OverUnder = observer(() => {
     const { summary_card, journal, client } = useStore();
-    const { connectionStatus, isAuthorized } = useApiBase();
+    const { connectionStatus, isAuthorized, isAuthorizing } = useApiBase();
     
     const [digitStats, setDigitStats] = useState(Array(10).fill(0));
     const [lastDigit, setLastDigit] = useState<number | null>(null);
@@ -39,8 +39,10 @@ const OverUnder = observer(() => {
             if (ticks_subscription.current) {
                 ticks_subscription.current.unsubscribe();
             }
+            // Ensure we forget any previous tick subscriptions before creating a new one.
             api_base.api.send({ forget_all: 'ticks' });
 
+            // Reset stats for the new subscription
             setDigitStats(Array(10).fill(0));
             setLastDigit(null);
 
@@ -69,19 +71,22 @@ const OverUnder = observer(() => {
             api_base.api.send({ ticks: selectedSymbol, subscribe: 1 });
         };
 
+        // Only subscribe when the connection is open AND the user is authorized.
         if (connectionStatus === CONNECTION_STATUS.OPENED && isAuthorized) {
             subscribe();
         }
 
+        // Cleanup function to unsubscribe from ticks when the component unmounts or dependencies change.
         return () => {
             if (ticks_subscription.current) {
                 ticks_subscription.current.unsubscribe();
-                if (api_base?.api?.connection?.readyState === 1) {
+                // If the API is still available, tell it to forget the tick subscriptions.
+                if (api_base?.api?.connection?.readyState === 1) { // 1 = OPEN
                     api_base.api.send({ forget_all: 'ticks' });
                 }
             }
         };
-    }, [connectionStatus, isAuthorized, selectedSymbol, journal]);
+    }, [connectionStatus, isAuthorized, selectedSymbol, journal]); // Rerun effect if authorization status changes
 
     const executeMultiTrade = async () => {
         const common_params = {
@@ -115,6 +120,21 @@ const OverUnder = observer(() => {
 
     const totalTicks = useMemo(() => digitStats.reduce((a, b) => a + b, 0) || 1, [digitStats]);
 
+    const getConnectionStatusDisplay = () => {
+        if (connectionStatus !== CONNECTION_STATUS.OPENED) {
+            return { text: 'Disconnected', className: 'disconnected' };
+        }
+        if (isAuthorizing) {
+            return { text: 'Authorizing...', className: 'authorizing' };
+        }
+        if (isAuthorized) {
+            return { text: 'Connected', className: 'connected' };
+        }
+        return { text: 'Connecting...', className: 'connecting' };
+    };
+
+    const statusDisplay = getConnectionStatusDisplay();
+
     return (
         <div className="over-under-container">
             <div className="stats-grid">
@@ -135,8 +155,8 @@ const OverUnder = observer(() => {
             <div className="controls-panel">
                  <div className="input-group">
                     <label>Connection</label>
-                    <div className={`connection-status ${connectionStatus === CONNECTION_STATUS.OPENED && isAuthorized ? 'connected' : 'disconnected'}`}>
-                        {connectionStatus === CONNECTION_STATUS.OPENED && isAuthorized ? 'Connected' : 'Disconnected'}
+                    <div className={`connection-status ${statusDisplay.className}`}>
+                        {statusDisplay.text}
                     </div>
                 </div>
                 <div className="input-group">
