@@ -4,19 +4,19 @@ import { useStore } from '@/hooks/useStore';
 import './over-under.scss';
 
 // Connection Statuses
-const STATUS_DISCONNECTED = 'Disconnected';
+const STATUS_OFFLINE = 'Offline';
 const STATUS_CONNECTING = 'Connecting...';
-const STATUS_AUTHORIZING = 'Authorizing...';
-const STATUS_CONNECTED = 'Connected';
+const STATUS_LIVE = 'Live Ticks';
+const STATUS_AUTHORIZED = 'Account Connected';
 
 const OverUnder = observer(() => {
     const { journal, client } = useStore();
     const ws = useRef<WebSocket | null>(null);
     const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
-    const tickSubscriptionActive = useRef<string | null>(null);
+    const isAuthorized = useRef(false);
 
     // State
-    const [connectionStatus, setConnectionStatus] = useState(STATUS_DISCONNECTED);
+    const [connectionStatus, setConnectionStatus] = useState(STATUS_OFFLINE);
     const [digitStats, setDigitStats] = useState(Array(10).fill(0));
     const [lastDigit, setLastDigit] = useState<number | null>(null);
     const [isAutoRunning, setIsAutoRunning] = useState(false);
@@ -41,74 +41,47 @@ const OverUnder = observer(() => {
     ];
 
     const subscribeToTicks = (symbol: string) => {
-        if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-            console.log('WebSocket not ready for subscription');
-            return;
-        }
+        if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
         
-        // Avoid redundant subscriptions
-        if (tickSubscriptionActive.current === symbol) return;
-
         console.log(`Subscribing to ticks for ${symbol}`);
-        
-        // Forget previous subscriptions
         ws.current.send(JSON.stringify({ forget_all: 'ticks' }));
+        ws.current.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
         
         // Reset stats for new symbol
         setDigitStats(Array(10).fill(0));
         setLastDigit(null);
-        
-        // Subscribe
-        ws.current.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
-        tickSubscriptionActive.current = symbol;
-        
-        if (journal?.pushMessage) {
-            journal.pushMessage({ message: `📡 Subscribing to ${symbol}...`, type: 'info' });
-        }
     };
 
     const connectWebSocket = () => {
-        // Cleanup existing connection
         if (ws.current) {
             ws.current.onclose = null;
-            ws.current.onerror = null;
-            ws.current.onmessage = null;
-            ws.current.onopen = null;
             ws.current.close();
-            ws.current = null;
         }
 
         if (reconnectTimeout.current) {
             clearTimeout(reconnectTimeout.current);
-            reconnectTimeout.current = null;
         }
 
-        tickSubscriptionActive.current = null;
         setConnectionStatus(STATUS_CONNECTING);
+        isAuthorized.current = false;
         
-        console.log('Connecting to Deriv WebSocket...');
-        
-        // Using the same app_id as other functional tools in the repo
         const app_id = localStorage.getItem('config.app_id') || '80058';
         ws.current = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${app_id}`);
 
         ws.current.onopen = () => {
-            console.log('WebSocket opened, authorizing...');
-            setConnectionStatus(STATUS_AUTHORIZING);
+            console.log('WebSocket opened - Public Session');
+            setConnectionStatus(STATUS_LIVE);
             
-            // Try to get token from multiple possible locations
+            // Subscribe to ticks immediately - no auth required for public data
+            subscribeToTicks(selectedSymbol);
+
+            // If we have a token, try to authorize in the background
             const token = localStorage.getItem('authToken') || 
                           localStorage.getItem('token') || 
                           JSON.parse(localStorage.getItem('accountsList') || '{}')[client.loginid];
             
-            if (token && ws.current?.readyState === WebSocket.OPEN) {
-                ws.current.send(JSON.stringify({ authorize: token }));
-            } else {
-                console.error('No auth token found for Over/Under tool');
-                setConnectionStatus(STATUS_DISCONNECTED);
-                if (journal?.pushMessage) {
-                    journal.pushMessage({ message: '❌ Auth token not found. Please log in.', type: 'error' });
-                }
+            if (token) {
+                ws.current?.send(JSON.stringify({ authorize: token }));
             }
         };
 
@@ -116,21 +89,10 @@ const OverUnder = observer(() => {
             try {
                 const data = JSON.parse(msg.data);
 
-                if (data.error) {
-                    console.error('WebSocket error:', data.error);
-                    if (data.msg_type === 'authorize') {
-                        setConnectionStatus(STATUS_DISCONNECTED);
-                    }
-                    return;
-                }
-
-                if (data.msg_type === 'authorize') {
+                if (data.msg_type === 'authorize' && !data.error) {
                     console.log('Authorized successfully');
-                    setConnectionStatus(STATUS_CONNECTED);
-                    if (journal?.pushMessage) {
-                        journal.pushMessage({ message: '✅ Connected to Deriv', type: 'success' });
-                    }
-                    subscribeToTicks(selectedSymbol);
+                    isAuthorized.current = true;
+                    setConnectionStatus(STATUS_AUTHORIZED);
                 }
 
                 if (data.msg_type === 'tick') {
@@ -149,12 +111,16 @@ const OverUnder = observer(() => {
                     }
                 }
 
-                if (data.msg_type === 'buy') {
+                if (data.msg_type === 'buy' && !data.error) {
                     if (journal?.pushMessage) {
                         journal.pushMessage({ 
                             message: `💰 Trade executed: ${data.buy.contract_id}`, 
                             type: 'success' 
                         });
+                    }
+                } else if (data.error && data.msg_type === 'buy') {
+                    if (journal?.pushMessage) {
+                        journal.pushMessage({ message: `❌ Trade failed: ${data.error.message}`, type: 'error' });
                     }
                 }
             } catch (error) {
@@ -163,57 +129,37 @@ const OverUnder = observer(() => {
         };
 
         ws.current.onclose = () => {
-            console.log('WebSocket closed');
-            setConnectionStatus(STATUS_DISCONNECTED);
-            tickSubscriptionActive.current = null;
-            
-            // Reconnect logic
-            reconnectTimeout.current = setTimeout(() => {
-                if (document.visibilityState === 'visible') {
-                    connectWebSocket();
-                }
-            }, 5000);
-        };
-
-        ws.current.onerror = (err) => {
-            console.error('WebSocket connection error:', err);
+            setConnectionStatus(STATUS_OFFLINE);
+            reconnectTimeout.current = setTimeout(connectWebSocket, 5000);
         };
     };
 
-    // Main connection effect
     useEffect(() => {
         connectWebSocket();
-
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible' && (!ws.current || ws.current.readyState === WebSocket.CLOSED)) {
-                connectWebSocket();
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-
         return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
             if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-            if (ws.current) {
-                ws.current.onclose = null;
-                ws.current.close();
-            }
+            if (ws.current) ws.current.close();
         };
-    }, [client.loginid]); // Reconnect if account changes
+    }, []);
 
-    // Symbol change effect
     useEffect(() => {
-        if (connectionStatus === STATUS_CONNECTED) {
+        if (connectionStatus !== STATUS_OFFLINE && connectionStatus !== STATUS_CONNECTING) {
             subscribeToTicks(selectedSymbol);
         }
-    }, [selectedSymbol, connectionStatus]);
+    }, [selectedSymbol]);
 
     const executeMultiTrade = () => {
         if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+        
+        if (!isAuthorized.current) {
+            if (journal?.pushMessage) {
+                journal.pushMessage({ message: '⚠️ Cannot trade: Not logged in.', type: 'error' });
+            }
+            setIsAutoRunning(false);
+            return;
+        }
 
         const currency = client.currency || 'USD';
-        
         const baseParams = {
             buy: 1,
             price: stake,
@@ -227,13 +173,11 @@ const OverUnder = observer(() => {
             }
         };
 
-        // OVER 5
         ws.current.send(JSON.stringify({
             ...baseParams,
             parameters: { ...baseParams.parameters, contract_type: 'DIGITOVER', barrier: '5' }
         }));
 
-        // UNDER 4
         ws.current.send(JSON.stringify({
             ...baseParams,
             parameters: { ...baseParams.parameters, contract_type: 'DIGITUNDER', barrier: '4' }
@@ -246,9 +190,8 @@ const OverUnder = observer(() => {
 
     const getStatusClassName = () => {
         switch(connectionStatus) {
-            case STATUS_CONNECTED: return 'connected';
-            case STATUS_AUTHORIZING:
-            case STATUS_CONNECTING: return 'authorizing';
+            case STATUS_AUTHORIZED: return 'connected';
+            case STATUS_LIVE: return 'authorizing'; // Using orange for live but not authorized
             default: return 'disconnected';
         }
     };
