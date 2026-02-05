@@ -257,12 +257,14 @@ const OverUnder = observer(() => {
 
         const trade1_params = {
             buy: 1,
-            parameters: { ...baseParameters, contract_type: 'DIGITOVER', barrier: '5' }
+            price: tradeAmount,
+            parameters: { ...baseParameters, contract_type: 'DIGITOVER', barrier: '5' },
         };
 
         const trade2_params = {
             buy: 1,
-            parameters: { ...baseParameters, contract_type: 'DIGITUNDER', barrier: '4' }
+            price: tradeAmount,
+            parameters: { ...baseParameters, contract_type: 'DIGITUNDER', barrier: '4' },
         };
 
         addLog(`Executing trades: Over 5, Under 4. Stake: ${tradeAmount} ${currency}`);
