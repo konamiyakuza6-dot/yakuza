@@ -18,10 +18,10 @@ const pip_sizes = {
     'R_25': 3,
     'R_10': 3,
     '1HZ100V': 2,
-    '1HZ75V': 4,
-    '1HZ50V': 4,
-    '1HZ25V': 3,
-    '1HZ10V': 3,
+    '1HZ75V': 2,
+    '1HZ50V': 2,
+    '1HZ25V': 2,
+    '1HZ10V': 2,
 };
 
 export default class OverUnderStore {
@@ -289,7 +289,7 @@ export default class OverUnderStore {
             return;
         }
 
-        const tradeAmount = Number(this.stake);
+        const tradeAmount = Number(.stake);
         if (tradeAmount <= 0) {
             this.addLog(`Cannot trade: Invalid stake of ${tradeAmount}.`);
             this.root_store.journal.pushMessage('⚠️ Stake must be a positive number.', 'error');
