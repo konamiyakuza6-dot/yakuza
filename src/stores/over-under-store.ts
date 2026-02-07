@@ -199,7 +199,6 @@ export default class OverUnderStore {
                         const buy_data = data.buy;
                         const contract_id = buy_data.contract_id;
                         this.addLog(`Purchase Successful: ${contract_id}`);
-                        this.root_store.transactions.pushTransaction(buy_data);
 
                         this.ws?.send(
                             JSON.stringify({
