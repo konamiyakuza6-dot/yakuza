@@ -510,7 +510,8 @@ export default class RunPanelStore {
         }
         
         this.setContractStage(contract_stages.NOT_RUNNING);
-        this.restoreOriginalAccount();
+        // Removed restoreOriginalAccount() to prevent "sorry for interruption" error
+        // this.restoreOriginalAccount();
         
         // Force state update to refresh UI
         const current_index = this.active_index;
