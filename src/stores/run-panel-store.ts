@@ -490,9 +490,8 @@ export default class RunPanelStore {
         console.log('[Run Panel] clearStat executing...');
         const { summary_card, journal, transactions } = this.root_store;
 
-        this.setIsRunning(false);
-        this.setHasOpenContract(false);
-        this.clear();
+        // CRITICAL: ONLY clear data, DO NOT touch account or running state
+        // This prevents Deriv from thinking the session was interrupted
         
         if (journal && typeof journal.clear === 'function') {
             console.log('[Run Panel] Clearing journal');
@@ -509,11 +508,7 @@ export default class RunPanelStore {
             transactions.clear();
         }
         
-        this.setContractStage(contract_stages.NOT_RUNNING);
-        // Removed restoreOriginalAccount() to prevent "sorry for interruption" error
-        // this.restoreOriginalAccount();
-        
-        // Force state update to refresh UI
+        // Ensure UI updates without disrupting the session
         const current_index = this.active_index;
         this.setActiveTabIndex(current_index === 0 ? 1 : 0);
         setTimeout(() => {
