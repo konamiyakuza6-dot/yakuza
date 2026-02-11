@@ -490,31 +490,30 @@ export default class RunPanelStore {
         console.log('[Run Panel] clearStat executing...');
         const { summary_card, journal, transactions } = this.root_store;
 
-        // CRITICAL: ONLY clear data, DO NOT touch account or running state
-        // This prevents Deriv from thinking the session was interrupted
-        
-        if (journal && typeof journal.clear === 'function') {
-            console.log('[Run Panel] Clearing journal');
-            journal.clear();
-        }
-        
-        if (summary_card && typeof summary_card.clear === 'function') {
-            console.log('[Run Panel] Clearing summary card');
-            summary_card.clear();
-        }
-        
-        if (transactions && typeof transactions.clear === 'function') {
-            console.log('[Run Panel] Clearing transactions');
-            transactions.clear();
-        }
-        
-        // Ensure UI updates without disrupting the session
-        const current_index = this.active_index;
-        this.setActiveTabIndex(current_index === 0 ? 1 : 0);
-        setTimeout(() => {
-            this.setActiveTabIndex(current_index);
-            console.log('[Run Panel] clearStat UI refresh completed');
-        }, 50);
+        // CRITICAL: Minimal logic to avoid session disruption.
+        // Wrap everything in an action to prevent multiple observers from triggering.
+        runInAction(() => {
+            if (journal && typeof journal.clear === 'function') {
+                journal.clear();
+            }
+            
+            if (summary_card && typeof summary_card.clear === 'function') {
+                summary_card.clear();
+            }
+            
+            if (transactions && typeof transactions.clear === 'function') {
+                transactions.clear();
+            }
+            
+            // Minimal UI refresh
+            const current_index = this.active_index;
+            this.setActiveTabIndex(current_index === 0 ? 1 : 0);
+            setTimeout(() => {
+                runInAction(() => {
+                    this.setActiveTabIndex(current_index);
+                });
+            }, 100);
+        });
         
         console.log('[Run Panel] clearStat completed');
     };
