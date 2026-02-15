@@ -502,17 +502,13 @@ export default class RunPanelStore {
             }
             
             if (transactions && typeof transactions.clear === 'function') {
+                // IMPORTANT: Ensure transactions.clear doesn't trigger API calls
+                // like proposal_open_contract or statement requests that Deriv might throttle.
                 transactions.clear();
             }
             
-            // Minimal UI refresh
-            const current_index = this.active_index;
-            this.setActiveTabIndex(current_index === 0 ? 1 : 0);
-            setTimeout(() => {
-                runInAction(() => {
-                    this.setActiveTabIndex(current_index);
-                });
-            }, 100);
+            // Minimal UI refresh - don't force heavy re-renders
+            this.setActiveTabIndex(this.active_index);
         });
         
         console.log('[Run Panel] clearStat completed');
