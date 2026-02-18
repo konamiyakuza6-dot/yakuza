@@ -44,15 +44,14 @@ const BotBuilder = observer(() => {
                     const xml_text = await response.text();
                     const dom = (window as any).Blockly.utils.xml.textToDom(xml_text);
                     (window as any).Blockly.utils.xml.domToWorkspace(dom, workspace);
-                    console.log('Default starter bot loaded');
                 } catch (e) {
-                    console.error('Failed to load default bot:', e);
+                    // Silently fail
                 }
             }
         };
 
-        // Wait a bit for workspace to be fully ready
-        setTimeout(loadDefaultBot, 1500);
+        // Instant load check
+        loadDefaultBot();
 
         return () => onUnmount();
     }, [onMount, onUnmount, dashboard]);

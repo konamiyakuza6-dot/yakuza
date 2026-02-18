@@ -81,10 +81,10 @@ export default class OverUnderStore {
     }
 
     addLog(msg: string) {
-        console.log(`[OverUnder] ${msg}`);
+        // Optimized logging
         const timestamp = new Date().toLocaleTimeString();
         this.debug_info.unshift(`[${timestamp}] ${msg}`);
-        if (this.debug_info.length > 30) {
+        if (this.debug_info.length > 20) {
             this.debug_info.pop();
         }
     }

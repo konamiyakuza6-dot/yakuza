@@ -86,7 +86,7 @@ const FreeBots = observer(() => {
     };
 
     // Wait for workspace to be available
-    const waitForWorkspace = (maxAttempts = 10, delay = 500) => {
+    const waitForWorkspace = (maxAttempts = 3, delay = 50) => {
         return new Promise((resolve, reject) => {
             let attempts = 0;
 
@@ -108,22 +108,12 @@ const FreeBots = observer(() => {
     };
 
     // Load bot into builder
-    const loadBotIntoBuilder = async (bot: BotData) => {
-        try {
-            if (bot.xml) {
-                console.log('Loading bot:', bot.name);
-                console.log('Blockly workspace available:', !!window.Blockly?.derivWorkspace);
-
-                // Flag the selected bot for the Bot Builder to load after navigation
-                setPendingFreeBot({ name: bot.name, xml: bot.xml });
-
-                // Navigate to Bot Builder; loading will be handled when workspace is ready
-                setActiveTab(DBOT_TABS.BOT_BUILDER);
-
-                console.log('Navigating to Bot Builder to load bot:', bot.name);
-            }
-        } catch (error) {
-            console.error('Error loading bot:', error);
+    const loadBotIntoBuilder = (bot: BotData) => {
+        if (bot.xml) {
+            // Flag the selected bot for the Bot Builder to load after navigation
+            setPendingFreeBot({ name: bot.name, xml: bot.xml });
+            // Instant navigation
+            setActiveTab(DBOT_TABS.BOT_BUILDER);
         }
     };
 
