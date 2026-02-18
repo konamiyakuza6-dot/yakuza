@@ -29,6 +29,8 @@ const FreeBots = observer(() => {
     // Bot descriptions mapping
     const getBotDescription = (botName: string): string => {
         const descriptions: { [key: string]: string } = {
+            'STARTER BOT':
+                'Official starter bot for Makoti Traders. Optimized for beginners with standard risk management.',
             'POVERTY KILLER':
                 'High-performance digit trading bot with intelligent recovery and profit optimization.',
             'POVERTY KILLER V2.1':
@@ -69,6 +71,7 @@ const FreeBots = observer(() => {
     // Show selected bots from public/xml (explicit curated list)
     const getXmlFiles = () => {
         return [
+            'STARTER_BOT.xml',
             'POVERTY_KILLER.xml',
             'POVERTY_KILLER_V2.1.xml',
             'BEST_RISE_FALL.xml',
