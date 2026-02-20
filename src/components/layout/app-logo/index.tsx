@@ -1,6 +1,4 @@
-import { useDevice } from '@deriv-com/ui';
 import { useState, useEffect, useRef } from 'react';
-
 import { LegacyMenuHamburger1pxIcon } from '@deriv/quill-icons/Legacy';
 // Custom icons to match uploaded images exactly
 import './app-logo.scss';
@@ -83,11 +81,9 @@ const MessageMenu = () => {
 };
 
 export const AppLogo = ({ onMenuClick }: { onMenuClick?: () => void }) => {
-    const { isDesktop } = useDevice();
-
     return (
         <div className='app-header__logo-container'>
-            {!isDesktop && onMenuClick && <MenuIcon onClick={onMenuClick} />}
+            {onMenuClick && <MenuIcon onClick={onMenuClick} />}
         </div>
     );
 };
