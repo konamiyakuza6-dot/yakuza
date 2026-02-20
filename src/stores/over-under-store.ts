@@ -439,9 +439,9 @@ export default class OverUnderStore {
         this.active_contracts.clear();
         this.contract_results.clear();
 
-        if (this.is_manual_mode || !this.is_turbo) {
+        if (!this.is_turbo) {
             this.setIsAutoRunning(false);
-            this.addLog('Auto-run stopped.');
+            this.addLog('Auto-run stopped: Turbo Mode is off.');
         }
     }
 
