@@ -303,7 +303,7 @@ export default class OverUnderStore {
 
     setSelectedSymbol(symbol: string) {
         this.selected_symbol = symbol;
-        if (this.connection_status === STATUS_LIVE || this.connection_status === STATUS_AUTHORIZED) {
+        if (this.is_authorized || this.connection_status === STATUS_LIVE) {
             this.subscribeToTicks(symbol);
         }
     }
@@ -395,9 +395,8 @@ export default class OverUnderStore {
             this.ws = new WebSocket(`wss://${server_url}/websockets/v3?app_id=${app_id}`);
 
             this.ws.onopen = () => {
-                this.addLog('WS Opened. Subscribing to ticks...');
+                this.addLog('WS Opened. Authorizing...');
                 this.connection_status = STATUS_LIVE;
-                this.subscribeToTicks(this.selected_symbol);
 
                 const token =
                     localStorage.getItem('authToken') ||
@@ -405,10 +404,10 @@ export default class OverUnderStore {
                     JSON.parse(localStorage.getItem('accountsList') || '{}')[this.root_store.client.loginid];
 
                 if (token) {
-                    this.addLog('Authorizing with token...');
                     this.ws?.send(JSON.stringify({ authorize: token }));
                 } else {
-                    this.addLog('No auth token found. Trading will be disabled.');
+                    this.addLog('No auth token found. Subscribing to public ticks.');
+                    this.subscribeToTicks(this.selected_symbol);
                 }
             };
 
@@ -463,6 +462,7 @@ export default class OverUnderStore {
                         this.addLog('Authorization Successful!');
                         this.is_authorized = true;
                         this.connection_status = STATUS_AUTHORIZED;
+                        this.subscribeToTicks(this.selected_symbol); 
                     }
 
                     if (data.msg_type === 'buy') {
