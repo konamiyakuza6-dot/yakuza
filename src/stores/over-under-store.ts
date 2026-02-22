@@ -255,6 +255,10 @@ export default class OverUnderStore {
 
     setIsAutomate(value: boolean) {
         this.is_automate = value;
+        if (value && this.is_volatility_changer) {
+            this.addLog("Automate ON: Initial volatility analysis started.");
+            this.fetchAllVolatilityTicks();
+        }
     }
 
     setUseSecondTrigger(value: boolean) {
@@ -507,6 +511,10 @@ export default class OverUnderStore {
                             const expected_count = (this.is_manual_mode || this.is_recovery_active) ? 1 : (this.use_second_trigger ? 2 : 1);
                             if (this.contract_results.size >= expected_count) {
                                 this.processRoundResults();
+                                if (this.is_automate) {
+                                    this.addLog("Round finished. Automate: Analyzing volatilities again...");
+                                    this.fetchAllVolatilityTicks();
+                                }
                             }
                         }
                     }
