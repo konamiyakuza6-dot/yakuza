@@ -29,6 +29,7 @@ const OverUnder = observer(() => {
         selected_symbol,
         debug_info,
         is_analyzing_volatility,
+        current_analyzing_symbol,
         setStake,
         setMartingale,
         setIsVolatilityChanger,
@@ -100,6 +101,12 @@ const OverUnder = observer(() => {
             default: return 'disconnected';
         }
     };
+
+    const analyzingText = useMemo(() => {
+        if (!is_analyzing_volatility) return 'ANALYZING...';
+        const name = volatilityIndices.find(v => v.value === current_analyzing_symbol)?.text || current_analyzing_symbol;
+        return `ANALYZING: ${name}`;
+    }, [is_analyzing_volatility, current_analyzing_symbol]);
 
     return (
         <div className="over-under-container" style={{ height: 'calc(100vh - 15rem)', overflowY: 'auto' }}>
@@ -254,7 +261,7 @@ const OverUnder = observer(() => {
                         {is_turbo ? 'TURBO ON' : 'TURBO OFF'}
                     </button>
                     <button className={`btn-primary ${is_auto_running ? 'running' : ''}`} onClick={handleStartStop} disabled={is_analyzing_volatility}>
-                        {is_analyzing_volatility ? 'ANALYZING...' : (is_auto_running ? 'STOP' : 'START')}
+                        {is_analyzing_volatility ? analyzingText : (is_auto_running ? 'STOP' : 'START')}
                     </button>
                 </div>
             </div>

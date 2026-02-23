@@ -90,6 +90,7 @@ export default class OverUnderStore {
             selected_symbol: observable,
             debug_info: observable,
             is_analyzing_volatility: observable,
+            current_analyzing_symbol: observable,
             setStake: action.bound,
             setMartingale: action.bound,
             setIsVolatilityChanger: action.bound,
@@ -157,6 +158,7 @@ export default class OverUnderStore {
             }));
         } else {
             this.is_analyzing_volatility = false;
+            this.current_analyzing_symbol = null;
             if (this.best_symbol) {
                 this.addLog(`Analysis complete. Best volatility: ${this.best_symbol}`);
                 this.setSelectedSymbol(this.best_symbol);
@@ -198,9 +200,6 @@ export default class OverUnderStore {
 
     setIsAutomate(value: boolean) {
         this.is_automate = value;
-        if (value && this.is_volatility_changer) {
-            this.startVolatilityAnalysis();
-        }
     }
 
     setUseSecondTrigger(value: boolean) {
@@ -277,7 +276,7 @@ export default class OverUnderStore {
         this.setIsAutoRunning(!this.is_auto_running);
         if (this.is_auto_running) {
             this.addLog("Tool started. Waiting for trigger...");
-            if (this.is_automate) {
+            if (this.is_automate && this.is_volatility_changer) {
                 this.startVolatilityAnalysis();
             }
         } else {
@@ -353,9 +352,9 @@ export default class OverUnderStore {
                         this.addLog(`Error: ${data.error.message}`);
                         return;
                     }
-                    
-                    if (this.is_analyzing_volatility && data.msg_type === 'history') {
-                        if(data.echo_req.ticks_history === this.current_analyzing_symbol){
+
+                    if (data.msg_type === 'history') {
+                        if (this.is_analyzing_volatility && data.echo_req.ticks_history === this.current_analyzing_symbol) {
                             const pip_size = pip_sizes[this.current_analyzing_symbol] || 2;
                             const prices = data.history.prices;
                             const digits = prices.map((p: string | number) => {
@@ -368,24 +367,29 @@ export default class OverUnderStore {
                                 contract_type: this.is_recovery_active ? this.recovery_contract_type : this.manual_contract_type,
                                 barrier: this.is_recovery_active ? this.recovery_barrier : this.manual_barrier,
                             });
+                        } else if (data.echo_req.subscribe === 1) {
+                            const pip_size = pip_sizes[this.selected_symbol] || 2;
+                            const prices = data.history.prices;
+                            const digits = prices.map((p: string | number) => {
+                                const price_str = Number(p).toFixed(pip_size);
+                                return parseInt(price_str.slice(-1), 10);
+                            });
+                            this.tick_history = digits;
+                            if (digits.length > 0) {
+                                this.last_digit = digits[digits.length - 1];
+                            }
+                            this.addLog(`Loaded ${digits.length} historical ticks for ${this.selected_symbol}.`);
                         }
-                        return;
-                    }
-
-                    if (data.msg_type === 'authorize') {
+                    } else if (data.msg_type === 'authorize') {
                         this.addLog('Authorization Successful!');
                         this.is_authorized = true;
                         this.connection_status = STATUS_AUTHORIZED;
                         this.subscribeToTicks(this.selected_symbol); 
-                    }
-
-                    if (data.msg_type === 'buy') {
+                    } else if (data.msg_type === 'buy') {
                         const contract_id = data.buy.contract_id;
                         this.addLog(`Purchase Sent: ${contract_id}`);
                         this.active_contracts.add(String(contract_id));
-                    }
-
-                    if (data.msg_type === 'proposal_open_contract') {
+                    } else if (data.msg_type === 'proposal_open_contract') {
                         const contract = data.proposal_open_contract;
 
                         if (this.root_store.summary_card?.onBotContractEvent) {
@@ -408,23 +412,7 @@ export default class OverUnderStore {
                                 }
                             }
                         }
-                    }
-
-                    if (data.msg_type === 'history' && data.echo_req.subscribe === 1) {
-                        const pip_size = pip_sizes[this.selected_symbol] || 2;
-                        const prices = data.history.prices;
-                        const digits = prices.map((p: string | number) => {
-                            const price_str = Number(p).toFixed(pip_size);
-                            return parseInt(price_str.slice(-1), 10);
-                        });
-                        this.tick_history = digits;
-                        if (digits.length > 0) {
-                            this.last_digit = digits[digits.length - 1];
-                        }
-                        this.addLog(`Loaded ${digits.length} historical ticks for ${this.selected_symbol}.`);
-                    }
-
-                    if (data.msg_type === 'tick') {
+                    } else if (data.msg_type === 'tick') {
                         const quote = data.tick.quote;
                         const pip_size = data.tick.pip_size;
                         const quote_str = quote.toFixed(pip_size);
