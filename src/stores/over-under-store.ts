@@ -1,5 +1,5 @@
 
-import { action, makeObservable, observable } from 'mobx';
+import { action, makeObservable, observable, reaction } from 'mobx';
 import { TStores } from '@/types/stores.types';
 import RootStore from './root-store';
 
@@ -66,6 +66,7 @@ export default class OverUnderStore {
     current_analyzing_symbol: string | null = null;
 
     private _boundAuthHandler: (event: MessageEvent) => void;
+    private _loginReaction: () => void;
 
     constructor(root_store: RootStore) {
         makeObservable(this, {
@@ -123,6 +124,16 @@ export default class OverUnderStore {
         this.initializeWorker();
         this._boundAuthHandler = this.handleAuthResponse.bind(this);
         window.addEventListener('message', this._boundAuthHandler);
+
+        // Sync with global login status
+        this._loginReaction = reaction(
+            () => this.root_store.client.is_logged_in,
+            (is_logged_in) => {
+                if (is_logged_in && !this.is_authorized) {
+                    this.connectWebSocket();
+                }
+            }
+        );
     }
 
     handleAuthResponse(event: MessageEvent) {
@@ -168,7 +179,6 @@ export default class OverUnderStore {
         if (this.analysis_queue.length > 0) {
             this.current_analyzing_symbol = this.analysis_queue.shift();
             if (this.current_analyzing_symbol) {
-                // Reduced count to 25 for faster analysis as requested
                 this.ws?.send(JSON.stringify({ ticks_history: this.current_analyzing_symbol, count: 25, end: 'latest', style: 'ticks' }));
             }
         } else {
@@ -228,7 +238,8 @@ export default class OverUnderStore {
     }
 
     handleStartStop() {
-        if (!this.is_authorized) {
+        // Check both local and global login status
+        if (!this.is_authorized && !this.root_store.client.is_logged_in) {
             this.addLog("Please log in to start trading.");
             return;
         }
@@ -279,6 +290,7 @@ export default class OverUnderStore {
                     window.parent.postMessage({ name: 'request_auth_token' }, '*');
                 } else {
                     try {
+                        // Check for token in multiple places
                         const active_loginid = localStorage.getItem('active_loginid');
                         const client_accounts_str = active_loginid ? localStorage.getItem('client.accounts') : null;
                         if (client_accounts_str) {
@@ -359,8 +371,10 @@ export default class OverUnderStore {
 
                             if (this.is_auto_running && !this.is_analyzing_volatility && this.active_contracts.size === 0) {
                                 if (this.is_differs_mode) {
+                                    // DIFFERS mode runs independently of trigger digits
                                     this.analyzeAndExecuteDiffers();
                                 } else {
+                                    // Standard Over/Under strategies still use trigger digits
                                     let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
                                     if (is_triggered) {
                                         if (this.is_recovery_active) {
@@ -403,15 +417,11 @@ export default class OverUnderStore {
         const last5 = this.tick_history.slice(-5);
         const last10 = this.tick_history.slice(-10);
         
-        // Count occurrences in last 100 ticks for "least appearing" context
         const stats = Array(10).fill(0);
         this.tick_history.slice(-100).forEach(d => stats[d]++);
         
-        // Find digits that appeared in the last 5 ticks
         const appearedInLast5 = Array.from(new Set(last5));
         
-        // Filter those that are "least appearing" overall (among those that appeared)
-        // and ensure they are not increasing in frequency in the last 10 ticks
         const candidates = appearedInLast5.filter(d => {
             const countLast5 = last5.filter(x => x === d).length;
             const countPrev5 = last10.slice(0, 5).filter(x => x === d).length;
@@ -454,14 +464,14 @@ export default class OverUnderStore {
     }
 
     executeTrade(contract_type: string, barrier: string) {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.is_authorized) return;
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || (!this.is_authorized && !this.root_store.client.is_logged_in)) return;
         const tradeAmount = Number(this.stake);
         this.addLog(`Executing: ${contract_type} ${barrier} @ ${tradeAmount}`);
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: this.selected_symbol, contract_type, barrier } }));
     }
 
     executeMultiTrade() {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.is_authorized) return;
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || (!this.is_authorized && !this.root_store.client.is_logged_in)) return;
         const tradeAmount = Number(this.stake);
         this.addLog(`Executing Multi-Trade: O5/U4 @ ${tradeAmount}`);
         const baseParams = { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: this.selected_symbol };
@@ -471,6 +481,7 @@ export default class OverUnderStore {
 
     dispose() {
         window.removeEventListener('message', this._boundAuthHandler);
+        if (this._loginReaction) this._loginReaction();
         if (this.ws) { this.ws.onclose = null; this.ws.close(); }
         if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
         this.volatilityAnalyzer?.terminate();
