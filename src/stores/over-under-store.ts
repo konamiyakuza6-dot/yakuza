@@ -181,7 +181,7 @@ export default class OverUnderStore {
     }
 
     startVolatilityAnalysis() {
-        if (!this.is_automate || this.is_analyzing_volatility) return;
+        if (!this.is_volatility_changer || this.is_analyzing_volatility) return;
         this.is_analyzing_volatility = true;
         this.analysis_queue = Object.keys(pip_sizes);
         this.best_score = Infinity;
@@ -194,7 +194,7 @@ export default class OverUnderStore {
         if (this.analysis_queue.length > 0) {
             this.current_analyzing_symbol = this.analysis_queue.shift();
             if (this.current_analyzing_symbol) {
-                this.ws?.send(JSON.stringify({ ticks_history: this.current_analyzing_symbol, count: 25, end: 'latest', style: 'ticks' }));
+                this.ws?.send(JSON.stringify({ ticks_history: this.current_analyzing_symbol, count: 50, end: 'latest', style: 'ticks' }));
             }
         } else {
             this.is_analyzing_volatility = false;
@@ -203,8 +203,7 @@ export default class OverUnderStore {
                 this.addLog(`Analysis complete. Best volatility: ${this.best_symbol}`);
                 this.setSelectedSymbol(this.best_symbol);
             } else {
-                this.addLog('Analysis complete. No suitable volatility found. Reverting to default.');
-                this.setSelectedSymbol('R_100');
+                this.addLog('Analysis complete. No suitable volatility found.');
             }
         }
     }
@@ -214,7 +213,6 @@ export default class OverUnderStore {
         this.debug_info.unshift(`[${timestamp}] ${msg}`);
         if (this.debug_info.length > 20) this.debug_info.pop();
         
-        // SYNC WITH JOURNAL: Push important logs to the main Journal panel
         if (this.root_store.journal) {
             this.root_store.journal.pushMessage(msg, MessageTypes.NOTIFY);
         }
@@ -276,7 +274,7 @@ export default class OverUnderStore {
             this.initial_stake = this.stake;
             this.setIsRecoveryActive(false);
             this.addLog("Tool started. Waiting for trigger...");
-            if (this.is_automate && this.is_volatility_changer) this.startVolatilityAnalysis();
+            if (this.is_volatility_changer) this.startVolatilityAnalysis();
         } else {
             this.addLog("Tool stopped by user.");
             this.setIsRecoveryActive(false);
@@ -374,6 +372,16 @@ export default class OverUnderStore {
                                 this.tick_history = digits;
                                 if (digits.length > 0) this.last_digit = digits[digits.length - 1];
                                 this.addLog(`Loaded ${digits.length} historical ticks.`);
+                            } else if (this.is_analyzing_volatility) {
+                                // Handle volatility analysis ticks
+                                const pip_size = pip_sizes[data.echo_req.ticks_history] || 2;
+                                const digits = data.history.prices.map((p: string | number) => Number(p).toFixed(pip_size).slice(-1)).map(Number);
+                                
+                                this.volatilityAnalyzer?.postMessage({
+                                    ticks: digits,
+                                    contract_type: this.is_recovery_active ? this.recovery_contract_type : (this.is_manual_mode ? this.manual_contract_type : 'DIGITOVER'),
+                                    barrier: this.is_recovery_active ? this.recovery_barrier : (this.is_manual_mode ? this.manual_barrier : '5')
+                                });
                             }
                             break;
                         case 'authorize':
@@ -385,7 +393,6 @@ export default class OverUnderStore {
                                 this.addLog(`Authorization Successful for ${data.authorize.loginid}!`);
                                 this.is_authorized = true;
                                 this.connection_status = STATUS_AUTHORIZED;
-                                // Request proposal_open_contract stream to track results globally
                                 this.ws?.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
                             }
                             this.subscribeToTicks(this.selected_symbol);
@@ -400,12 +407,19 @@ export default class OverUnderStore {
                         case 'proposal_open_contract':
                             const contract = data.proposal_open_contract;
                             
-                            // SYNC WITH ALL PANELS: Report to Summary, Transactions, and Journals
+                            // Ensure contract has required fields for Transactions tab
+                            const formattedContract = {
+                                ...contract,
+                                date_start: contract.date_start || Math.floor(Date.now() / 1000),
+                                transaction_ids: contract.transaction_ids || { buy: contract.contract_id },
+                                accountID: contract.accountID || this.root_store.client.loginid
+                            };
+
                             if (this.root_store.summary_card) {
-                                this.root_store.summary_card.onBotContractEvent(contract);
+                                this.root_store.summary_card.onBotContractEvent(formattedContract);
                             }
                             if (this.root_store.transactions) {
-                                this.root_store.transactions.onBotContractEvent(contract);
+                                this.root_store.transactions.onBotContractEvent(formattedContract);
                             }
                             
                             if (contract.is_sold) {
@@ -509,7 +523,7 @@ export default class OverUnderStore {
             this.stake = this.initial_stake;
             this.addLog(`Resetting stake to ${this.initial_stake}`);
             this.setIsRecoveryActive(false);
-            if (this.is_volatility_changer && this.is_automate) this.startVolatilityAnalysis();
+            if (this.is_volatility_changer) this.startVolatilityAnalysis();
         }
         this.contract_results.clear();
         if (!this.is_turbo) {
