@@ -471,56 +471,67 @@ export default class OverUnderStore {
     }
 
     analyzeAndExecuteDiffers() {
-        if (this.tick_history.length < 50 || this.is_purchasing) return;
+        if (this.tick_history.length < 25 || this.is_purchasing) return;
         
-        // If we already have a barrier digit set, check if it appears
-        if (this.differs_barrier_digit !== null) {
-            if (this.last_digit === this.differs_barrier_digit) {
-                this.addLog(`Barrier digit ${this.differs_barrier_digit} appeared! Firing trade immediately.`);
-                const targetDigit = this.differs_barrier_digit;
-                this.differs_barrier_digit = null; // Reset first to avoid re-triggering
-                this.executeTrade('DIGITDIFF', String(targetDigit));
+        // State machine for the new differs strategy:
+        // State 1: Waiting for hot digit to appear
+        // State 2: Hot digit appeared, waiting for 1 tick gap
+        // State 3: Gap tick received, check if it's NOT the hot digit, then trade on next tick
+        
+        // If we don't have a barrier digit set yet, find the hot digit from last 25 ticks
+        if (this.differs_barrier_digit === null) {
+            const last25 = this.tick_history.slice(-25);
+            
+            // Calculate frequency over last 25 ticks
+            const stats = Array(10).fill(0).map((_, i) => ({
+                digit: i,
+                count: last25.filter(d => d === i).length
+            }));
+            
+            // Find the most frequent digit (hot digit)
+            const sortedByFrequency = stats.sort((a, b) => b.count - a.count);
+            const hotDigit = sortedByFrequency[0].digit;
+            const hotDigitFreq = sortedByFrequency[0].count;
+            const hotDigitPercent = (hotDigitFreq / 25) * 100;
+            
+            this.differs_barrier_digit = hotDigit;
+            // Store state: waiting for hot digit to appear
+            (this as any).differs_state = 'waiting_for_hot_digit';
+            this.addLog(`Differs Strategy: Hot digit identified as ${hotDigit} (${hotDigitPercent.toFixed(1)}% in last 25 ticks). Waiting for it to appear...`);
+            return;
+        }
+        
+        const hotDigit = this.differs_barrier_digit;
+        const currentState = (this as any).differs_state || 'waiting_for_hot_digit';
+        
+        // State 1: Waiting for hot digit to appear
+        if (currentState === 'waiting_for_hot_digit') {
+            if (this.last_digit === hotDigit) {
+                this.addLog(`Hot digit ${hotDigit} appeared! Now waiting for 1 tick gap...`);
+                (this as any).differs_state = 'waiting_for_gap';
             }
             return;
         }
         
-        const last50 = this.tick_history.slice(-50);
-        const last10 = this.tick_history.slice(-10);
-        
-        // 1. Calculate frequency over 50 ticks to find all digits
-        const stats50 = Array(10).fill(0).map((_, i) => ({
-            digit: i,
-            count: last50.filter(d => d === i).length
-        }));
-
-        // Sort by count (ascending) to find least frequent digits
-        const sortedByFrequency = stats50.sort((a, b) => a.count - b.count);
-        
-        // Get the second least frequent digit
-        const secondLeastFrequentDigit = sortedByFrequency[1].digit;
-        const secondLeastCount = sortedByFrequency[1].count;
-        const leastFrequentDigit = sortedByFrequency[0].digit;
-        
-        // 2. Check if second least frequent digit is increasing in the last 10 ticks
-        const countInLast5 = last10.slice(-5).filter(d => d === secondLeastFrequentDigit).length;
-        const countInPrev5 = last10.slice(0, 5).filter(d => d === secondLeastFrequentDigit).length;
-        const isIncreasing = countInLast5 > countInPrev5;
-        
-        // 3. Select barrier digit: if increasing, use least frequent; otherwise use second least frequent
-        let selectedBarrierDigit: number;
-        let selectionReason: string;
-        
-        if (isIncreasing) {
-            selectedBarrierDigit = leastFrequentDigit;
-            selectionReason = `Least Frequent (2nd least was increasing)`;
-        } else {
-            selectedBarrierDigit = secondLeastFrequentDigit;
-            selectionReason = `2nd Least Frequent (not increasing)`;
+        // State 2: Hot digit appeared, waiting for 1 tick gap (next tick)
+        if (currentState === 'waiting_for_gap') {
+            const gapDigit = this.last_digit;
+            
+            // Check if the gap tick is NOT the hot digit
+            if (gapDigit !== hotDigit) {
+                this.addLog(`Gap tick received: ${gapDigit} (not the hot digit ${hotDigit}). Executing DIFFERS trade with barrier ${hotDigit}...`);
+                const targetDigit = hotDigit;
+                this.differs_barrier_digit = null; // Reset for next cycle
+                (this as any).differs_state = 'waiting_for_hot_digit';
+                this.executeTrade('DIGITDIFF', String(targetDigit));
+            } else {
+                // Gap tick IS the hot digit, reset and wait for next hot digit appearance
+                this.addLog(`Gap tick was the hot digit ${hotDigit}. Resetting strategy...`);
+                this.differs_barrier_digit = null;
+                (this as any).differs_state = 'waiting_for_hot_digit';
+            }
+            return;
         }
-        
-        const freq = (secondLeastCount / 50) * 100;
-        this.differs_barrier_digit = selectedBarrierDigit;
-        this.addLog(`Differs Strategy: Barrier digit set to ${selectedBarrierDigit} (${selectionReason}, Freq: ${freq.toFixed(1)}%). Waiting for digit to appear...`);
     }
 
     processRoundResults() {
