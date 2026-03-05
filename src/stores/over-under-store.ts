@@ -62,6 +62,8 @@ export default class OverUnderStore {
     active_subscription_id: string | null = null;
     differs_barrier_digit: number | null = null;
     is_differs_recovery_mode = false;
+    is_2term_mode = false;
+    last_profit = 0;
 
     is_analyzing_volatility = false;
     analysis_queue: string[] = [];
@@ -107,7 +109,9 @@ export default class OverUnderStore {
             is_authorizing: observable,
             differs_barrier_digit: observable,
             is_differs_recovery_mode: observable,
+            is_2term_mode: observable,
             setStake: action.bound,
+            setIs2termMode: action.bound,
             setMartingale: action.bound,
             setIsVolatilityChanger: action.bound,
             setIsDiffersMode: action.bound,
@@ -228,6 +232,7 @@ export default class OverUnderStore {
     setMartingale(value: number) { this.martingale = value; }
     setIsVolatilityChanger(value: boolean) { this.is_volatility_changer = value; }
     setIsDiffersMode(value: boolean) { this.is_differs_mode = value; }
+    setIs2termMode(value: boolean) { this.is_2term_mode = value; }
     setIsAutomate(value: boolean) { this.is_automate = value; }
     setUseSecondTrigger(value: boolean) { this.use_second_trigger = value; }
     setIsManualMode(value: boolean) { this.is_manual_mode = value; }
@@ -430,25 +435,19 @@ export default class OverUnderStore {
                             this.last_digit = digit;
                             this.tick_history = [...this.tick_history.slice(-MAX_TICKS + 1), digit];
                             if (this.is_auto_running && !this.is_analyzing_volatility && !this.is_purchasing && !this.is_processing_round && this.active_contracts.size === 0) {
-                                if (this.is_differs_mode && !this.is_differs_recovery_mode) {
+                                if (this.is_differs_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
                                     this.analyzeAndExecuteDiffers();
-                                } else if (this.is_differs_mode && this.is_differs_recovery_mode) {
-                                    // In differs recovery mode, trade Over/Under based on recovery config
-                                    let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
-                                    if (is_triggered) {
-                                        this.addLog(`Trigger Hit: Differs Recovery Trade (${this.recovery_contract_type} ${this.recovery_barrier})`);
-                                        this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
-                                    }
                                 } else {
+                                    // Recovery or Normal Over/Under mode: both should wait for trigger
                                     let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
                                     if (is_triggered) {
                                         if (this.is_recovery_active) {
-                                            this.addLog(`Trigger Hit: Recovery Trade`);
+                                            this.addLog(`Trigger Hit: Recovery Trade (${this.recovery_contract_type} ${this.recovery_barrier})`);
                                             this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
                                         } else if (this.is_manual_mode) {
                                             this.addLog(`Trigger Hit: Manual Trade`);
                                             this.executeTrade(this.manual_contract_type, this.manual_barrier);
-                                        } else {
+                                        } else if (!this.is_differs_mode) {
                                             this.addLog(`Trigger Hit: Standard Multi-Trade`);
                                             this.executeMultiTrade();
                                         }
@@ -526,14 +525,14 @@ export default class OverUnderStore {
         // State 1: Waiting for rare digit to appear
         if (currentState === 'waiting_for_digit_appearance') {
             if (this.last_digit === rareDigit) {
-                this.addLog(`Rare digit ${rareDigit} appeared! Now waiting for 4-tick gap...`);
+                this.addLog(`Rare digit ${rareDigit} appeared! Now waiting for 5-tick gap...`);
                 (this as any).differs_state = 'waiting_for_gap';
                 (this as any).differs_gap_counter = 0;
             }
             return;
         }
         
-        // State 2: Rare digit appeared, waiting for 4-tick gap
+        // State 2: Rare digit appeared, waiting for 5-tick gap
         if (currentState === 'waiting_for_gap') {
             (this as any).differs_gap_counter = ((this as any).differs_gap_counter || 0) + 1;
             
@@ -545,9 +544,9 @@ export default class OverUnderStore {
                 return;
             }
             
-            // Check if we've completed the 4-tick gap
-            if ((this as any).differs_gap_counter >= 4) {
-                this.addLog(`4-tick gap completed without rare digit ${rareDigit}. Executing DIFFERS trade with barrier ${rareDigit}...`);
+            // Check if we've completed the 5-tick gap
+            if ((this as any).differs_gap_counter >= 5) {
+                this.addLog(`5-tick gap completed without rare digit ${rareDigit}. Executing DIFFERS trade with barrier ${rareDigit}...`);
                 this.differs_barrier_digit = null; // Reset for next cycle
                 (this as any).differs_state = 'waiting_for_digit_appearance';
                 (this as any).differs_gap_counter = 0;
@@ -565,24 +564,25 @@ export default class OverUnderStore {
             this.stake = Number((this.stake * this.martingale).toFixed(2));
             this.addLog(`Martingale Applied: New stake is ${this.stake}`);
             this.setIsRecoveryActive(true);
-            if (!this.use_recovery_delay) {
-                this.addLog("Immediate recovery trade");
-                this.is_processing_round = false;
-                if (this.is_differs_mode) {
-                    // Switch to recovery mode (Over/Under) instead of continuing differs
-                    this.is_differs_recovery_mode = true;
-                    this.differs_barrier_digit = null;
-                    this.addLog(`Switching to Recovery Mode: ${this.recovery_contract_type} ${this.recovery_barrier}`);
-                    this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
-                } else {
-                    this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
-                }
-                this.contract_results.clear();
-                return;
+            if (this.is_differs_mode) {
+                // Switch to recovery mode (Over/Under) instead of continuing differs
+                this.is_differs_recovery_mode = true;
+                this.differs_barrier_digit = null;
+                this.addLog(`Switching to Recovery Mode: ${this.recovery_contract_type} ${this.recovery_barrier}`);
             }
+            // Recovery logic: Always wait for trigger digit if recovery is active
+            // So we don't execute trade immediately here anymore
         } else {
-            this.stake = this.initial_stake;
-            this.addLog(`Resetting stake to ${this.initial_stake}`);
+            const totalProfit = Array.from(this.contract_results.values()).reduce((sum, p) => sum + p, 0);
+            if (this.is_2term_mode) {
+                // For 2term: next stake = current stake + total profit
+                const nextStake = Number((this.stake + totalProfit).toFixed(2));
+                this.addLog(`2term Applied: Stake updated with profit ${totalProfit.toFixed(2)}. New stake: ${nextStake}`);
+                this.stake = nextStake;
+            } else {
+                this.stake = this.initial_stake;
+                this.addLog(`Resetting stake to ${this.initial_stake}`);
+            }
             this.setIsRecoveryActive(false);
             if (this.is_differs_mode) {
                 this.is_differs_recovery_mode = false;

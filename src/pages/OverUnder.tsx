@@ -15,6 +15,7 @@ const OverUnder = observer(() => {
         martingale,
         is_volatility_changer,
         is_differs_mode,
+        is_2term_mode,
         is_automate,
         use_second_trigger,
         is_manual_mode,
@@ -36,6 +37,7 @@ const OverUnder = observer(() => {
         setMartingale,
         setIsVolatilityChanger,
         setIsDiffersMode,
+        setIs2termMode,
         setIsAutomate,
         setUseSecondTrigger,
         setIsManualMode,
@@ -207,6 +209,18 @@ const OverUnder = observer(() => {
                             {is_differs_mode ? 'ON' : 'OFF'}
                         </button>
                     </div>
+                    {is_differs_mode && (
+                        <div className="input-group switch-group">
+                            <label>2term</label>
+                            <button 
+                                className={`ui-switch ${is_2term_mode ? 'active' : ''}`} 
+                                onClick={() => setIs2termMode(!is_2term_mode)}
+                                disabled={is_auto_running || is_authorizing}
+                            >
+                                {is_2term_mode ? 'ON' : 'OFF'}
+                            </button>
+                        </div>
+                    )}
                     {(is_volatility_changer || is_differs_mode) && (
                         <div className="input-group switch-group">
                             <label>Automate</label>
