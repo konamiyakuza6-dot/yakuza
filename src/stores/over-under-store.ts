@@ -441,23 +441,23 @@ export default class OverUnderStore {
                                 } else {
                                     // Recovery mode: non-differs should execute immediately
                                     if (this.is_recovery_active && !this.is_differs_mode) {
-                                        this.addLog(`Recovery Active (Non-Differs): Executing immediately.`);
+                                        this.addLog(`Recovery: Executing immediately...`);
                                         this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
                                     } else if (this.is_manual_mode && this.is_recovery_active) {
-                                        this.addLog(`Recovery Active (Manual): Executing immediately.`);
+                                        this.addLog(`Recovery: Executing immediately...`);
                                         this.executeTrade(this.manual_contract_type, this.manual_barrier);
                                     } else {
                                         // Normal or Differs-Recovery mode: wait for trigger
                                         let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
                                         if (is_triggered) {
                                             if (this.is_recovery_active) {
-                                                this.addLog(`Trigger Hit: Recovery Trade (${this.recovery_contract_type} ${this.recovery_barrier})`);
+                                                this.addLog(`Trigger: Recovery ${this.recovery_contract_type} ${this.recovery_barrier}`);
                                                 this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
                                             } else if (this.is_manual_mode) {
-                                                this.addLog(`Trigger Hit: Manual Trade`);
+                                                this.addLog(`Trigger: Manual ${this.manual_contract_type} ${this.manual_barrier}`);
                                                 this.executeTrade(this.manual_contract_type, this.manual_barrier);
                                             } else if (!this.is_differs_mode) {
-                                                this.addLog(`Trigger Hit: Standard Multi-Trade`);
+                                                this.addLog(`Trigger: O5/U4`);
                                                 this.executeMultiTrade();
                                             }
                                         }
@@ -484,6 +484,7 @@ export default class OverUnderStore {
         
         // Strategy: Look for the second least appearing number in the 1000 historical ticks
         // Trigger: Wait for the digit to appear then execute the trade using the digit as a barrier.
+        // Constraint: If the digit's percentage increases before trade execution, wait for it to appear again.
         
         if (this.differs_barrier_digit === null) {
             const last1000 = this.tick_history.slice(-1000);
@@ -504,8 +505,8 @@ export default class OverUnderStore {
             this.differs_barrier_digit = rareDigitValue;
             // Store state: waiting for rare digit to appear
             (this as any).differs_state = 'waiting_for_digit_appearance';
-            (this as any).differs_gap_counter = 0;
-            this.addLog(`Differs Strategy: Second least frequent digit identified as ${rareDigitValue} (${rareDigitFreq1000.toFixed(1)}% in 1000 ticks). Waiting for appearance...`);
+            (this as any).differs_initial_percentage = rareDigitFreq1000; // Store initial percentage
+            this.addLog(`Differs: Digit ${rareDigitValue} (${rareDigitFreq1000.toFixed(1)}%) waiting...`);
             return;
         }
         
@@ -515,10 +516,24 @@ export default class OverUnderStore {
         // State 1: Waiting for rare digit to appear
         if (currentState === 'waiting_for_digit_appearance') {
             if (this.last_digit === rareDigit) {
-                this.addLog(`Rare digit ${rareDigit} appeared! Executing DIFFERS trade with barrier ${rareDigit}...`);
+                // Check if percentage has increased
+                const last1000 = this.tick_history.slice(-1000);
+                const currentCount = last1000.filter(d => d === rareDigit).length;
+                const currentPercentage = (currentCount / 1000) * 100;
+                const initialPercentage = (this as any).differs_initial_percentage;
+                
+                if (currentPercentage > initialPercentage + 0.1) {
+                    // Percentage increased by more than 0.1%, wait for it to appear again
+                    this.addLog(`Differs: Digit ${rareDigit} appeared but % increased (${initialPercentage.toFixed(1)}% -> ${currentPercentage.toFixed(1)}%). Waiting again...`);
+                    (this as any).differs_initial_percentage = currentPercentage; // Update threshold
+                    return;
+                }
+                
+                // Percentage is constant or decreased, execute trade
+                this.addLog(`Differs: Executing trade with digit ${rareDigit}...`);
                 this.differs_barrier_digit = null; // Reset for next cycle
                 (this as any).differs_state = 'waiting_for_digit_appearance';
-                (this as any).differs_gap_counter = 0;
+                (this as any).differs_initial_percentage = null;
                 this.executeTrade('DIGITDIFF', String(rareDigit));
             }
             return;
@@ -544,12 +559,12 @@ export default class OverUnderStore {
             if (this.is_differs_mode) {
                 this.is_differs_recovery_mode = true;
                 this.differs_barrier_digit = null;
-                this.addLog(`Switching to Recovery Mode (Differs): ${this.recovery_contract_type} ${this.recovery_barrier}. Waiting for trigger...`);
+                this.addLog(`Recovery: Waiting for trigger...`);
             } else if (this.is_manual_mode) {
-                this.addLog(`Switching to Recovery Mode (Manual Immediate): ${this.manual_contract_type} ${this.manual_barrier}`);
+                this.addLog(`Recovery: Executing...`);
                 this.executeTrade(this.manual_contract_type, this.manual_barrier);
             } else {
-                this.addLog(`Switching to Recovery Mode (Immediate): ${this.recovery_contract_type} ${this.recovery_barrier}`);
+                this.addLog(`Recovery: Executing...`);
                 this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
             }
         } else {
@@ -592,8 +607,9 @@ export default class OverUnderStore {
         const is_logged_in = this.is_authorized || this.root_store.client.is_logged_in || !!localStorage.getItem('active_loginid');
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !is_logged_in) return;
         this.is_purchasing = true;
-        const tradeAmount = Number(this.stake);
-        this.addLog(`Executing: ${contract_type} ${barrier} @ ${tradeAmount}`);
+        // Use initial_stake for recovery trades, otherwise use current stake
+        const tradeAmount = this.is_recovery_active ? Number(this.initial_stake) : Number(this.stake);
+        this.addLog(`Trade: ${contract_type} ${barrier} @ ${tradeAmount}`);
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: this.selected_symbol, contract_type, barrier } }));
     }
 
@@ -602,8 +618,9 @@ export default class OverUnderStore {
         const is_logged_in = this.is_authorized || this.root_store.client.is_logged_in || !!localStorage.getItem('active_loginid');
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !is_logged_in) return;
         this.is_purchasing = true;
-        const tradeAmount = Number(this.stake);
-        this.addLog(`Executing Multi-Trade: O5/U4 @ ${tradeAmount}`);
+        // Use initial_stake for recovery trades, otherwise use current stake
+        const tradeAmount = this.is_recovery_active ? Number(this.initial_stake) : Number(this.stake);
+        this.addLog(`Trade: O5/U4 @ ${tradeAmount}`);
         const baseParams = { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: this.selected_symbol };
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITOVER', barrier: '5' } }));
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITUNDER', barrier: '4' } }));
