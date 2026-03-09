@@ -619,7 +619,6 @@ export default class RunPanelStore {
     showClearStatDialog = () => {
         this.onOkButtonClick = () => {
             this.clearStat();
-            this.onCloseDialog();
         };
         this.onCancelButtonClick = this.onCloseDialog;
         this.dialog_options = {
