@@ -488,7 +488,7 @@ export default class RunPanelStore {
     clearStat = () => {
         const { journal, summary_card, transactions } = this.root_store;
 
-        this.onCloseDialog();
+        this.is_dialog_open = false;
         
         // Call the proper clear methods - they handle MobX reactivity and localStorage correctly
         try {
