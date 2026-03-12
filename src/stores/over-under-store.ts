@@ -507,7 +507,10 @@ export default class OverUnderStore {
     }
 
     analyzeAndExecuteRiseFall() {
-        if (this._tick_prices.length < 36 || this.is_purchasing) return;
+        // Require at least 300 ticks so that all EMAs (12, 26, 9) are fully
+        // warmed up — matching the 1000-tick pre-loaded history the XML DBot
+        // always has before its first signal fires.
+        if (this._tick_prices.length < 300 || this.is_purchasing) return;
 
         const fast_ema = this.calculateEMA(this._tick_prices, 12);
         const slow_ema = this.calculateEMA(this._tick_prices, 26);
@@ -527,12 +530,15 @@ export default class OverUnderStore {
         const sc = signal_line[signal_line.length - 1];
         const sp = signal_line[signal_line.length - 2];
 
-        if (mp < sp && mc > sc && mc < 0) {
-            this.addLog(`Rise/Fall: MACD crossed ABOVE signal (mc=${mc.toFixed(5)}). RISE!`);
-            this.executeRiseFallTrade('CALL');
-        } else if (mp > sp && mc < sc && mc > 0) {
-            this.addLog(`Rise/Fall: MACD crossed BELOW signal (mc=${mc.toFixed(5)}). FALL!`);
+        // Exact same conditions as the XML bot:
+        // FALL (PUT):  previous MACD above signal → current MACD below signal, MACD still positive
+        // RISE (CALL): previous MACD below signal → current MACD above signal, MACD still negative
+        if (mp > sp && mc < sc && mc > 0) {
+            this.addLog(`Rise/Fall: MACD crossed BELOW signal (mc=${mc.toFixed(6)}, sc=${sc.toFixed(6)}). FALL!`);
             this.executeRiseFallTrade('PUT');
+        } else if (mp < sp && mc > sc && mc < 0) {
+            this.addLog(`Rise/Fall: MACD crossed ABOVE signal (mc=${mc.toFixed(6)}, sc=${sc.toFixed(6)}). RISE!`);
+            this.executeRiseFallTrade('CALL');
         }
     }
 
