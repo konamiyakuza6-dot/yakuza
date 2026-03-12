@@ -274,6 +274,9 @@ export default class OverUnderStore {
             this.is_processing_round = false;
             this.differs_barrier_digit = null;
             this.is_differs_recovery_mode = false;
+            // Reset Exaggerated Pushback surge tracker so each run starts clean
+            (this as any)._surge_count = 0;
+            (this as any)._surge_direction = null;
         }
     }
 
@@ -565,108 +568,67 @@ export default class OverUnderStore {
     }
 
     analyzeAndExecuteDiffers() {
-        if (this.tick_history.length < 1000 || this.is_purchasing) return;
-        
-        // Strategy: Look for the most appearing number in the 1000 historical ticks
-        // Trigger: Wait for the digit to appear then execute the trade using the digit as a barrier.
-        // Constraint: If the digit's percentage increases before trade execution, wait for it to appear again.
-        
-        if (this.differs_barrier_digit === null) {
-            const last1000 = this.tick_history.slice(-1000);
-            
-            // Calculate frequency over last 1000 ticks
-            const stats1000 = Array(10).fill(0).map((_, i) => ({
-                digit: i,
-                count: last1000.filter(d => d === i).length,
-                frequency: (last1000.filter(d => d === i).length / 1000) * 100
-            }));
-            
-            // Sort by count to find the most appearing number
-            const sortedStats = [...stats1000].sort((a, b) => b.count - a.count);
-            const selectedDigit = sortedStats[0]; // Most frequent
-            const targetDigitValue = selectedDigit.digit;
-            const targetDigitFreq1000 = selectedDigit.frequency;
-            
-            this.differs_barrier_digit = targetDigitValue;
-            // Store state: waiting for target digit to appear
-            (this as any).differs_state = 'waiting_for_digit_appearance';
-            (this as any).differs_initial_percentage = targetDigitFreq1000; // Store initial percentage
-            this.addLog(`Differs: Digit ${targetDigitValue} (${targetDigitFreq1000.toFixed(1)}%) waiting...`);
+        if (this._tick_prices.length < 5 || this.is_purchasing) return;
+
+        // --- Exaggerated Pushback Strategy ---
+        // Pattern: 3+ consecutive ticks moving in one direction (surge),
+        // followed by a single reversal tick (the "rejection").
+        // Action: immediately fire DIGITDIFF using the rejection tick's last digit.
+
+        // Lazy-initialise per-run tracking state
+        if ((this as any)._surge_count === undefined) {
+            (this as any)._surge_count = 0;
+            (this as any)._surge_direction = null;
+        }
+
+        const prices = this._tick_prices;
+        const prev_price = prices[prices.length - 2];
+        const curr_price = prices[prices.length - 1];
+
+        // No price movement this tick – nothing to track
+        if (curr_price === prev_price) return;
+
+        const curr_direction: 'up' | 'down' = curr_price > prev_price ? 'up' : 'down';
+        const prev_direction: string | null = (this as any)._surge_direction;
+
+        // First tick seen – just seed the tracker
+        if (prev_direction === null) {
+            (this as any)._surge_direction = curr_direction;
+            (this as any)._surge_count = 1;
             return;
         }
-        
-        const targetDigit = this.differs_barrier_digit;
-        const currentState = (this as any).differs_state || 'waiting_for_digit_appearance';
-        
-        // State 1: Waiting for rare digit to appear
-        if (currentState === 'waiting_for_digit_appearance') {
-            if (this.last_digit === targetDigit) {
-                // Check if percentage has increased
-                const last1000 = this.tick_history.slice(-1000);
-                const currentCount = last1000.filter(d => d === targetDigit).length;
-                const currentPercentage = (currentCount / 1000) * 100;
-                const initialPercentage = (this as any).differs_initial_percentage;
-                
-                if (currentPercentage > initialPercentage + 0.1) {
-                    // Percentage increased by more than 0.1%, wait for it to appear again
-                    this.addLog(`Differs: Digit ${targetDigit} appeared but % increased (${initialPercentage.toFixed(1)}% -> ${currentPercentage.toFixed(1)}%). Waiting again...`);
-                    (this as any).differs_initial_percentage = currentPercentage; // Update threshold
-                    return;
-                }
-                
-                // Percentage is constant or decreased, increment appearance counter
-                this.differs_digit_appearance_count++;
-                this.addLog(`Differs: Digit ${targetDigit} appeared (${this.differs_digit_appearance_count}/2 times)`);
-                
-                if (this.differs_digit_appearance_count >= 2) {
-                    // Digit appeared twice, execute trade
-                    this.addLog(`Differs: Digit ${targetDigit} appeared 2 times. Executing trade...`);
-                    this.differs_barrier_digit = null; // Reset for next cycle
-                    this.differs_digit_appearance_count = 0; // Reset counter
-                    (this as any).differs_state = 'waiting_for_digit_appearance';
-                    (this as any).differs_initial_percentage = null;
-                    this.executeTrade('DIGITDIFF', String(targetDigit));
-                } else {
-                    // Wait for the digit to appear again
-                    (this as any).differs_state = 'waiting_for_second_appearance';
-                }
+
+        if (curr_direction === prev_direction) {
+            // Surge continues in the same direction
+            (this as any)._surge_count++;
+            this.addLog(`Differs: Surge ${curr_direction} x${(this as any)._surge_count}`);
+        } else {
+            // Direction reversed – check if the preceding surge was strong enough
+            const surge_count: number = (this as any)._surge_count;
+
+            if (surge_count >= 3) {
+                // Exaggerated Pushback confirmed:
+                // surge_count ticks went one way, this tick snapped back.
+                const rejection_digit = this.last_digit;
+                this.differs_barrier_digit = rejection_digit; // kept for recovery reference
+
+                this.addLog(
+                    `Differs: PATTERN! ${surge_count}x ${prev_direction} surge → ` +
+                    `${curr_direction} rejection. Digit ${rejection_digit}. DIFFER!`
+                );
+
+                // Reset tracker – start the next surge from this reversal tick
+                (this as any)._surge_count = 1;
+                (this as any)._surge_direction = curr_direction;
+
+                // Fire the trade immediately
+                this.executeTrade('DIGITDIFF', String(rejection_digit));
+            } else {
+                // Surge too short – reset and begin tracking the new direction
+                this.addLog(`Differs: Weak surge (${surge_count}x ${prev_direction}), resetting to ${curr_direction}.`);
+                (this as any)._surge_count = 1;
+                (this as any)._surge_direction = curr_direction;
             }
-            return;
-        }
-        
-        // State 2: Waiting for second appearance
-        if (currentState === 'waiting_for_second_appearance') {
-            if (this.last_digit === targetDigit) {
-                // Check if percentage has increased
-                const last1000 = this.tick_history.slice(-1000);
-                const currentCount = last1000.filter(d => d === targetDigit).length;
-                const currentPercentage = (currentCount / 1000) * 100;
-                const initialPercentage = (this as any).differs_initial_percentage;
-                
-                if (currentPercentage > initialPercentage + 0.1) {
-                    // Percentage increased by more than 0.1%, reset and wait again
-                    this.addLog(`Differs: Digit ${targetDigit} appeared again but % increased. Resetting...`);
-                    this.differs_digit_appearance_count = 0;
-                    (this as any).differs_state = 'waiting_for_digit_appearance';
-                    (this as any).differs_initial_percentage = currentPercentage;
-                    return;
-                }
-                
-                // Percentage is constant or decreased, increment counter
-                this.differs_digit_appearance_count++;
-                this.addLog(`Differs: Digit ${targetDigit} appeared (${this.differs_digit_appearance_count}/2 times)`);
-                
-                if (this.differs_digit_appearance_count >= 2) {
-                    // Digit appeared twice, execute trade
-                    this.addLog(`Differs: Digit ${targetDigit} appeared 2 times. Executing trade...`);
-                    this.differs_barrier_digit = null; // Reset for next cycle
-                    this.differs_digit_appearance_count = 0; // Reset counter
-                    (this as any).differs_state = 'waiting_for_digit_appearance';
-                    (this as any).differs_initial_percentage = null;
-                    this.executeTrade('DIGITDIFF', String(targetDigit));
-                }
-            }
-            return;
         }
     }
 
