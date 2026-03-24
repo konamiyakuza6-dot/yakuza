@@ -31,9 +31,8 @@ $cyan:    #06b6d4;
     background: $bg0;
     color: $txt;
     font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-    font-size: 14px;           // explicit — bypasses 62.5% rem
+    font-size: 14px;
     line-height: 1.5;
-    // Fill the entire parent container — no external scroll
     width: 100%;
     height: 100%;
     overflow: hidden;
@@ -42,7 +41,6 @@ $cyan:    #06b6d4;
 
     *, *::before, *::after { box-sizing: border-box; }
 
-    // subtle dot grid
     &::before {
         content: '';
         position: absolute; inset: 0; z-index: 0; pointer-events: none;
@@ -126,6 +124,7 @@ $cyan:    #06b6d4;
     padding: 12px 16px;
     background: $bg1; border: 1px solid $b1; border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.3); overflow: hidden; position: relative;
+    flex-shrink: 0;
 
     &::before {
         content: '';
@@ -172,6 +171,7 @@ $cyan:    #06b6d4;
     display: grid;
     grid-template-columns: repeat(10, 1fr);
     gap: 6px;
+    flex-shrink: 0;
     @media (max-width: 700px) { grid-template-columns: repeat(5, 1fr); }
 }
 
@@ -232,8 +232,8 @@ $cyan:    #06b6d4;
 
 // ── Body (two-column) ─────────────────────────────────────────
 .ou-body {
-    flex: 1;            // fill remaining vertical space in ou-root
-    min-height: 0;      // critical: allows flex child to shrink below content size
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: 360px 1fr;
     grid-template-rows: 1fr;
@@ -246,10 +246,9 @@ $cyan:    #06b6d4;
 // ── Config Panel ──────────────────────────────────────────────
 .ou-panel {
     background: $bg1; border: 1px solid $b1; border-radius: 14px;
-    // Scroll internally — config fits any screen without hiding the start button
     overflow-y: auto; overflow-x: hidden;
     box-shadow: 0 8px 28px rgba(0,0,0,0.28); position: relative;
-    // Custom scrollbar
+
     &::-webkit-scrollbar { width: 3px; }
     &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 3px; }
 
@@ -264,11 +263,16 @@ $cyan:    #06b6d4;
         display: flex; align-items: center; gap: 8px;
         padding: 12px 16px 12px;
         border-bottom: 1px solid $b0;
-        background: rgba(255,255,255,0.015);
+        background: rgba(11, 21, 38, 0.7); // semi-transparent
         font-size: 13px; font-weight: 700; color: $sub;
-        position: sticky; top: 2px; z-index: 1;
+        position: sticky; top: 2px; z-index: 2;
         backdrop-filter: blur(8px);
         svg { color: $blue; }
+    }
+
+    // On mobile, constrain the panel's height so it doesn't cover the monitor
+    @media (max-width: 760px) {
+      max-height: 65vh;
     }
 }
 
@@ -388,7 +392,6 @@ $cyan:    #06b6d4;
         color: $txt; transition: all .18s;
         &:focus { outline: none; border-color: rgba($blue,.55); box-shadow: 0 0 0 3px rgba($blue,.12); }
         &:disabled { opacity: .35; cursor: not-allowed; }
-        // hide spinners
         &::-webkit-inner-spin-button, &::-webkit-outer-spin-button { -webkit-appearance: none; }
         -moz-appearance: textfield;
     }
@@ -426,7 +429,15 @@ $cyan:    #06b6d4;
 }
 
 // ── CTA ──────────────────────────────────────────────────────
-.ou-cta-wrap { padding: 13px 14px 14px; }
+.ou-cta-wrap {
+    padding: 14px 14px;
+    position: sticky;
+    bottom: 0;
+    z-index: 3; // Ensure it's above other elements
+    background: linear-gradient(to top, $bg1 70%, rgba(7, 14, 28, 0.7));
+    backdrop-filter: blur(4px);
+    border-top: 1px solid $b0;
+}
 
 .ou-cta {
     display: flex; align-items: center; justify-content: center; gap: 9px;
@@ -467,7 +478,6 @@ $cyan:    #06b6d4;
 .ou-monitor {
     background: $bg1; border: 1px solid $b1; border-radius: 14px;
     display: flex; flex-direction: column;
-    // Fill the grid cell completely — no fixed heights
     min-height: 0; height: 100%;
     box-shadow: 0 8px 28px rgba(0,0,0,.28); position: relative; overflow: hidden;
 
