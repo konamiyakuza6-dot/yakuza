@@ -1,75 +1,100 @@
 
+function calcEMA(data: number[], period: number): number[] {
+    const k = 2 / (period + 1);
+    const ema: number[] = [data[0]];
+    for (let i = 1; i < data.length; i++) {
+        ema.push(data[i] * k + ema[i - 1] * (1 - k));
+    }
+    return ema;
+}
+
+function calcMACDHistogram(prices: number[]): number[] {
+    if (prices.length < 35) return [];
+    const ema12 = calcEMA(prices, 12);
+    const ema26 = calcEMA(prices, 26);
+    const macdLine = ema12.map((v, i) => v - ema26[i]).slice(25);
+    const signal = calcEMA(macdLine, 9);
+    return macdLine.map((v, i) => v - signal[i]);
+}
+
 self.onmessage = (event) => {
-    const { ticks, contract_type, barrier } = event.data;
+    const { ticks, prices, contract_type, barrier, strategy } = event.data;
 
-    const calculateInstability = (
-        p_ticks: number[],
-        p_contract_type: string,
-        p_barrier: string
-    ): number => {
-        if (p_ticks.length < 30) return Infinity;
+    const calculateScore = (): number => {
+        if (!ticks || ticks.length < 30) return Infinity;
 
-        // ── DIFFERS mode: score based on how often digits repeat within 1, 2, or 3 ticks ──
-        // Lower score = digits change frequently = good for differs strategy
-        if (p_contract_type === 'DIGITDIFF') {
-            const sample = p_ticks.slice(-100);
-            const n = sample.length;
-
-            let repeat_1 = 0; // same digit as the immediately previous tick
+        // ── DIFFERS ──────────────────────────────────────────────────────────────
+        // Find volatility where digits rarely repeat over the last 1000 ticks.
+        // A lower repetition rate means better variety for a Differs contract.
+        if (strategy === 'differs') {
+            const n = ticks.length;
+            let repeat_1 = 0; // same digit as immediately prior tick
             let repeat_2 = 0; // same digit as 2 ticks ago
             let repeat_3 = 0; // same digit as 3 ticks ago
 
-            for (let i = 1; i < n; i++) {
-                if (sample[i] === sample[i - 1]) repeat_1++;
-            }
-            for (let i = 2; i < n; i++) {
-                if (sample[i] === sample[i - 2]) repeat_2++;
-            }
-            for (let i = 3; i < n; i++) {
-                if (sample[i] === sample[i - 3]) repeat_3++;
-            }
+            for (let i = 1; i < n; i++) if (ticks[i] === ticks[i - 1]) repeat_1++;
+            for (let i = 2; i < n; i++) if (ticks[i] === ticks[i - 2]) repeat_2++;
+            for (let i = 3; i < n; i++) if (ticks[i] === ticks[i - 3]) repeat_3++;
 
-            // Normalise each count to a 0-100 percentage
-            const pct_1 = (repeat_1 / (n - 1)) * 100;
-            const pct_2 = (repeat_2 / (n - 2)) * 100;
-            const pct_3 = (repeat_3 / (n - 3)) * 100;
+            const pct1 = (repeat_1 / (n - 1)) * 100;
+            const pct2 = (repeat_2 / (n - 2)) * 100;
+            const pct3 = (repeat_3 / (n - 3)) * 100;
 
-            // Weight immediate repeats the most, then 2-step, then 3-step
-            // Lower combined score = digits vary more = better volatility for differs
-            return (pct_1 * 3.0) + (pct_2 * 2.0) + (pct_3 * 1.0);
+            // Lower score = fewer repeats = better for Differs
+            return (pct1 * 3.0) + (pct2 * 2.0) + (pct3 * 1.0);
         }
 
-        // ── OVER / UNDER mode: original trend + frequency scoring ──
-        const barrier_num = parseInt(p_barrier, 10);
-        let target_digits: number[] = [];
-
-        if (p_contract_type === 'DIGITOVER') {
-            for (let i = 0; i <= barrier_num; i++) target_digits.push(i);
-        } else if (p_contract_type === 'DIGITUNDER') {
-            for (let i = barrier_num; i < 10; i++) target_digits.push(i);
+        // ── RISE / FALL ───────────────────────────────────────────────────────────
+        // Find volatility whose MACD histograms are mostly tall (strong momentum).
+        // A higher average absolute histogram value = stronger trending behaviour.
+        if (strategy === 'rise_fall') {
+            if (!prices || prices.length < 35) return Infinity;
+            const histogram = calcMACDHistogram(prices);
+            if (histogram.length === 0) return Infinity;
+            const avgAbsHistogram = histogram.reduce((sum, h) => sum + Math.abs(h), 0) / histogram.length;
+            return -avgAbsHistogram; // negate — lower score wins; higher avg abs = better
         }
 
-        if (target_digits.length === 0) return Infinity;
+        // ── MANUAL ────────────────────────────────────────────────────────────────
+        // Find volatility where losing digits of the chosen contract appear < 10%
+        // each across the last 1000 ticks.
+        if (strategy === 'manual') {
+            const barrier_num = parseInt(barrier, 10);
+            let losing_digits: number[] = [];
 
-        const recent_ticks = p_ticks.slice(-50);
+            if (contract_type === 'DIGITOVER') {
+                // DIGITOVER X wins if last digit > X — losing digits are 0..X
+                for (let i = 0; i <= barrier_num; i++) losing_digits.push(i);
+            } else if (contract_type === 'DIGITUNDER') {
+                // DIGITUNDER X wins if last digit < X — losing digits are X..9
+                for (let i = barrier_num; i <= 9; i++) losing_digits.push(i);
+            } else if (contract_type === 'DIGITDIFF') {
+                // Differs loses only when last digit equals the barrier
+                losing_digits = [barrier_num];
+            }
 
-        const first_half  = recent_ticks.slice(0, 25);
-        const second_half = recent_ticks.slice(25, 50);
+            if (losing_digits.length === 0) return Infinity;
 
-        const countInFirstHalf  = first_half.filter(t  => target_digits.includes(t)).length;
-        const countInSecondHalf = second_half.filter(t => target_digits.includes(t)).length;
+            const n = ticks.length;
+            const maxPct = Math.max(
+                ...losing_digits.map(d => (ticks.filter((t: number) => t === d).length / n) * 100)
+            );
+            // Penalise heavily when any losing digit exceeds 10%
+            return maxPct + Math.max(0, maxPct - 10) * 5;
+        }
 
-        const percentInFirstHalf  = (countInFirstHalf  / 25) * 100;
-        const percentInSecondHalf = (countInSecondHalf / 25) * 100;
-
-        const trend = percentInSecondHalf - percentInFirstHalf;
-
-        const totalCount   = recent_ticks.filter(t => target_digits.includes(t)).length;
-        const totalPercent = (totalCount / 50) * 100;
-
-        return (trend * 2.0) + totalPercent;
+        // ── OVER 5 / UNDER 4 (default) ────────────────────────────────────────────
+        // Digits 4 and 5 cause both contracts to lose simultaneously.
+        // Find volatility where digits 4 and 5 each appear < 10% of the time.
+        {
+            const n = ticks.length;
+            const pct4 = (ticks.filter((d: number) => d === 4).length / n) * 100;
+            const pct5 = (ticks.filter((d: number) => d === 5).length / n) * 100;
+            // Lower combined frequency = better; extra penalty above 10%
+            return (pct4 + pct5) + Math.max(0, pct4 - 10) * 5 + Math.max(0, pct5 - 10) * 5;
+        }
     };
 
-    const score = calculateInstability(ticks, contract_type, barrier);
+    const score = calculateScore();
     self.postMessage({ score });
 };

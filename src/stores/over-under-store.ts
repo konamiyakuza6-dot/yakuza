@@ -207,7 +207,7 @@ export default class OverUnderStore {
         if (this.analysis_queue.length > 0) {
             this.current_analyzing_symbol = this.analysis_queue.shift();
             if (this.current_analyzing_symbol) {
-                this.ws?.send(JSON.stringify({ ticks_history: this.current_analyzing_symbol, count: 100, end: 'latest', style: 'ticks' }));
+                this.ws?.send(JSON.stringify({ ticks_history: this.current_analyzing_symbol, count: 1000, end: 'latest', style: 'ticks' }));
             }
         } else {
             this.is_analyzing_volatility = false;
@@ -390,11 +390,18 @@ export default class OverUnderStore {
                                 this.addLog(`Loaded ${digits.length} historical ticks.`);
                             } else if (this.is_analyzing_volatility) {
                                 const pip_size = pip_sizes[data.echo_req.ticks_history] || 2;
-                                const digits = data.history.prices.map((p: string | number) => Number(p).toFixed(pip_size).slice(-1)).map(Number);
+                                const rawPrices = data.history.prices.map((p: string | number) => Number(p));
+                                const digits = rawPrices.map((p: number) => Number(p.toFixed(pip_size).slice(-1)));
+                                const strategy = this.is_differs_mode ? 'differs'
+                                    : this.is_rise_fall_mode ? 'rise_fall'
+                                    : this.is_manual_mode ? 'manual'
+                                    : 'over_under';
                                 this.volatilityAnalyzer?.postMessage({
                                     ticks: digits,
+                                    prices: rawPrices,
                                     contract_type: this.is_recovery_active ? this.recovery_contract_type : (this.is_manual_mode ? this.manual_contract_type : (this.is_differs_mode ? 'DIGITDIFF' : 'DIGITOVER')),
-                                    barrier: this.is_recovery_active ? this.recovery_barrier : (this.is_manual_mode ? this.manual_barrier : '5')
+                                    barrier: this.is_recovery_active ? this.recovery_barrier : (this.is_manual_mode ? this.manual_barrier : '5'),
+                                    strategy,
                                 });
                             }
                             break;

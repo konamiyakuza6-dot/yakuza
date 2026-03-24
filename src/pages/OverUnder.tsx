@@ -148,6 +148,23 @@ const OverUnder = observer(() => {
 
     return (
         <div className='ou-root'>
+            {/* ── Top Bar ───────────────────────────────────── */}
+            <div className='ou-topbar'>
+                <div className='ou-topbar__brand'>
+                    <div className='ou-topbar__icon'>
+                        <Zap size={16} />
+                    </div>
+                    <div>
+                        <div className='ou-topbar__title'>Over / Under Terminal</div>
+                        <div className='ou-topbar__sub'>Synthetic Indices · Digit Strategy Engine</div>
+                    </div>
+                </div>
+                <div className={`ou-status ou-status--${statusDot}`}>
+                    <span className='ou-status__dot' />
+                    <span>{statusLabel}</span>
+                </div>
+            </div>
+
             {/* ── Guide FAB ─────────────────────────────────── */}
             <button className='ou-guide-fab' onClick={() => setShowGuide(true)}>
                 <Info size={16} /><span>Guide</span>
@@ -211,17 +228,29 @@ const OverUnder = observer(() => {
                     const isHot = i === maxIdx && count > 0;
                     const isCold = i === minIdx && count > 0;
                     const isActive = last_digit === i;
+                    const fillColor = isHot
+                        ? 'linear-gradient(180deg,#10b981,#059669)'
+                        : isCold
+                        ? 'linear-gradient(180deg,#ef4444,#dc2626)'
+                        : 'linear-gradient(180deg,#3b82f6,#2563eb)';
                     return (
-                        <motion.div key={i} className={`ou-digit ${isActive ? 'active' : ''} ${isHot ? 'hot' : isCold ? 'cold' : ''}`}
-                            whileHover={{ y: -3 }}>
+                        <motion.div
+                            key={i}
+                            className={`ou-digit ${isActive ? 'active' : ''} ${isHot ? 'hot' : isCold ? 'cold' : ''}`}
+                            whileHover={{ y: -4, scale: 1.02 }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                        >
+                            {isHot && <span className='ou-digit__tag ou-digit__tag--hot'>HOT</span>}
+                            {isCold && <span className='ou-digit__tag ou-digit__tag--cold'>LOW</span>}
+                            {!isHot && !isCold && <span style={{ height: '1rem', display: 'block' }} />}
                             <div className='ou-digit__num'>{i}</div>
                             <div className='ou-digit__bar'>
-                                <motion.div className='ou-digit__fill'
+                                <motion.div
+                                    className='ou-digit__fill'
                                     animate={{ height: `${pct}%` }}
-                                    transition={{ duration: 0.3, ease: 'easeOut' }}
-                                    style={{
-                                        background: isHot ? '#10b981' : isCold ? '#ef4444' : '#3b82f6',
-                                    }} />
+                                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                                    style={{ background: fillColor }}
+                                />
                             </div>
                             <div className='ou-digit__pct'>{pct.toFixed(0)}%</div>
                         </motion.div>
@@ -241,9 +270,8 @@ const OverUnder = observer(() => {
                             <Cpu size={15} />
                             <span>Configuration</span>
                         </div>
-                        <div className={`ou-status ou-status--${statusDot}`}>
-                            <span className='ou-status__dot' />
-                            <span>{statusLabel}</span>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--muted, #4e6480)', fontWeight: 600, letterSpacing: '0.4px' }}>
+                            {activeMeta.icon}&nbsp;{activeMeta.label}
                         </div>
                     </div>
 
