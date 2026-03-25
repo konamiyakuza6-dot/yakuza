@@ -13,7 +13,7 @@ interface StrategyResult {
     tier: 1 | 2 | 3;
 }
 
-const TIER_WEIGHT: Record<1 | 2 | 3, number> = { 1: 3.0, 2: 1.8, 3: 1.0 };
+const TIER_WEIGHT: Record<1 | 2 | 3, number> = { 1: 4.0, 2: 1.8, 3: 1.0 };
 
 function normaliseScores(scores: number[]): number[] {
     const total = scores.reduce((a, b) => a + b, 0);
@@ -128,7 +128,7 @@ function knnPatternStrategy(history: number[], k = 5, winLen = 4): StrategyResul
 // ── 5. Adaptive Momentum ───────────────────────────────────────────────────
 function adaptiveMomentumStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(0) as number[];
-    const windows = [5, 8, 12];
+    const windows = [3, 5, 8];
     if (history.length < Math.max(...windows)) return { scores: normaliseScores(scores), confidence: 0, name: 'adaptiveMomentum', tier: 1 };
 
     windows.forEach((w, wi) => {
@@ -146,21 +146,24 @@ function adaptiveMomentumStrategy(history: number[]): StrategyResult {
 // ── 6. Digit Acceleration ──────────────────────────────────────────────────
 function digitAccelerationStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(0) as number[];
-    if (history.length < 20) return { scores: normaliseScores(scores), confidence: 0, name: 'acceleration', tier: 2 };
+    const window = history.slice(-20);
+    if (window.length < 10) return { scores: normaliseScores(scores), confidence: 0, name: 'acceleration', tier: 2 };
 
     const countInWindow = (start: number, end: number, digit: number) =>
-        history.slice(start, end).filter(d => d === digit).length;
+        window.slice(start, end).filter(d => d === digit).length;
 
-    const half = Math.floor(history.length / 2);
+    const half = Math.floor(window.length / 2);
     for (let d = 0; d <= 9; d++) {
+        if (half === 0 || (window.length - half) === 0) continue;
         const oldVelocity = countInWindow(0, half, d) / half;
-        const newVelocity = countInWindow(half, history.length, d) / (history.length - half);
+        const newVelocity = countInWindow(half, window.length, d) / (window.length - half);
         const acceleration = newVelocity - oldVelocity;
         scores[d] = Math.max(0, acceleration);
     }
 
     return { scores: normaliseScores(scores), confidence: Math.max(...normaliseScores(scores)), name: 'acceleration', tier: 2 };
 }
+
 
 // ── 7. Hot-Cold Digit Tracker ──────────────────────────────────────────────
 function hotColdDigitStrategy(history: number[]): StrategyResult {
@@ -187,7 +190,7 @@ function bayesianProbabilityStrategy(history: number[]): StrategyResult {
     if (history.length === 0) return { scores: normaliseScores(priors), confidence: 0.1, name: 'bayesian', tier: 2 };
 
     const posteriors = [...priors];
-    const decayFactor = 0.95;
+    const decayFactor = 0.85;
     let weight = 1;
 
     for (let i = history.length - 1; i >= 0; i--) {
@@ -288,12 +291,13 @@ function ema(data: number[], period: number): number[] {
 
 function macdStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(1) as number[];
-    if (history.length < 35) return { scores: normaliseScores(scores), confidence: 0, name: 'macd', tier: 3 };
+    if (history.length < 20) return { scores: normaliseScores(scores), confidence: 0, name: 'macd', tier: 3 };
 
-    const fast = ema(history, 12), slow = ema(history, 26);
+    const fast = ema(history, 5), slow = ema(history, 10);
     const offset = fast.length - slow.length;
+    if (slow.length === 0) return { scores: normaliseScores(scores), confidence: 0, name: 'macd', tier: 3 };
     const macdLine = slow.map((s, i) => fast[offset + i] - s);
-    const signal = ema(macdLine, 9);
+    const signal = ema(macdLine, 5);
     if (signal.length < 2) return { scores: normaliseScores(scores), confidence: 0, name: 'macd', tier: 3 };
 
     const mc = macdLine[macdLine.length - 1], sc = signal[signal.length - 1];
@@ -345,22 +349,22 @@ export function predictNextDigits(history: number[]): PredictionResult {
     }
 
     const strategies: StrategyResult[] = [
+        nGramStrategy(history, 1),
         nGramStrategy(history, 2),
         nGramStrategy(history, 3),
-        nGramStrategy(history, 4),
         markovChainStrategy(history),
         cyclicalPatternStrategy(history),
-        knnPatternStrategy(history, 5, 3),
-        knnPatternStrategy(history, 5, 5),
+        knnPatternStrategy(history, 5, 2),
+        knnPatternStrategy(history, 5, 4),
         adaptiveMomentumStrategy(history),
         digitAccelerationStrategy(history),
         hotColdDigitStrategy(history),
         bayesianProbabilityStrategy(history),
         entropyStrategy(history),
         digitRepetitionStrategy(history),
-        rsiStrategy(history),
+        rsiStrategy(history, 9),
         macdStrategy(history),
-        bollingerBandsStrategy(history),
+        bollingerBandsStrategy(history, 10),
     ];
 
     const combined = Array(10).fill(0) as number[];
