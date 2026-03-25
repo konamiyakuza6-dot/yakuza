@@ -27,8 +27,6 @@ import SpeedBotFloatingStop from '../../components/speedbot-floating-stop';
 import ChartModal from '../chart/chart-modal';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
-import OverUnder from '../OverUnder'; 
-import MakotiMagic from '../MakotiMagic'; // The new tool import
 import './main.scss';
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
@@ -37,7 +35,9 @@ const AnalysisTools = lazy(() => import('../analysis-tool'));
 const CopyTrading = lazy(() => import('../copy-trading'));
 const Strategies = lazy(() => import('../free-bots/strategies'));
 const Dtrader = lazy(() => import('../dtrader'));
-import TradingBots from '../free-bots/trading-bots';
+const OverUnder = lazy(() => import('../OverUnder'));
+const MakotiMagic = lazy(() => import('../MakotiMagic'));
+const TradingBots = lazy(() => import('../free-bots/trading-bots'));
 
 const AppWrapper = observer(() => {
     const { connectionStatus } = useApiBase();
@@ -122,15 +122,15 @@ const AppWrapper = observer(() => {
                             <Suspense fallback={<ChunkLoader message={localize('Please wait, loading chart...')} />}><ChartWrapper show_digits_stats={false} /></Suspense>
                         </div>
                         <div label={<><LabelPairedPuzzlePieceTwoCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Trading Bots' /></>} id='id-trading-bots'>
-                            <TradingBots />
+                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Trading Bots...')} />}><TradingBots /></Suspense>
                         </div>
                         <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Over/Under' /></>} id='over_under'>
-                            <OverUnder />
+                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Over/Under...')} />}><OverUnder /></Suspense>
                         </div>
 
                         {/* MAKOTI MAGIC TAB START */}
                         <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Makoti Magic' /></>} id='makoti_magic'>
-                            <MakotiMagic />
+                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Makoti Magic...')} />}><MakotiMagic /></Suspense>
                         </div>
                         {/* MAKOTI MAGIC TAB END */}
 

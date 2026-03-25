@@ -226,16 +226,25 @@ export default class OverUnderStore {
         this.processAnalysisQueue();
     }
 
-    processAnalysisQueue() {
+    processAnalysisQueue(retryCount = 0) {
         if (this.analysis_queue.length > 0) {
-            const sym = this.analysis_queue.shift()!;
-            runInAction(() => { this.current_analyzing_symbol = sym; });
+            const sym = this.analysis_queue[0];
             if (this.ws?.readyState === WebSocket.OPEN) {
+                this.analysis_queue.shift();
+                runInAction(() => { this.current_analyzing_symbol = sym; });
                 this.ws.send(JSON.stringify({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
             } else {
-                // WebSocket not ready — skip this symbol and continue
-                this.addLog(`⚠️ WS not open during analysis, skipping ${sym}.`);
-                this.processAnalysisQueue();
+                const MAX_RETRIES = 20;
+                if (retryCount >= MAX_RETRIES) {
+                    this.analysis_queue.shift();
+                    this.addLog(`⚠️ WS not open, skipping ${sym} after waiting.`);
+                    this.processAnalysisQueue();
+                } else {
+                    if (this.ws?.readyState !== WebSocket.CONNECTING) {
+                        this.connectWebSocket();
+                    }
+                    setTimeout(() => this.processAnalysisQueue(retryCount + 1), 300);
+                }
             }
         } else {
             this._clearAnalysisTimeout();
