@@ -153,7 +153,7 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {active_tab !== 8 && hash[active_tab] !== 'over_under' && hash[active_tab] !== 'makoti_magic' && (
+                {active_tab !== 8 && hash[active_tab] !== 'makoti_magic' && (
                     <div className='main__run-strategy-wrapper'>
                         {active_tab !== 3 && <RunStrategy />}
                         <RunPanel />
