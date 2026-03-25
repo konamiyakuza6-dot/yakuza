@@ -194,6 +194,7 @@ $cyan:    #06b6d4;
         height: 14px; display: flex; align-items: center;
         &.hot { background: rgba($green,.2); color: $green; padding: 0 5px; border-radius: 3px; }
         &.cold { background: rgba($red,.2);  color: $red;   padding: 0 5px; border-radius: 3px; }
+        &.predicted { background: rgba(#f59e0b,.2); color: #f59e0b; padding: 0 5px; border-radius: 3px; }
     }
 
     &__num {
@@ -234,6 +235,14 @@ $cyan:    #06b6d4;
         border-color: rgba($red,.4);
         .ou-cell__num { color: $red; }
         &::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: $red; box-shadow: 0 0 8px $red; }
+    }
+
+    &--predicted {
+        border-color: rgba(#f59e0b,.5);
+        background: rgba(#f59e0b,.05);
+        box-shadow: 0 0 0 1px rgba(#f59e0b,.25), 0 0 14px rgba(#f59e0b,.06);
+        .ou-cell__num { color: #f59e0b; }
+        &::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
     }
 }
 

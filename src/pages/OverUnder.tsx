@@ -42,6 +42,7 @@ const OverUnder = observer(() => {
         recovery_contract_type, recovery_barrier, use_recovery_delay,
         entry_digit, second_entry_digit, is_turbo, selected_symbol,
         debug_info, is_analyzing_volatility, is_authorizing,
+        differs_predicted_top4,
         setStake, setMartingale, setIsVolatilityChanger,
         setIsDiffersMode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
         setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier,
@@ -203,13 +204,15 @@ const OverUnder = observer(() => {
                     const hot = i === maxIdx && count > 0;
                     const cold = i === minIdx && count > 0;
                     const active = last_digit === i;
+                    const predicted = is_differs_mode && differs_predicted_top4.includes(i);
+                    const predRank = predicted ? differs_predicted_top4.indexOf(i) + 1 : -1;
                     return (
                         <motion.div key={i}
-                            className={`ou-cell${active ? ' ou-cell--active' : ''}${hot ? ' ou-cell--hot' : cold ? ' ou-cell--cold' : ''}`}
+                            className={`ou-cell${active ? ' ou-cell--active' : ''}${hot ? ' ou-cell--hot' : cold ? ' ou-cell--cold' : ''}${predicted ? ' ou-cell--predicted' : ''}`}
                             whileHover={{ y: -4, scale: 1.05 }}
                             transition={{ type: 'spring', stiffness: 360, damping: 20 }}>
-                            <span className={`ou-cell__badge${hot ? ' hot' : cold ? ' cold' : ''}`}>
-                                {hot ? 'HOT' : cold ? 'LOW' : ''}
+                            <span className={`ou-cell__badge${hot ? ' hot' : cold ? ' cold' : predicted ? ' predicted' : ''}`}>
+                                {hot ? 'HOT' : cold ? 'LOW' : predicted ? `P${predRank}` : ''}
                             </span>
                             <div className='ou-cell__num'>{i}</div>
                             <div className='ou-cell__bar'>

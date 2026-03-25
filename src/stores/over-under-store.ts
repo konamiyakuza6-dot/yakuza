@@ -4,6 +4,7 @@ import { TStores } from '@/types/stores.types';
 import RootStore from './root-store';
 import { getAppId, getSocketURL } from '@/components/shared';
 import { MessageTypes } from '@/external/bot-skeleton';
+import { predictNextDigits } from '@/utils/differs-prediction-engine';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_CONNECTING = 'Connecting...';
@@ -65,6 +66,7 @@ export default class OverUnderStore {
     is_2term_mode = false;
     is_rise_fall_mode = false;
     last_profit = 0;
+    differs_predicted_top4: number[] = [];
     private _tick_prices: number[] = [];
     total_loss_to_recover = 0;
     differs_digit_appearance_count = 0;
@@ -119,6 +121,7 @@ export default class OverUnderStore {
             is_differs_recovery_mode: observable,
             is_2term_mode: observable,
             is_rise_fall_mode: observable,
+            differs_predicted_top4: observable,
             setStake: action.bound,
             setIsRiseFallMode: action.bound,
             setIs2termMode: action.bound,
@@ -710,11 +713,29 @@ export default class OverUnderStore {
                 return;
             }
 
+            // ── Prediction Engine Filter ──────────────────────────────────
+            // Run all prediction strategies against recent tick history to get
+            // the top 4 most-likely-to-appear digits. If our selected digit
+            // is among them, the market is predicted to hit it — a Differs
+            // trade on it would likely lose — so we skip.
+            const predictionInput = this.tick_history.slice(-200);
+            const prediction = predictNextDigits(predictionInput);
+            runInAction(() => { this.differs_predicted_top4 = prediction.top4Digits; });
+            this.addLog(`Prediction Engine: ${prediction.summary}`);
+
+            if (prediction.top4Digits.includes(rejection_digit!)) {
+                this.addLog(
+                    `Differs: BLOCKED digit ${rejection_digit} — prediction engine flagged it as likely to appear (top4: [${prediction.top4Digits.join(',')}]). Skipping trade.`
+                );
+                return;
+            }
+
             this.differs_barrier_digit = rejection_digit;
 
             this.addLog(
                 `Differs: PATTERN! ${surge_count}x ${surge_direction} surge → ` +
-                `${curr_direction} reversal. Digit ${rejection_digit} (${digitPct.toFixed(1)}%, ${recentCount}x recent). DIFFER!`
+                `${curr_direction} reversal. Digit ${rejection_digit} (${digitPct.toFixed(1)}%, ${recentCount}x recent). ` +
+                `Prediction engine cleared. DIFFER!`
             );
 
             this.executeTrade('DIGITDIFF', String(rejection_digit));
