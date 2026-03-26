@@ -490,26 +490,53 @@ export default class RunPanelStore {
 
         this.onCloseDialog();
         
-        // Call the proper clear methods - they handle MobX reactivity and localStorage correctly
+        // Call the proper clear methods - wrap each in try-catch to prevent one error from breaking others
         try {
-            runInAction(() => {
-                if (journal) {
-                    journal.clear();
-                    console.log('[Run Panel] Journal cleared');
-                }
-                if (summary_card) {
-                    summary_card.clear();
-                    console.log('[Run Panel] Summary card cleared');
-                }
-                if (transactions) {
-                    transactions.clear();
-                    console.log('[Run Panel] Transactions cleared');
-                }
-            });
-            console.log('[Run Panel] ✅ All trade history cleared successfully');
-        } catch (error) {
-            console.error('[Run Panel] ❌ Error clearing statistics:', error);
+            if (journal?.clear) {
+                runInAction(() => {
+                    try {
+                        journal.clear();
+                        console.log('[Run Panel] Journal cleared');
+                    } catch (e) {
+                        console.error('[Run Panel] Journal clear error:', e);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('[Run Panel] Journal action error:', e);
         }
+
+        try {
+            if (summary_card?.clear) {
+                runInAction(() => {
+                    try {
+                        summary_card.clear();
+                        console.log('[Run Panel] Summary card cleared');
+                    } catch (e) {
+                        console.error('[Run Panel] Summary clear error:', e);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('[Run Panel] Summary action error:', e);
+        }
+
+        try {
+            if (transactions?.clear) {
+                runInAction(() => {
+                    try {
+                        transactions.clear();
+                        console.log('[Run Panel] Transactions cleared');
+                    } catch (e) {
+                        console.error('[Run Panel] Transactions clear error:', e);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('[Run Panel] Transactions action error:', e);
+        }
+
+        console.log('[Run Panel] ✅ Clear operation completed');
     };
 
     toggleStatisticsInfoModal = () => {
