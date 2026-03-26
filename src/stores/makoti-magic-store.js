@@ -4,6 +4,8 @@ import { predictNextDigits } from '@/utils/differs-prediction-engine';
 const STATUS_OFFLINE = 'Offline';
 const STATUS_LIVE = 'Live';
 const MAX_TICKS = 200;
+const MIN_CONFIDENCE = 0.31;
+const MAX_SCAN_ATTEMPTS = 50;
 
 class MakotiMagicStore {
     is_loading = false;
@@ -21,6 +23,8 @@ class MakotiMagicStore {
     last_scan_time = null;
     scan_interval_ms = 1000;
     bot_load_callback = null;
+    scan_attempts = 0;
+    is_auto_scanning = false;
 
     constructor() {
         makeAutoObservable(this, {
@@ -32,6 +36,7 @@ class MakotiMagicStore {
             loadBot: action,
             setBotLoadCallback: action,
             dispose: action,
+            performPrediction: action,
         });
     }
 
@@ -83,7 +88,7 @@ class MakotiMagicStore {
                     summary: 'Collecting tick data...',
                 };
             });
-            return;
+            return { continueScanning: true };
         }
 
         const history = this.tick_history.slice(-200);
@@ -91,17 +96,24 @@ class MakotiMagicStore {
         const topDigit = result.rankedDigits[0];
 
         const tickRange = Math.floor(Math.random() * 4) + 4;
+        const confidence = topDigit?.score ?? 0;
 
         runInAction(() => {
             this.prediction = {
                 predictedDigit: topDigit?.digit ?? null,
-                confidence: topDigit?.score ?? 0,
+                confidence: confidence,
                 tickRange: tickRange,
                 rankedDigits: result.rankedDigits.slice(0, 10),
                 summary: result.summary,
                 symbol: this.selected_symbol,
             };
         });
+
+        if (confidence >= MIN_CONFIDENCE || this.scan_attempts >= MAX_SCAN_ATTEMPTS) {
+            return { continueScanning: false, confidence, digit: topDigit?.digit };
+        }
+
+        return { continueScanning: true, confidence, digit: topDigit?.digit };
     }
 
     connectWebSocket = () => {
@@ -208,13 +220,34 @@ class MakotiMagicStore {
         }
 
         this.is_loading = true;
-        this.scan_count++;
-        this.last_scan_time = Date.now();
+        this.scan_attempts = 0;
+        this.is_auto_scanning = true;
+
+        this.runAutoScan();
+    }
+
+    runAutoScan = () => {
+        if (!this.is_auto_scanning) return;
+
+        this.scan_attempts++;
 
         setTimeout(() => {
-            this.performPrediction();
-            this.is_loading = false;
-        }, 1500);
+            const result = this.performPrediction();
+
+            if (result.continueScanning && this.scan_attempts < MAX_SCAN_ATTEMPTS) {
+                this.runAutoScan();
+            } else {
+                runInAction(() => {
+                    this.is_loading = false;
+                    this.is_auto_scanning = false;
+                });
+            }
+        }, 800);
+    };
+
+    stopScan = () => {
+        this.is_auto_scanning = false;
+        this.is_loading = false;
     };
 
     loadBot = async () => {
@@ -242,6 +275,7 @@ class MakotiMagicStore {
     };
 
     dispose = () => {
+        this.is_auto_scanning = false;
         if (this.ws) {
             this.ws.onclose = null;
             this.ws.close();

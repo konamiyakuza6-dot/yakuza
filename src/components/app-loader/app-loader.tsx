@@ -1,168 +1,207 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './app-loader.scss';
 import AnimatedStatus from './AnimatedStatus';
 
 interface AppLoaderProps {
     onLoadingComplete: () => void;
-    duration?: number; // Duration in milliseconds, default 12000ms (12 seconds)
+    duration?: number;
 }
 
-const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete, duration = 12000 }) => {
+const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete, duration = 6000 }) => {
     const [isVisible, setIsVisible] = useState(true);
     const [progress, setProgress] = useState(0);
-    const [messageIndex, setMessageIndex] = useState(0);
+    const [crackEffects, setCrackEffects] = useState<Array<{ id: number; x: number; y: number; angle: number }>>([]);
+    const [flyingWords, setFlyingWords] = useState<Array<{ id: number; text: string; x: number; y: number; angle: number; delay: number }>>([]);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const crackAudioRef = useRef<HTMLAudioElement | null>(null);
 
-    const messages = [
-        { title: 'Initializing' },
-        { title: 'Connecting to trading server...' },
-        { title: 'Loading charts' },
-        { title: 'Loading Blocky' },
-        { title: 'Preparing dashboard' },
-    ];
-
-    const steps = ['Connection', 'Market Data', 'AI Engine', 'Trading Bots', 'Final Setup'] as const;
-    const stepIndex = Math.min(steps.length - 1, Math.max(0, messageIndex));
-
-    // Initialize loading timer
-    // Total loader duration fixed at 6 seconds
-    const effectiveDuration = 6000;
+    const words = ['TRADING', 'MAKOTI', 'PRECISION', 'PROFIT', 'AUTOMATED', 'SIGNALS', 'BOTS', 'ANALYSIS', 'STRATEGY', 'SUCCESS'];
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setIsVisible(false);
-            setTimeout(onLoadingComplete, 300); // Wait for fade out animation
-        }, effectiveDuration);
+        // Initialize flying words from different directions
+        const newWords = words.map((word, i) => ({
+            id: i,
+            text: word,
+            x: Math.random() > 0.5 ? -200 - Math.random() * 100 : window.innerWidth + 200 + Math.random() * 100,
+            y: Math.random() * window.innerHeight,
+            angle: Math.random() * 30 - 15,
+            delay: i * 200 + Math.random() * 500,
+        }));
+        setFlyingWords(newWords);
 
-        return () => clearTimeout(timer);
-    }, [onLoadingComplete, effectiveDuration]);
+        // Generate crack effects
+        const cracks = Array.from({ length: 8 }, (_, i) => ({
+            id: i,
+            x: 40 + Math.random() * 20,
+            y: 40 + Math.random() * 20,
+            angle: Math.random() * 360,
+        }));
+        setCrackEffects(cracks);
 
-    // Progress bar and message advancement
+        // Try to load sounds (placeholder - would need actual audio files)
+        try {
+            // @ts-ignore - audio would be loaded from public folder
+            audioRef.current = new Audio('/sounds/engine.mp3');
+            audioRef.current.volume = 0.3;
+            
+            // @ts-ignore
+            crackAudioRef.current = new Audio('/sounds/crack.mp3');
+            crackAudioRef.current.volume = 0.5;
+        } catch (e) {
+            console.log('Audio files not found, continuing without sound');
+        }
+
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+            }
+            if (crackAudioRef.current) {
+                crackAudioRef.current.pause();
+            }
+        };
+    }, []);
+
+    // Progress bar
     useEffect(() => {
-        if (!isVisible) return;
-
-        setProgress(0);
-        // Evenly split the 6s across all messages
-        const totalPerMessageMs = Math.max(200, Math.floor(effectiveDuration / messages.length));
-        const stepMs = totalPerMessageMs / 100;
-        let current = 0;
-
-        const interval = setInterval(
-            () => {
-                current += 1;
-                if (current > 100) {
+        const interval = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 100) {
                     clearInterval(interval);
-                    // move to next message if any, and restart
-                    setMessageIndex(prev => {
-                        const next = prev + 1;
-                        if (next < messages.length) {
-                            // trigger next cycle
-                            setProgress(0);
-                            return next;
-                        }
-                        return prev;
-                    });
-                    return;
+                    return 100;
                 }
-                setProgress(current);
-            },
-            Math.max(4, stepMs)
-        );
+                return prev + 2;
+            });
+        }, duration / 50);
 
         return () => clearInterval(interval);
-    }, [isVisible, messageIndex, duration]);
+    }, [duration]);
+
+    // Complete loading
+    useEffect(() => {
+        if (progress >= 100) {
+            // Play crack sound
+            if (crackAudioRef.current) {
+                crackAudioRef.current.currentTime = 0;
+                crackAudioRef.current.play().catch(() => {});
+            }
+            
+            setTimeout(() => {
+                if (audioRef.current) {
+                    audioRef.current.pause();
+                }
+                setIsVisible(false);
+                setTimeout(onLoadingComplete, 500);
+            }, 500);
+        }
+    }, [progress, onLoadingComplete]);
 
     if (!isVisible) return null;
 
     return (
-        <div className='georgetown-loader'>
-            <div className='smart-loader-bg' />
-
-            <div className='smart-loader__wrap'>
-                <div className='smart-loader__card'>
-                    <div className='smart-loader__header'>
-                        <div className='smart-loader__brand'>
-                            <div className='smart-loader__brand-mark' aria-hidden='true'>
-                                <svg width='22' height='22' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
-                                    <path
-                                        d='M4 19V5M4 19H20M7 15L11 11L14 14L19 9'
-                                        stroke='currentColor'
-                                        strokeWidth='2'
-                                        strokeLinecap='round'
-                                        strokeLinejoin='round'
-                                    />
-                                </svg>
-                            </div>
-                            <div className='smart-loader__brand-text'>
-                                <div className='smart-loader__brand-title'>SMART</div>
-                                <div className='smart-loader__brand-subtitle'>TRADING HUB</div>
-                            </div>
-                        </div>
-
-                        <div className='smart-loader__welcome'>
-                            <div className='smart-loader__welcome-line'>
-                                Welcome to <span className='smart-loader__welcome-accent'>MAKOTI TRADERS</span>
-                            </div>
-                            <div className='smart-loader__welcome-sub'>Automated Precision Trading System</div>
-                        </div>
+        <div className='makoti-intro-loader'>
+            {/* Flying words background */}
+            <div className='flying-words-container'>
+                {flyingWords.map((word) => (
+                    <div
+                        key={word.id}
+                        className='flying-word'
+                        style={{
+                            '--start-x': `${word.x}px`,
+                            '--start-y': `${word.y}px`,
+                            '--angle': `${word.angle}deg`,
+                            '--delay': `${word.delay}ms`,
+                        } as React.CSSProperties}
+                    >
+                        {word.text}
                     </div>
+                ))}
+            </div>
 
-                    <div className='smart-loader__steps'>
-                        {steps.map((label, idx) => {
-                            const is_done = idx < stepIndex;
-                            const is_active = idx === stepIndex;
-                            return (
-                                <div
-                                    key={label}
-                                    className={[
-                                        'smart-loader__step',
-                                        is_done ? 'smart-loader__step--done' : '',
-                                        is_active ? 'smart-loader__step--active' : '',
-                                    ]
-                                        .filter(Boolean)
-                                        .join(' ')}
-                                >
-                                    <div className='smart-loader__step-dot' aria-hidden='true'>
-                                        {is_done ? '✓' : idx + 1}
-                                    </div>
-                                    <div className='smart-loader__step-label'>{label}</div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    <div className='smart-loader__tiles'>
-                        {[
-                            { label: 'Free Bots', icon: '🤖' },
-                            { label: 'AI Bots', icon: '🧠' },
-                            { label: 'Analysis Tool', icon: '📊' },
-                            { label: 'Smart Analysis', icon: '✨' },
-                            { label: 'Copy Trading', icon: '📄' },
-                            { label: 'Signals', icon: '📡' },
-                        ].map(t => (
-                            <div key={t.label} className='smart-loader__tile' aria-hidden='true'>
-                                <div className='smart-loader__tile-icon'>{t.icon}</div>
-                                <div className='smart-loader__tile-label'>{t.label}</div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <AnimatedStatus
-                        status="Establishing secure connection..."
-                        subStatus={messages[messageIndex]?.title || 'Connecting...'}
+            {/* Crack overlay effect */}
+            <div className='crack-overlay'>
+                {crackEffects.map((crack) => (
+                    <div
+                        key={crack.id}
+                        className='crack-line'
+                        style={{
+                            '--crack-x': `${crack.x}%`,
+                            '--crack-y': `${crack.y}%`,
+                            '--crack-angle': `${crack.angle}deg`,
+                        } as React.CSSProperties}
                     />
+                ))}
+            </div>
 
-                    <div className='progress-wrapper'>
-                        <div className='progress-track'>
-                            <div className='loading-bar-glow' style={{ width: `${progress}%` }} />
-                            <div className='loading-bar-pulse' />
+            {/* Main content */}
+            <div className='intro-content'>
+                <div className='intro-logo-container'>
+                    <div className='intro-logo'>
+                        <div className='logo-icon'>
+                            <svg viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
+                                <path d='M13 3L4 14H12L11 21L20 10H12L13 3Z' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'/>
+                            </svg>
                         </div>
-                        <div className='progress-counter'>{progress}%</div>
-                    </div>
-
-                    <div className='smart-loader__footer'>
-                        © 2025 MAKOTI TRADERS Powered by Deriv. All rights reserved.
+                        <div className='logo-text'>
+                            <span className='logo-main'>MAKOTI</span>
+                            <span className='logo-sub'>TRADING</span>
+                        </div>
                     </div>
                 </div>
+
+                <div className='intro-tagline'>
+                    <span className='tagline-word'>Automated</span>
+                    <span className='tagline-word'>Precision</span>
+                    <span className='tagline-word'>Trading</span>
+                    <span className='tagline-word'>System</span>
+                </div>
+
+                <div className='intro-features'>
+                    <div className='feature-item'>
+                        <span className='feature-icon'>⚡</span>
+                        <span>AI Prediction</span>
+                    </div>
+                    <div className='feature-item'>
+                        <span className='feature-icon'>🎯</span>
+                        <span>Smart Analysis</span>
+                    </div>
+                    <div className='feature-item'>
+                        <span className='feature-icon'>🚀</span>
+                        <span>Auto Trading</span>
+                    </div>
+                </div>
+
+                <div className='intro-progress'>
+                    <div className='progress-bar-container'>
+                        <div className='progress-bar-fill' style={{ width: `${progress}%` }}>
+                            <div className='progress-shine' />
+                        </div>
+                    </div>
+                    <div className='progress-text'>
+                        <span className='progress-percent'>{Math.round(progress)}%</span>
+                        <span className='progress-status'>
+                            {progress < 30 && 'Initializing systems...'}
+                            {progress >= 30 && progress < 60 && 'Loading prediction engine...'}
+                            {progress >= 60 && progress < 90 && 'Connecting to markets...'}
+                            {progress >= 90 && 'Almost ready...'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Particles */}
+            <div className='particles-container'>
+                {Array.from({ length: 50 }).map((_, i) => (
+                    <div
+                        key={i}
+                        className='particle'
+                        style={{
+                            '--x': `${Math.random() * 100}%`,
+                            '--y': `${Math.random() * 100}%`,
+                            '--duration': `${2 + Math.random() * 3}s`,
+                            '--delay': `${Math.random() * 2}s`,
+                        } as React.CSSProperties}
+                    />
+                ))}
             </div>
         </div>
     );

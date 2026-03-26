@@ -289,6 +289,31 @@
         }
     }
 
+    .mm-scan-progress {
+        margin-bottom: 16px;
+
+        &__bar {
+            height: 4px;
+            background: #2a2a35;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        &__fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffcc00, #ff9900);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        &__text {
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+        }
+    }
+
     .mm-cta-wrap {
         margin-top: auto;
         display: flex;
@@ -323,6 +348,15 @@
         &:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 4px 20px rgba(255, 204, 0, 0.4);
+        }
+
+        &--stop {
+            background: linear-gradient(145deg, #e74c3c, #c0392b);
+            color: #fff;
+
+            &:hover:not(:disabled) {
+                box-shadow: 0 4px 20px rgba(231, 76, 60, 0.4);
+            }
         }
     }
 

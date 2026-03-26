@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
 import { motion } from 'framer-motion';
-import { Zap, BarChart2, Cpu, RefreshCw, TrendingUp, Play } from 'lucide-react';
+import { Zap, BarChart2, Cpu, RefreshCw, TrendingUp, Play, Square } from 'lucide-react';
 import MakotiMagicStore from '@/stores/makoti-magic-store';
 import './MakotiMagic.scss';
 
@@ -10,6 +10,7 @@ const MakotiMagic = observer(() => {
         connectWebSocket,
         setSelectedSymbol,
         runScan,
+        stopScan,
         loadBot,
         last_digit,
         prediction,
@@ -17,6 +18,8 @@ const MakotiMagic = observer(() => {
         selected_symbol,
         connection_status,
         tick_history,
+        scan_attempts,
+        is_auto_scanning,
     } = MakotiMagicStore;
 
     useEffect(() => {
@@ -39,7 +42,7 @@ const MakotiMagic = observer(() => {
 
     const getConfidenceColor = (confidence) => {
         if (confidence >= 0.4) return '#2ecc71';
-        if (confidence >= 0.25) return '#f39c12';
+        if (confidence >= 0.31) return '#f39c12';
         return '#e74c3c';
     };
 
@@ -92,6 +95,7 @@ const MakotiMagic = observer(() => {
                                     className='mm-sel'
                                     value={selected_symbol}
                                     onChange={e => setSelectedSymbol(e.target.value)}
+                                    disabled={is_loading}
                                 >
                                     {volatilityOptions.map(v => (
                                         <option key={v.value} value={v.value}>{v.label}</option>
@@ -126,13 +130,37 @@ const MakotiMagic = observer(() => {
                         )}
                     </div>
 
+                    {is_auto_scanning && (
+                        <div className='mm-scan-progress'>
+                            <div className='mm-scan-progress__bar'>
+                                <motion.div 
+                                    className='mm-scan-progress__fill'
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${Math.min((scan_attempts / 50) * 100, 100)}%` }}
+                                />
+                            </div>
+                            <div className='mm-scan-progress__text'>
+                                Scanning... {scan_attempts}/50 attempts
+                            </div>
+                        </div>
+                    )}
+
                     <div className='mm-cta-wrap'>
-                        <motion.button className='mm-cta' onClick={runScan} disabled={is_loading}>
-                            <span className='mm-cta__ico'>
-                                {is_loading ? <RefreshCw size={17} className='mm-spin' /> : <Zap size={17} />}
-                            </span>
-                            <span className='mm-cta__txt'>{is_loading ? 'SCANNING...' : 'SCAN'}</span>
-                        </motion.button>
+                        {!is_auto_scanning ? (
+                            <motion.button className='mm-cta' onClick={runScan} disabled={is_loading}>
+                                <span className='mm-cta__ico'>
+                                    <Zap size={17} />
+                                </span>
+                                <span className='mm-cta__txt'>SCAN (Min 31% Confidence)</span>
+                            </motion.button>
+                        ) : (
+                            <motion.button className='mm-cta mm-cta--stop' onClick={stopScan}>
+                                <span className='mm-cta__ico'>
+                                    <Square size={17} />
+                                </span>
+                                <span className='mm-cta__txt'>STOP SCANNING</span>
+                            </motion.button>
+                        )}
                         
                         {showLoadButton && (
                             <motion.button 
