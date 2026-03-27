@@ -856,7 +856,7 @@ export default class OverUnderStore {
         for (let d = 0; d <= 9; d++) {
             if (!top9Digits.includes(d)) {
                 const recentCount = last20.filter(x => x === d).length;
-                if (recentCount <= 2) {
+                if (recentCount <= 7) {
                     differsDigit = d;
                     break;
                 }
