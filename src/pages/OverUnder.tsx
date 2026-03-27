@@ -208,7 +208,7 @@ const OverUnder = observer(() => {
                     const hot = i === maxIdx && count > 0;
                     const cold = i === minIdx && count > 0;
                     const active = last_digit === i;
-                    const predicted = is_differs_mode && differs_predicted_top4.includes(i);
+                    const predicted = (is_differs_mode || is_differs_v2_mode) && differs_predicted_top4.includes(i);
                     const predRank = predicted ? differs_predicted_top4.indexOf(i) + 1 : -1;
                     return (
                         <motion.div key={i}

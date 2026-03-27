@@ -782,80 +782,45 @@ export default class OverUnderStore {
         const autoSwitchOn = this.is_volatility_changer && this.is_analyzing_volatility;
         const hasPlacedTrade = this.differs_v2_predicted_digit !== null;
         
-        if (hasPlacedTrade && !autoSwitchOn && this.differs_v2_post_trade_ticks < 3) {
+        if (hasPlacedTrade && !autoSwitchOn && this.differs_v2_post_trade_ticks < 5) {
             return;
         }
 
         const predictionInput = this.tick_history.slice(-200);
         const prediction = predictNextDigits(predictionInput);
         
-        if (prediction.top4Digits.length === 0) {
+        if (prediction.rankedDigits.length === 0) {
             this.addLog(`DiffersV2: Insufficient data for prediction`);
             return;
         }
 
-        runInAction(() => { 
-            this.differs_predicted_top4 = prediction.top4Digits; 
-        });
-        this.addLog(`DiffersV2 Prediction: ${prediction.summary}`);
-
-        const predictedDigit = prediction.top4Digits[0];
+        const top9Digits = prediction.rankedDigits.slice(0, 9).map(d => d.digit);
         
-        const history = this.tick_history.slice(-1000);
-        const totalTicks = history.length;
-        const digitCounts = Array(10).fill(0) as number[];
-        history.forEach(d => { if (d >= 0 && d <= 9) digitCounts[d]++; });
-
-        const digitCount = digitCounts[predictedDigit];
-        const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
-
-        if (digitPct > 9.8) {
-            this.addLog(
-                `DiffersV2: SKIP digit ${predictedDigit} — too frequent (${digitPct.toFixed(1)}% in last ${totalTicks} ticks, limit 9.8%). Re-analyzing...`
-            );
-            return;
-        }
-
-        const last10 = history.slice(-10);
-        const recentCount = last10.filter(d => d === predictedDigit).length;
-
-        if (recentCount > 3) {
-            this.addLog(
-                `DiffersV2: SKIP digit ${predictedDigit} — rapidly increasing (appeared ${recentCount}x in last 10 ticks, limit 3). Re-analyzing...`
-            );
-            return;
-        }
+        runInAction(() => { 
+            this.differs_predicted_top4 = top9Digits; 
+        });
+        this.addLog(`DiffersV2: Predicting top 9: [${top9Digits.join(',')}]`);
 
         let differsDigit: number | null = null;
         
         for (let d = 0; d <= 9; d++) {
-            if (!prediction.top4Digits.includes(d)) {
-                const dCount = digitCounts[d];
-                const dPct = totalTicks > 0 ? (dCount / totalTicks) * 100 : 0;
-                
-                if (dPct <= 9.8) {
-                    const dRecentCount = last10.filter(x => x === d).length;
-                    if (dRecentCount <= 3) {
-                        differsDigit = d;
-                        break;
-                    }
-                }
+            if (!top9Digits.includes(d)) {
+                differsDigit = d;
+                break;
             }
         }
 
         if (differsDigit === null) {
-            this.addLog(`DiffersV2: No suitable differs digit found. All digits either in top4 or blocked by frequency.`);
+            this.addLog(`DiffersV2: Error - no differs digit found`);
             return;
         }
 
         runInAction(() => {
-            this.differs_v2_predicted_digit = predictedDigit;
+            this.differs_v2_predicted_digit = top9Digits[0];
             this.differs_v2_post_trade_ticks = 0;
         });
 
-        this.addLog(
-            `DiffersV2: PREDICTED ${predictedDigit} (${digitPct.toFixed(1)}%) → BET DIFFERS on ${differsDigit} (not in top4)`
-        );
+        this.addLog(`DiffersV2: PREDICTED [${top9Digits.join(',')}] → DIFFER on ${differsDigit}`);
 
         this.executeTrade('DIGITDIFF', String(differsDigit));
     }
