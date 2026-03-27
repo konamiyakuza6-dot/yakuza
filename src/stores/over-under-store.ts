@@ -861,46 +861,17 @@ export default class OverUnderStore {
         });
         this.addLog(`DiffersV2: Predicting next tick - top 9: [${top9Digits.join(',')}]`);
 
-        const last30 = this.tick_history.slice(-30);
-        const digitCounts = Array(10).fill(0);
-        last30.forEach(d => { if (d >= 0 && d <= 9) digitCounts[d]++; });
-
-        const minCount = Math.min(...digitCounts);
-        const leastFrequentDigits = digitCounts.map((count, d) => ({ digit: d, count }))
-            .filter(item => item.count === minCount)
-            .map(item => item.digit);
-
         let differsDigit: number | null = null;
         
-        for (const d of leastFrequentDigits) {
+        for (let d = 0; d <= 9; d++) {
             if (!top9Digits.includes(d)) {
                 differsDigit = d;
                 break;
             }
         }
-        
-        if (differsDigit === null) {
-            for (let d = 0; d <= 9; d++) {
-                if (!top9Digits.includes(d)) {
-                    if (digitCounts[d] <= 4) {
-                        differsDigit = d;
-                        break;
-                    }
-                }
-            }
-        }
 
         if (differsDigit === null) {
-            for (let d = 0; d <= 9; d++) {
-                if (!top9Digits.includes(d)) {
-                    differsDigit = d;
-                    break;
-                }
-            }
-        }
-
-        if (differsDigit === null) {
-            this.addLog(`DiffersV2: No suitable differs digit found`);
+            this.addLog(`DiffersV2: Error - no differs digit found`);
             return;
         }
 
