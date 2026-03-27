@@ -1,9 +1,9 @@
-
 export interface PredictionResult {
     top4Digits: number[];
     rankedDigits: Array<{ digit: number; score: number }>;
     overallConfidence: number;
     summary: string;
+    predictedDigit: number | null;
 }
 
 interface StrategyResult {
@@ -13,7 +13,7 @@ interface StrategyResult {
     tier: 1 | 2 | 3;
 }
 
-const TIER_WEIGHT: Record<1 | 2 | 3, number> = { 1: 4.0, 2: 1.8, 3: 1.0 };
+const TIER_WEIGHT: Record<1 | 2 | 3, number> = { 1: 5.0, 2: 2.5, 3: 1.0 };
 
 function normaliseScores(scores: number[]): number[] {
     const total = scores.reduce((a, b) => a + b, 0);
@@ -21,7 +21,14 @@ function normaliseScores(scores: number[]): number[] {
     return scores.map(s => s / total);
 }
 
-// ── 1. N-Gram Sequence Prediction ─────────────────────────────────────────
+function getRecentFrequency(history: number[], window: number): number[] {
+    const recent = history.slice(-window);
+    const counts = Array(10).fill(0);
+    recent.forEach(d => { if (d >= 0 && d <= 9) counts[d]++; });
+    return counts;
+}
+
+// ── 1. Deep N-Gram with multiple contexts ─────────────────────────────────────
 function nGramStrategy(history: number[], n: number): StrategyResult {
     const name = `nGram-${n}`;
     const scores = Array(10).fill(0) as number[];
@@ -44,39 +51,52 @@ function nGramStrategy(history: number[], n: number): StrategyResult {
     return { scores, confidence: Math.max(...scores), name, tier: 1 };
 }
 
-// ── 2. Markov Chain ────────────────────────────────────────────────────────
+// ── 2. Advanced Markov Chain with multiple lookbacks ───────────────────────
 function markovChainStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(0) as number[];
-    if (history.length < 2) return { scores: normaliseScores(scores), confidence: 0, name: 'markov', tier: 1 };
+    if (history.length < 3) return { scores: normaliseScores(scores), confidence: 0, name: 'markov', tier: 1 };
 
-    const matrix: number[][] = Array.from({ length: 10 }, () => Array(10).fill(0));
-    for (let i = 0; i < history.length - 1; i++) {
-        const from = history[i], to = history[i + 1];
-        if (from >= 0 && from <= 9 && to >= 0 && to <= 9) matrix[from][to]++;
+    const weights: number[] = [];
+    const results: number[][] = [];
+
+    for (let lookback = 1; lookback <= 3; lookback++) {
+        const matrix: number[][] = Array.from({ length: 10 }, () => Array(10).fill(0));
+        for (let i = lookback; i < history.length; i++) {
+            const from = history[i - lookback], to = history[i];
+            if (from >= 0 && from <= 9 && to >= 0 && to <= 9) matrix[from][to]++;
+        }
+        const last = history[history.length - lookback];
+        if (last < 0 || last > 9) continue;
+        const row = matrix[last];
+        const total = row.reduce((a, b) => a + b, 0);
+        if (total > 0) {
+            weights.push(4 - lookback);
+            results.push(row.map(c => c / total));
+        }
     }
-    const last = history[history.length - 1];
-    if (last < 0 || last > 9) return { scores: normaliseScores(scores), confidence: 0, name: 'markov', tier: 1 };
 
-    const row = matrix[last];
-    const total = row.reduce((a, b) => a + b, 0);
-    if (total === 0) return { scores: normaliseScores(scores), confidence: 0, name: 'markov', tier: 1 };
+    if (results.length === 0) return { scores: normaliseScores(scores), confidence: 0, name: 'markov', tier: 1 };
 
-    row.forEach((c, i) => { scores[i] = c / total; });
-    return { scores, confidence: Math.max(...scores), name: 'markov', tier: 1 };
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    results.forEach((probs, idx) => {
+        probs.forEach((p, d) => { scores[d] += p * (weights[idx] / totalWeight); });
+    });
+
+    return { scores: normaliseScores(scores), confidence: Math.max(...scores), name: 'markov', tier: 1 };
 }
 
-// ── 3. Cyclical Pattern Detection ─────────────────────────────────────────
+// ── 3. Multi-Scale Cyclical Pattern Detection ─────────────────────────────
 function cyclicalPatternStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(0) as number[];
-    const minLen = 6;
+    const minLen = 8;
     if (history.length < minLen) return { scores: normaliseScores(scores), confidence: 0, name: 'cyclical', tier: 2 };
 
     let bestCycleLen = 0, bestScore = 0;
 
-    for (let cycleLen = 2; cycleLen <= 8; cycleLen++) {
+    for (let cycleLen = 2; cycleLen <= 10; cycleLen++) {
         if (history.length < cycleLen * 2) continue;
         let matches = 0;
-        const checks = Math.min(history.length - cycleLen, cycleLen * 3);
+        const checks = Math.min(history.length - cycleLen, cycleLen * 4);
         for (let i = 0; i < checks; i++) {
             if (history[history.length - 1 - i] === history[history.length - 1 - i - cycleLen]) matches++;
         }
@@ -84,9 +104,9 @@ function cyclicalPatternStrategy(history: number[]): StrategyResult {
         if (score > bestScore) { bestScore = score; bestCycleLen = cycleLen; }
     }
 
-    if (bestScore > 0.6 && bestCycleLen > 0) {
+    if (bestScore > 0.55 && bestCycleLen > 0) {
         const predictedIdx = history.length % bestCycleLen;
-        const window = history.slice(-bestCycleLen * 4);
+        const window = history.slice(-bestCycleLen * 5);
         const cycleVotes = Array(10).fill(0) as number[];
         for (let j = predictedIdx; j < window.length; j += bestCycleLen) {
             const d = window[j];
@@ -99,8 +119,8 @@ function cyclicalPatternStrategy(history: number[]): StrategyResult {
     return { scores: normaliseScores(scores), confidence: bestScore, name: 'cyclical', tier: 2 };
 }
 
-// ── 4. KNN Pattern Match ───────────────────────────────────────────────────
-function knnPatternStrategy(history: number[], k = 5, winLen = 4): StrategyResult {
+// ── 4. Deep KNN with multiple windows ──────────────────────────────────────
+function knnPatternStrategy(history: number[], k = 7, winLen = 3): StrategyResult {
     const scores = Array(10).fill(0) as number[];
     if (history.length < winLen + 1) return { scores: normaliseScores(scores), confidence: 0, name: 'knn', tier: 1 };
 
@@ -118,17 +138,18 @@ function knnPatternStrategy(history: number[], k = 5, winLen = 4): StrategyResul
     if (kNearest.length === 0) return { scores: normaliseScores(scores), confidence: 0, name: 'knn', tier: 1 };
 
     const maxDist = kNearest[kNearest.length - 1].dist || 1;
+    const weightSum = kNearest.reduce((sum, item) => sum + (maxDist - item.dist + 1), 0);
     kNearest.forEach(({ dist, next }) => {
-        if (next >= 0 && next <= 9) scores[next] += (maxDist - dist + 1);
+        if (next >= 0 && next <= 9) scores[next] += (maxDist - dist + 1) / weightSum;
     });
 
     return { scores: normaliseScores(scores), confidence: Math.max(...scores), name: 'knn', tier: 1 };
 }
 
-// ── 5. Adaptive Momentum ───────────────────────────────────────────────────
+// ── 5. Multi-Window Adaptive Momentum ──────────────────────────────────────
 function adaptiveMomentumStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(0) as number[];
-    const windows = [3, 5, 8];
+    const windows = [3, 5, 8, 12, 20];
     if (history.length < Math.max(...windows)) return { scores: normaliseScores(scores), confidence: 0, name: 'adaptiveMomentum', tier: 1 };
 
     windows.forEach((w, wi) => {
@@ -136,61 +157,70 @@ function adaptiveMomentumStrategy(history: number[]): StrategyResult {
         const freq = Array(10).fill(0) as number[];
         slice.forEach(d => { if (d >= 0 && d <= 9) freq[d]++; });
         const total = slice.length;
-        const weight = wi === 0 ? 3 : wi === 1 ? 2 : 1;
+        const weight = (windows.length - wi) * 1.5;
         freq.forEach((c, i) => { scores[i] += (c / total) * weight; });
     });
 
     return { scores: normaliseScores(scores), confidence: Math.max(...normaliseScores(scores)), name: 'adaptiveMomentum', tier: 1 };
 }
 
-// ── 6. Digit Acceleration ──────────────────────────────────────────────────
+// ── 6. Digit Acceleration with multiple timeframes ────────────────────────
 function digitAccelerationStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(0) as number[];
-    const window = history.slice(-20);
-    if (window.length < 10) return { scores: normaliseScores(scores), confidence: 0, name: 'acceleration', tier: 2 };
+    const windows = [10, 20, 30, 50];
+    if (history.length < 20) return { scores: normaliseScores(scores), confidence: 0, name: 'acceleration', tier: 2 };
 
-    const countInWindow = (start: number, end: number, digit: number) =>
-        window.slice(start, end).filter(d => d === digit).length;
+    windows.forEach((windowSize, idx) => {
+        const window = history.slice(-windowSize);
+        if (window.length < 10) return;
+        const half = Math.floor(window.length / 2);
+        if (half === 0) return;
 
-    const half = Math.floor(window.length / 2);
-    for (let d = 0; d <= 9; d++) {
-        if (half === 0 || (window.length - half) === 0) continue;
-        const oldVelocity = countInWindow(0, half, d) / half;
-        const newVelocity = countInWindow(half, window.length, d) / (window.length - half);
-        const acceleration = newVelocity - oldVelocity;
-        scores[d] = Math.max(0, acceleration);
-    }
+        const countInWindow = (start: number, end: number, digit: number) =>
+            window.slice(start, end).filter(d => d === digit).length;
+
+        for (let d = 0; d <= 9; d++) {
+            const oldVelocity = countInWindow(0, half, d) / half;
+            const newVelocity = countInWindow(half, window.length, d) / (window.length - half);
+            const acceleration = newVelocity - oldVelocity;
+            const weight = 1 / (idx + 1);
+            scores[d] += Math.max(0, acceleration) * weight;
+        }
+    });
 
     return { scores: normaliseScores(scores), confidence: Math.max(...normaliseScores(scores)), name: 'acceleration', tier: 2 };
 }
 
-
-// ── 7. Hot-Cold Digit Tracker ──────────────────────────────────────────────
+// ── 7. Hot-Cold with recency weighting ─────────────────────────────────────
 function hotColdDigitStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(0) as number[];
-    const windowSize = Math.min(10, history.length);
-    if (windowSize === 0) return { scores: normaliseScores(scores), confidence: 0, name: 'hotCold', tier: 2 };
+    const windows = [10, 20, 50];
+    if (windows[0] === 0) return { scores: normaliseScores(scores), confidence: 0, name: 'hotCold', tier: 2 };
 
-    const recent = history.slice(-windowSize);
-    const freq = Array(10).fill(0) as number[];
-    recent.forEach(d => { if (d >= 0 && d <= 9) freq[d]++; });
-
-    freq.forEach((c, i) => {
-        if (c >= 3) scores[i] = c * 3;
-        else if (c >= 2) scores[i] = c * 1.5;
-        else scores[i] = c;
+    windows.forEach((windowSize, idx) => {
+        const recent = history.slice(-windowSize);
+        const freq = Array(10).fill(0) as number[];
+        recent.forEach(d => { if (d >= 0 && d <= 9) freq[d]++; });
+        const weight = 1 / (idx + 1);
+        
+        freq.forEach((c, i) => {
+            if (c >= 4) scores[i] += c * 4 * weight;
+            else if (c >= 3) scores[i] += c * 2 * weight;
+            else if (c >= 2) scores[i] += c * 1.5 * weight;
+            else scores[i] += c * weight;
+        });
     });
 
     return { scores: normaliseScores(scores), confidence: Math.max(...normaliseScores(scores)), name: 'hotCold', tier: 2 };
 }
 
-// ── 8. Bayesian Probability ────────────────────────────────────────────────
+// ── 8. Enhanced Bayesian with decay ────────────────────────────────────────
 function bayesianProbabilityStrategy(history: number[]): StrategyResult {
     const priors = Array(10).fill(0.1) as number[];
     if (history.length === 0) return { scores: normaliseScores(priors), confidence: 0.1, name: 'bayesian', tier: 2 };
 
     const posteriors = [...priors];
-    const decayFactor = 0.85;
+    const decayFactor = 0.8;
     let weight = 1;
 
     for (let i = history.length - 1; i >= 0; i--) {
@@ -202,19 +232,25 @@ function bayesianProbabilityStrategy(history: number[]): StrategyResult {
     return { scores: normaliseScores(posteriors), confidence: Math.max(...normaliseScores(posteriors)), name: 'bayesian', tier: 2 };
 }
 
-// ── 9. Entropy Analysis ────────────────────────────────────────────────────
+// ── 9. Recency-Weighted Entropy Analysis ─────────────────────────────────
 function entropyStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(0) as number[];
-    const windowSize = Math.min(50, history.length);
+    const windowSize = Math.min(100, history.length);
     if (windowSize === 0) return { scores: normaliseScores(scores), confidence: 0, name: 'entropy', tier: 3 };
 
     const slice = history.slice(-windowSize);
     const freq = Array(10).fill(0) as number[];
-    slice.forEach(d => { if (d >= 0 && d <= 9) freq[d]++; });
+    slice.forEach((d, idx) => { 
+        if (d >= 0 && d <= 9) {
+            const recency = 1 - (idx / windowSize);
+            freq[d] += 1 + recency;
+        }
+    });
 
     let entropy = 0;
+    const total = freq.reduce((a, b) => a + b, 0);
     freq.forEach(c => {
-        if (c > 0) { const p = c / windowSize; entropy -= p * Math.log2(p); }
+        if (c > 0) { const p = c / total; entropy -= p * Math.log2(p); }
     });
 
     const maxEntropy = Math.log2(10);
@@ -225,116 +261,157 @@ function entropyStrategy(history: number[]): StrategyResult {
     } else {
         const sorted = [...freq].sort((a, b) => a - b);
         const median = sorted[5];
-        freq.forEach((c, i) => { scores[i] = Math.abs(c - median) < 2 ? 1 : 0.5; });
+        freq.forEach((c, i) => { scores[i] = Math.abs(c - median) < 3 ? 1.5 : 0.5; });
     }
 
     return { scores: normaliseScores(scores), confidence: 1 - normEntropy, name: 'entropy', tier: 3 };
 }
 
-// ── 10. Digit Repetition & Frequency ──────────────────────────────────────
+// ── 10. Digit Repetition with recency ────────────────────────────────────
 function digitRepetitionStrategy(history: number[]): StrategyResult {
     const scores = Array(10).fill(0) as number[];
     if (history.length === 0) return { scores: normaliseScores(scores), confidence: 0, name: 'digitRepeat', tier: 2 };
 
-    const recentLen = Math.min(50, history.length);
+    const recentLen = Math.min(100, history.length);
     const recent = history.slice(-recentLen);
 
     recent.forEach((d, idx) => {
         if (d >= 0 && d <= 9) {
             const recency = (idx + 1) / recentLen;
-            scores[d] += recency * recency;
+            scores[d] += recency * recency * 2;
         }
     });
 
     return { scores: normaliseScores(scores), confidence: Math.max(...normaliseScores(scores)), name: 'digitRepeat', tier: 2 };
 }
 
-// ── 11. RSI Adapted ───────────────────────────────────────────────────────
-function rsiStrategy(history: number[], period = 14): StrategyResult {
-    const scores = Array(10).fill(1) as number[];
-    if (history.length < period + 1) return { scores: normaliseScores(scores), confidence: 0, name: 'rsi', tier: 3 };
+// ── 11. Consecutive Digit Pattern Detection ─────────────────────────────
+function consecutivePatternStrategy(history: number[]): StrategyResult {
+    const scores = Array(10).fill(0) as number[];
+    if (history.length < 5) return { scores: normaliseScores(scores), confidence: 0, name: 'consecutive', tier: 2 };
 
-    let gains = 0, losses = 0;
-    for (let i = history.length - period; i < history.length; i++) {
-        const diff = history[i] - history[i - 1];
-        if (diff > 0) gains += diff;
-        else losses += Math.abs(diff);
+    const patterns: Record<string, number> = {};
+    for (let i = 2; i <= 5; i++) {
+        if (history.length < i) continue;
+        const key = history.slice(-i).join(',');
+        const next = history[history.length - 1];
+        if (!patterns[key]) patterns[key] = 0;
+        patterns[key]++;
     }
 
-    if (losses === 0) {
-        for (let i = 6; i <= 9; i++) scores[i] += 2;
-        return { scores: normaliseScores(scores), confidence: 0.5, name: 'rsi', tier: 3 };
+    for (let i = 0; i <= history.length - 3; i++) {
+        const seq = [history[i], history[i+1], history[i+2]];
+        const isUp = seq[1] > seq[0] && seq[2] > seq[1];
+        const isDown = seq[1] < seq[0] && seq[2] < seq[1];
+        if (isUp || isDown) {
+            const last = history[history.length - 1];
+            if (isUp && last < 9) scores[last + 1] += 0.5;
+            if (isDown && last > 0) scores[last - 1] += 0.5;
+        }
     }
 
-    const rs = gains / losses;
-    const rsi = 100 - (100 / (1 + rs));
-
-    if (rsi > 70) {
-        for (let i = 0; i <= 4; i++) scores[i] += 2;
-    } else if (rsi < 30) {
-        for (let i = 5; i <= 9; i++) scores[i] += 2;
-    } else {
-        for (let i = 4; i <= 6; i++) scores[i] += 1.5;
-    }
-
-    return { scores: normaliseScores(scores), confidence: Math.abs(rsi - 50) / 50, name: 'rsi', tier: 3 };
+    return { scores: normaliseScores(scores), confidence: Math.max(...scores) * 0.7, name: 'consecutive', tier: 2 };
 }
 
-// ── 12. MACD Adapted ──────────────────────────────────────────────────────
-function ema(data: number[], period: number): number[] {
-    if (data.length < period) return [];
-    const k = 2 / (period + 1);
-    const result: number[] = [data.slice(0, period).reduce((a, b) => a + b, 0) / period];
-    for (let i = period; i < data.length; i++) result.push(data[i] * k + result[result.length - 1] * (1 - k));
-    return result;
-}
+// ── 12. Pair Frequency Analysis ─────────────────────────────────────────
+function pairFrequencyStrategy(history: number[]): StrategyResult {
+    const scores = Array(10).fill(0) as number[];
+    if (history.length < 3) return { scores: normaliseScores(scores), confidence: 0, name: 'pairs', tier: 2 };
 
-function macdStrategy(history: number[]): StrategyResult {
-    const scores = Array(10).fill(1) as number[];
-    if (history.length < 20) return { scores: normaliseScores(scores), confidence: 0, name: 'macd', tier: 3 };
-
-    const fast = ema(history, 5), slow = ema(history, 10);
-    const offset = fast.length - slow.length;
-    if (slow.length === 0) return { scores: normaliseScores(scores), confidence: 0, name: 'macd', tier: 3 };
-    const macdLine = slow.map((s, i) => fast[offset + i] - s);
-    const signal = ema(macdLine, 5);
-    if (signal.length < 2) return { scores: normaliseScores(scores), confidence: 0, name: 'macd', tier: 3 };
-
-    const mc = macdLine[macdLine.length - 1], sc = signal[signal.length - 1];
-    const histogram = mc - sc;
-
-    if (histogram > 0) {
-        for (let i = 5; i <= 9; i++) scores[i] += 2;
-    } else {
-        for (let i = 0; i <= 4; i++) scores[i] += 2;
+    const pairCounts: Record<string, number> = {};
+    for (let i = 0; i < history.length - 1; i++) {
+        const pair = `${history[i]}-${history[i+1]}`;
+        pairCounts[pair] = (pairCounts[pair] || 0) + 1;
     }
 
-    return { scores: normaliseScores(scores), confidence: Math.min(Math.abs(histogram) / 2, 1), name: 'macd', tier: 3 };
+    const last = history[history.length - 1];
+    Object.entries(pairCounts).forEach(([pair, count]) => {
+        if (pair.startsWith(`${last}-`)) {
+            const nextDigit = parseInt(pair.split('-')[1], 10);
+            if (nextDigit >= 0 && nextDigit <= 9) {
+                scores[nextDigit] += count;
+            }
+        }
+    });
+
+    return { scores: normaliseScores(scores), confidence: Math.max(...scores) / 10, name: 'pairs', tier: 2 };
 }
 
-// ── 13. Bollinger Bands Adapted ────────────────────────────────────────────
-function bollingerBandsStrategy(history: number[], period = 20): StrategyResult {
-    const scores = Array(10).fill(1) as number[];
-    if (history.length < period) return { scores: normaliseScores(scores), confidence: 0, name: 'bollinger', tier: 3 };
+// ── 13. Gap Analysis (distance between same digits) ─────────────────────
+function gapAnalysisStrategy(history: number[]): StrategyResult {
+    const scores = Array(10).fill(0) as number[];
+    if (history.length < 10) return { scores: normaliseScores(scores), confidence: 0, name: 'gap', tier: 2 };
 
-    const slice = history.slice(-period);
-    const mean = slice.reduce((a, b) => a + b, 0) / period;
-    const variance = slice.reduce((s, v) => s + (v - mean) ** 2, 0) / period;
+    const lastPositions: number[] = [];
+    for (let i = history.length - 1; i >= 0; i--) {
+        if (lastPositions.length >= 2) break;
+        if (history[i] === history[history.length - 1]) {
+            const gap = history.length - 1 - i;
+            lastPositions.push(gap);
+        }
+    }
+
+    if (lastPositions.length >= 2) {
+        const avgGap = (lastPositions[0] + lastPositions[1]) / 2;
+        const expectedPos = history.length - 1 + avgGap;
+        
+        for (let d = 0; d <= 9; d++) {
+            let count = 0;
+            for (let i = 0; i < history.length - 1; i++) {
+                if (history[i] === d && history[i+1] === d) count++;
+            }
+            if (count > 0) {
+                const lastIdx = history.lastIndexOf(d);
+                const gap = history.length - 1 - lastIdx;
+                if (gap >= avgGap * 0.7 && gap <= avgGap * 1.3) {
+                    scores[d] += count * 0.5;
+                }
+            }
+        }
+    }
+
+    return { scores: normaliseScores(scores), confidence: Math.max(...scores) * 0.5, name: 'gap', tier: 3 };
+}
+
+// ── 14. Digit Distribution Balance ────────────────────────────────────────
+function distributionBalanceStrategy(history: number[]): StrategyResult {
+    const scores = Array(10).fill(0) as number[];
+    const window = Math.min(50, history.length);
+    if (window < 20) return { scores: normaliseScores(scores), confidence: 0, name: 'distribution', tier: 3 };
+
+    const recent = history.slice(-window);
+    const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
+    const variance = recent.reduce((s, v) => s + (v - mean) ** 2, 0) / recent.length;
     const stdDev = Math.sqrt(variance);
 
     const last = history[history.length - 1];
-    const upper = mean + 2 * stdDev, lower = mean - 2 * stdDev;
-
-    if (stdDev < 1.5) {
-        for (let i = 4; i <= 6; i++) scores[i] += 2;
-    } else if (last > upper) {
-        for (let i = 0; i <= 4; i++) scores[i] += 2;
-    } else if (last < lower) {
-        for (let i = 5; i <= 9; i++) scores[i] += 2;
+    for (let d = 0; d <= 9; d++) {
+        const deviation = Math.abs(d - mean);
+        scores[d] = Math.max(0, (stdDev - deviation) / stdDev);
     }
 
-    const volatilityConfidence = Math.min(stdDev / 3, 1);
-    return { scores: normaliseScores(scores), confidence: volatilityConfidence, name: 'bollinger', tier: 3 };
+    return { scores: normaliseScores(scores), confidence: Math.min(stdDev / 5, 1), name: 'distribution', tier: 3 };
+}
+
+// ── 15. Trend Following Strategy ─────────────────────────────────────────
+function trendFollowingStrategy(history: number[]): StrategyResult {
+    const scores = Array(10).fill(0) as number[];
+    if (history.length < 5) return { scores: normaliseScores(scores), confidence: 0, name: 'trend', tier: 2 };
+
+    let upCount = 0, downCount = 0;
+    for (let i = 1; i < history.length; i++) {
+        if (history[i] > history[i-1]) upCount++;
+        else if (history[i] < history[i-1]) downCount++;
+    }
+
+    const trend = upCount > downCount ? 1 : (downCount > upCount ? -1 : 0);
+    const last = history[history.length - 1];
+
+    if (trend === 1 && last < 9) scores[last + 1] += 3;
+    else if (trend === -1 && last > 0) scores[last - 1] += 3;
+    else scores[last] += 1;
+
+    return { scores: normaliseScores(scores), confidence: Math.abs(upCount - downCount) / history.length, name: 'trend', tier: 2 };
 }
 
 // ── MAIN ENGINE ────────────────────────────────────────────────────────────
@@ -345,6 +422,7 @@ export function predictNextDigits(history: number[]): PredictionResult {
             rankedDigits: [],
             overallConfidence: 0,
             summary: 'Insufficient history for prediction',
+            predictedDigit: null,
         };
     }
 
@@ -352,25 +430,31 @@ export function predictNextDigits(history: number[]): PredictionResult {
         nGramStrategy(history, 1),
         nGramStrategy(history, 2),
         nGramStrategy(history, 3),
+        nGramStrategy(history, 4),
         markovChainStrategy(history),
         cyclicalPatternStrategy(history),
-        knnPatternStrategy(history, 5, 2),
-        knnPatternStrategy(history, 5, 4),
+        knnPatternStrategy(history, 7, 2),
+        knnPatternStrategy(history, 7, 3),
+        knnPatternStrategy(history, 7, 4),
         adaptiveMomentumStrategy(history),
         digitAccelerationStrategy(history),
         hotColdDigitStrategy(history),
         bayesianProbabilityStrategy(history),
         entropyStrategy(history),
         digitRepetitionStrategy(history),
-        rsiStrategy(history, 9),
-        macdStrategy(history),
-        bollingerBandsStrategy(history, 10),
+        consecutivePatternStrategy(history),
+        pairFrequencyStrategy(history),
+        gapAnalysisStrategy(history),
+        distributionBalanceStrategy(history),
+        trendFollowingStrategy(history),
     ];
 
     const combined = Array(10).fill(0) as number[];
     let totalWeight = 0;
     let tier1Consensus = Array(10).fill(0) as number[];
     let tier1Count = 0;
+    let tier2Consensus = Array(10).fill(0) as number[];
+    let tier2Count = 0;
 
     strategies.forEach(s => {
         const baseWeight = TIER_WEIGHT[s.tier];
@@ -380,9 +464,12 @@ export function predictNextDigits(history: number[]): PredictionResult {
         s.scores.forEach((score, digit) => { combined[digit] += score * weight; });
         totalWeight += weight;
 
-        if (s.tier === 1 && s.confidence > 0.15) {
+        if (s.tier === 1 && s.confidence > 0.12) {
             s.scores.forEach((score, digit) => { tier1Consensus[digit] += score; });
             tier1Count++;
+        } else if (s.tier === 2 && s.confidence > 0.15) {
+            s.scores.forEach((score, digit) => { tier2Consensus[digit] += score; });
+            tier2Count++;
         }
     });
 
@@ -392,7 +479,15 @@ export function predictNextDigits(history: number[]): PredictionResult {
         const t1max = Math.max(...tier1Consensus);
         if (t1max > 0) {
             tier1Consensus = tier1Consensus.map(s => s / t1max);
-            combined.forEach((_, i) => { combined[i] += tier1Consensus[i] * 0.3; });
+            combined.forEach((_, i) => { combined[i] += tier1Consensus[i] * 0.4; });
+        }
+    }
+
+    if (tier2Count > 0) {
+        const t2max = Math.max(...tier2Consensus);
+        if (t2max > 0) {
+            tier2Consensus = tier2Consensus.map(s => s / t2max);
+            combined.forEach((_, i) => { combined[i] += tier2Consensus[i] * 0.2; });
         }
     }
 
@@ -403,15 +498,17 @@ export function predictNextDigits(history: number[]): PredictionResult {
         .sort((a, b) => b.score - a.score);
 
     const top4Digits = rankedDigits.slice(0, 4).map(d => d.digit);
+    const predictedDigit = rankedDigits[0].digit;
 
     const topScore = rankedDigits[0].score;
     const secondScore = rankedDigits[1].score;
     const dominance = topScore - secondScore;
     const tier1AgreementCount = strategies.filter(s => s.tier === 1 && s.scores[rankedDigits[0].digit] === Math.max(...s.scores)).length;
-    const overallConfidence = Math.min((dominance * 10 + tier1AgreementCount / strategies.filter(s => s.tier === 1).length) / 2, 1);
+    const tier2AgreementCount = strategies.filter(s => s.tier === 2 && s.scores[rankedDigits[0].digit] === Math.max(...s.scores)).length;
+    const overallConfidence = Math.min((dominance * 15 + tier1AgreementCount * 0.15 + tier2AgreementCount * 0.08) / 2, 1);
 
     const top4Str = rankedDigits.slice(0, 4).map(d => `${d.digit}(${(d.score * 100).toFixed(0)}%)`).join(' ');
-    const summary = `Predict top4: [${top4Str}] conf:${(overallConfidence * 100).toFixed(0)}%`;
+    const summary = `Predict: ${predictedDigit} (${(rankedDigits[0].score * 100).toFixed(0)}%), Top4: [${top4Str}], Conf:${(overallConfidence * 100).toFixed(0)}%`;
 
-    return { top4Digits, rankedDigits, overallConfidence, summary };
+    return { top4Digits, rankedDigits, overallConfidence, summary, predictedDigit };
 }

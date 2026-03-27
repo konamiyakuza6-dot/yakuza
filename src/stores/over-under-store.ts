@@ -298,9 +298,11 @@ export default class OverUnderStore {
                         this.differs_v2_analysis_ready = false;
                         this.differs_v2_5s_analysis_pending = true;
                     });
-                    this.addLog("Differs V2: Analyzing new symbol data (5s)...");
+                    this.addLog("Differs V2: Switching symbol. Loading new symbol data...");
+                    
                     setTimeout(() => {
                         if (this.is_auto_running && this.is_differs_v2_mode) {
+                            this.addLog("Differs V2: Analyzing new symbol data (5s)...");
                             runInAction(() => {
                                 this.differs_v2_analysis_ready = true;
                                 this.differs_v2_5s_analysis_pending = false;
