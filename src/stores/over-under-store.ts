@@ -850,28 +850,30 @@ export default class OverUnderStore {
             return;
         }
 
-        const top9Digits = prediction.rankedDigits.slice(0, 9).map(d => d.digit);
+        const rankedDigits = prediction.rankedDigits;
         const confidence = prediction.overallConfidence;
         const CONFIDENCE_THRESHOLD = 0.60;
         const MAX_WAIT_MS = 20000;
-        const MIN_TICKS_ABSENT = 15;
         
         const now = Date.now();
         const hasBeenWaiting = this.differs_v2_confidence_wait_start !== null;
         const waitTime = hasBeenWaiting ? now - (this.differs_v2_confidence_wait_start || 0) : 0;
         const forceExecute = hasBeenWaiting && waitTime >= MAX_WAIT_MS;
         
+        const leastLikelyDigit = rankedDigits[rankedDigits.length - 1].digit;
+        const topDigits = rankedDigits.slice(0, 4).map(d => d.digit);
+        
         runInAction(() => { 
-            this.differs_predicted_top4 = top9Digits; 
+            this.differs_predicted_top4 = topDigits; 
         });
-        this.addLog(`DiffersV2: Predicting next tick - top 9: [${top9Digits.join(',')}] Conf: ${(confidence * 100).toFixed(0)}%`);
+        this.addLog(`DiffersV2: Analysis - least likely: ${leastLikelyDigit}, Conf: ${(confidence * 100).toFixed(0)}%`);
 
         if (confidence < CONFIDENCE_THRESHOLD && !forceExecute) {
             if (!hasBeenWaiting) {
                 runInAction(() => {
                     this.differs_v2_confidence_wait_start = now;
                 });
-                this.addLog(`DiffersV2: Low confidence (${(confidence * 100).toFixed(0)}% < 60%). Waiting for better prediction...`);
+                this.addLog(`DiffersV2: Low confidence (${(confidence * 100).toFixed(0)}% < 60%). Waiting...`);
             } else {
                 this.addLog(`DiffersV2: Low confidence (${(waitTime/1000).toFixed(0)}s/${MAX_WAIT_MS/1000}s). Still analyzing...`);
             }
@@ -879,45 +881,31 @@ export default class OverUnderStore {
         }
 
         if (hasBeenWaiting) {
-            this.addLog(`DiffersV2: Confidence OK (${(confidence * 100).toFixed(0)}%) or timeout reached. Executing...`);
+            this.addLog(`DiffersV2: Confidence OK or timeout. Executing...`);
             runInAction(() => {
                 this.differs_v2_confidence_wait_start = null;
             });
         }
 
-        const predictedDigit = prediction.rankedDigits[0].digit;
-        
         const last50 = this.tick_history.slice(-50);
+        const ticksAgo = last50.lastIndexOf(leastLikelyDigit) === -1 ? 50 : last50.length - last50.lastIndexOf(leastLikelyDigit);
         
-        let differsDigit: number | null = null;
-        let bestScore = -1;
-        
-        for (let d = 0; d <= 9; d++) {
-            const lastAppearance = last50.lastIndexOf(d);
-            const ticksAgo = lastAppearance === -1 ? 50 : last50.length - lastAppearance;
-            
-            if (ticksAgo >= bestScore && !top9Digits.includes(d)) {
-                bestScore = ticksAgo;
-                differsDigit = d;
-            }
-        }
-
-        if (differsDigit === null || bestScore < MIN_TICKS_ABSENT) {
-            this.addLog(`DiffersV2: No digit absent for ${MIN_TICKS_ABSENT}+ ticks. Skipping...`);
+        if (ticksAgo < 10) {
+            this.addLog(`DiffersV2: Least likely digit ${leastLikelyDigit} appeared recently (${ticksAgo} ticks ago). Skipping...`);
             return;
         }
 
         runInAction(() => {
-            this.differs_v2_predicted_digit = predictedDigit;
+            this.differs_v2_predicted_digit = leastLikelyDigit;
             this.differs_v2_post_trade_ticks = 0;
             this.differs_v2_analysis_ready = false;
             this.differs_v2_5s_analysis_pending = true;
             this.differs_v2_confidence_wait_start = null;
         });
 
-        this.addLog(`DiffersV2: Digit ${differsDigit} absent for ${bestScore} ticks → DIFFER on ${differsDigit}`);
+        this.addLog(`DiffersV2: ${leastLikelyDigit} least likely (absent ${ticksAgo} ticks) → DIFFER on ${leastLikelyDigit}`);
 
-        this.executeTrade('DIGITDIFF', String(differsDigit));
+        this.executeTrade('DIGITDIFF', String(leastLikelyDigit));
     }
 
     processRoundResults() {
