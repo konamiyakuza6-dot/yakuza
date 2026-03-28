@@ -41,6 +41,7 @@ const OverUnder = observer(() => {
         is_differs_mode, is_differs_v2_mode, is_2term_mode, is_rise_fall_mode, is_automate,
         use_second_trigger, is_manual_mode, manual_contract_type, manual_barrier,
         recovery_contract_type, recovery_barrier, use_recovery_delay, is_recovery_enabled,
+        recovery_entry_digit, recovery_second_entry_digit,
         entry_digit, second_entry_digit, is_turbo, selected_symbol,
         debug_info, is_analyzing_volatility, is_authorizing,
         differs_predicted_top4,
@@ -48,6 +49,7 @@ const OverUnder = observer(() => {
         setIsDiffersMode, setIsDiffersV2Mode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
         setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier,
         setRecoveryContractType, setRecoveryBarrier, setUseRecoveryDelay, setIsRecoveryEnabled,
+        setRecoveryEntryDigit, setRecoverySecondEntryDigit,
         setEntryDigit, setSecondEntryDigit, setIsTurbo, setSelectedSymbol,
         connectWebSocket, handleStartStop, clearDebug,
     } = over_under;
@@ -476,6 +478,28 @@ const OverUnder = observer(() => {
                                             </div>
                                         </div>
                                     </div>
+                                    {use_recovery_delay && (
+                                        <div className='ou-row-fields' style={{ paddingTop: 8 }}>
+                                            <div className='ou-f'>
+                                                <span className='ou-fl'>Trigger</span>
+                                                <input className='ou-inp' type='number' min='0' max='9'
+                                                    value={recovery_entry_digit} onChange={e => setRecoveryEntryDigit(Number(e.target.value))} disabled={disabled || !is_recovery_enabled} />
+                                            </div>
+                                            <div className='ou-f'>
+                                                <span className='ou-fl'>2ND</span>
+                                                <div className='ou-sw-row'>
+                                                    <Toggle on={use_second_trigger} onToggle={() => setUseSecondTrigger(!use_second_trigger)} disabled={disabled || !is_recovery_enabled || !use_recovery_delay} color='#ef4444' />
+                                                </div>
+                                            </div>
+                                            {use_second_trigger && (
+                                                <div className='ou-f'>
+                                                    <span className='ou-fl'>2nd Trigger</span>
+                                                    <input className='ou-inp' type='number' min='0' max='9'
+                                                        value={recovery_second_entry_digit} onChange={e => setRecoverySecondEntryDigit(Number(e.target.value))} disabled={disabled || !is_recovery_enabled} />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </motion.div>
                             )}
                         </AnimatePresence>

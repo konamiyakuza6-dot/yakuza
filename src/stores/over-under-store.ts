@@ -55,6 +55,8 @@ export default class OverUnderStore {
     recovery_contract_type = 'DIGITOVER';
     recovery_barrier = '5';
     use_recovery_delay = false;
+    recovery_entry_digit = 7;
+    recovery_second_entry_digit = 7;
     entry_digit = 7;
     second_entry_digit = 7;
     last_last_digit: number | null = null;
@@ -117,6 +119,8 @@ export default class OverUnderStore {
             recovery_contract_type: observable,
             recovery_barrier: observable,
             use_recovery_delay: observable,
+            recovery_entry_digit: observable,
+            recovery_second_entry_digit: observable,
             entry_digit: observable,
             second_entry_digit: observable,
             is_turbo: observable,
@@ -153,6 +157,8 @@ export default class OverUnderStore {
             setRecoveryContractType: action.bound,
             setRecoveryBarrier: action.bound,
             setUseRecoveryDelay: action.bound,
+            setRecoveryEntryDigit: action.bound,
+            setRecoverySecondEntryDigit: action.bound,
             setEntryDigit: action.bound,
             setSecondEntryDigit: action.bound,
             setIsTurbo: action.bound,
@@ -371,6 +377,8 @@ export default class OverUnderStore {
     setRecoveryContractType(value: string) { this.recovery_contract_type = value; }
     setRecoveryBarrier(value: string) { this.recovery_barrier = value; }
     setUseRecoveryDelay(value: boolean) { this.use_recovery_delay = value; }
+    setRecoveryEntryDigit(digit: number) { this.recovery_entry_digit = digit; }
+    setRecoverySecondEntryDigit(digit: number) { this.recovery_second_entry_digit = digit; }
     setEntryDigit(digit: number) { this.entry_digit = digit; }
     setSecondEntryDigit(digit: number) { this.second_entry_digit = digit; }
     setIsTurbo(is_turbo: boolean) { this.is_turbo = is_turbo; }
@@ -611,8 +619,19 @@ export default class OverUnderStore {
                                 } else if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
                                     this.analyzeAndExecuteDiffersV2();
                                 } else {
-                                    // Recovery mode: non-differs should execute immediately
-                                    if (this.is_recovery_active && !this.is_differs_mode && !this.is_differs_v2_mode) {
+                                    // Recovery mode with trigger wait
+                                    if (this.is_recovery_active && this.use_recovery_delay) {
+                                        const recoveryTrigger = this.use_second_trigger 
+                                            ? (this.last_digit === this.recovery_entry_digit && this.last_last_digit === this.recovery_second_entry_digit)
+                                            : (this.last_digit === this.recovery_entry_digit);
+                                        if (recoveryTrigger) {
+                                            this.addLog(`Recovery Trigger: ${this.recovery_contract_type} ${this.recovery_barrier}`);
+                                            this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
+                                        } else {
+                                            const waitType = this.use_second_trigger ? `${this.recovery_entry_digit},${this.recovery_second_entry_digit}` : this.recovery_entry_digit;
+                                            this.addLog(`Recovery: Waiting trigger ${waitType}...`);
+                                        }
+                                    } else if (this.is_recovery_active && !this.is_differs_mode && !this.is_differs_v2_mode) {
                                         this.addLog(`Recovery: Executing immediately...`);
                                         this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
                                     } else if (this.is_manual_mode && this.is_recovery_active) {
