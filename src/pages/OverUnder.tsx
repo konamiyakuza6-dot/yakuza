@@ -38,7 +38,7 @@ const OverUnder = observer(() => {
     const {
         connection_status, tick_history, last_digit, is_auto_running,
         stake, martingale, is_volatility_changer,
-        is_differs_mode, is_differs_v2_mode, is_tatu_bora_mode, is_all_vol_mode, is_2term_mode, is_rise_fall_mode, is_automate,
+        is_differs_mode, is_differs_v2_mode, is_tatu_bora_mode, is_nne_kwisha_mode, is_all_vol_mode, is_2term_mode, is_rise_fall_mode, is_automate,
         use_second_trigger, is_manual_mode, manual_contract_type, manual_barrier,
         recovery_contract_type, recovery_barrier, use_recovery_delay, is_recovery_enabled,
         recovery_entry_digit, recovery_second_entry_digit,
@@ -46,7 +46,7 @@ const OverUnder = observer(() => {
         debug_info, is_analyzing_volatility, is_authorizing,
         differs_predicted_top4,
         setStake, setMartingale, setIsVolatilityChanger,
-        setIsDiffersMode, setIsDiffersV2Mode, setIsTatuBoraMode, setIsAllVolMode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
+        setIsDiffersMode, setIsDiffersV2Mode, setIsTatuBoraMode, setIsNneKwishaMode, setIsAllVolMode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
         setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier,
         setRecoveryContractType, setRecoveryBarrier, setUseRecoveryDelay, setIsRecoveryEnabled,
         setRecoveryEntryDigit, setRecoverySecondEntryDigit,
@@ -354,6 +354,13 @@ const OverUnder = observer(() => {
                                             <div className='ou-sw-row'>
                                                 <Toggle on={is_tatu_bora_mode} onToggle={() => setIsTatuBoraMode(!is_tatu_bora_mode)} disabled={disabled} color='#ec4899' />
                                                 <span className={`ou-sw-lbl${is_tatu_bora_mode ? ' on' : ''}`} style={is_tatu_bora_mode ? { color: '#ec4899' } : {}}>{is_tatu_bora_mode ? 'ON' : 'OFF'}</span>
+                                            </div>
+                                        </div>
+                                        <div className='ou-f'>
+                                            <span className='ou-fl'>Nne Kwisha</span>
+                                            <div className='ou-sw-row'>
+                                                <Toggle on={is_nne_kwisha_mode} onToggle={() => setIsNneKwishaMode(!is_nne_kwisha_mode)} disabled={disabled} color='#ec4899' />
+                                                <span className={`ou-sw-lbl${is_nne_kwisha_mode ? ' on' : ''}`} style={is_nne_kwisha_mode ? { color: '#ec4899' } : {}}>{is_nne_kwisha_mode ? 'ON' : 'OFF'}</span>
                                             </div>
                                         </div>
                                         <div className='ou-f'>

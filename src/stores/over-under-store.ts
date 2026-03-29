@@ -46,6 +46,7 @@ export default class OverUnderStore {
     is_differs_mode = false;
     is_differs_v2_mode = false;
     is_tatu_bora_mode = false;
+    is_nne_kwisha_mode = false;
     is_all_vol_mode = false;
     is_automate = false;
     use_second_trigger = true;
@@ -139,6 +140,7 @@ export default class OverUnderStore {
             is_rise_fall_mode: observable,
             is_differs_v2_mode: observable,
             is_tatu_bora_mode: observable,
+            is_nne_kwisha_mode: observable,
             is_all_vol_mode: observable,
             differs_predicted_top4: observable,
             differs_v2_predicted_digit: observable,
@@ -154,6 +156,7 @@ export default class OverUnderStore {
             setIsDiffersMode: action.bound,
             setIsDiffersV2Mode: action.bound,
             setIsTatuBoraMode: action.bound,
+            setIsNneKwishaMode: action.bound,
             setIsAllVolMode: action.bound,
             setIsAutomate: action.bound,
             setUseSecondTrigger: action.bound,
@@ -374,7 +377,8 @@ export default class OverUnderStore {
     setIsDiffersMode(value: boolean) { this.is_differs_mode = value; }
     setIsDiffersV2Mode(value: boolean) { this.is_differs_v2_mode = value; }
     setIsTatuBoraMode(value: boolean) { this.is_tatu_bora_mode = value; }
-    
+    setIsNneKwishaMode(value: boolean) { this.is_nne_kwisha_mode = value; }
+
     setIsAllVolMode(value: boolean) {
         if (this.is_all_vol_mode === value) return;
         this.is_all_vol_mode = value;
@@ -906,10 +910,11 @@ export default class OverUnderStore {
 
         const is_double = lastTick === history[n - 2];
         const is_triple = this.is_tatu_bora_mode && is_double && lastTick === history[n - 3];
+        const is_quad = this.is_nne_kwisha_mode && is_triple && lastTick === history[n - 4];
 
-        const trigger_condition = this.is_tatu_bora_mode ? is_triple : is_double;
-        const trigger_name = this.is_tatu_bora_mode ? 'triple' : 'double';
-    
+        const trigger_condition = this.is_nne_kwisha_mode ? is_quad : (this.is_tatu_bora_mode ? is_triple : is_double);
+        const trigger_name = this.is_nne_kwisha_mode ? 'quad' : (this.is_tatu_bora_mode ? 'triple' : 'double');
+
         if (trigger_condition) {
             const barrier_digit = lastTick;
             const history_1000 = data.tick_history.slice(-1000);
