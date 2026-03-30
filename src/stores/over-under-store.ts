@@ -902,19 +902,31 @@ export default class OverUnderStore {
         const current_symbol = symbol || this.selected_symbol;
         const data = this.is_all_vol_mode ? this.symbol_data[current_symbol] : this;
     
-        if (!data || data.tick_history.length < 36 || this.is_purchasing) return;
+        if (!data || data.tick_history.length < 4 || this.is_purchasing) return;
     
         const history = data.tick_history;
         const lastTick = data.last_digit;
         const n = history.length;
-
-        const is_double = lastTick === history[n - 2];
-        const is_triple = this.is_tatu_bora_mode && is_double && lastTick === history[n - 3];
-        const is_quad = this.is_nne_kwisha_mode && is_triple && lastTick === history[n - 4];
-
-        const trigger_condition = this.is_nne_kwisha_mode ? is_quad : (this.is_tatu_bora_mode ? is_triple : is_double);
-        const trigger_name = this.is_nne_kwisha_mode ? 'quad' : (this.is_tatu_bora_mode ? 'triple' : 'double');
-
+    
+        let trigger_condition = false;
+        let trigger_name = 'double';
+    
+        if (this.is_nne_kwisha_mode) {
+            trigger_name = 'quad';
+            if (n >= 4 && lastTick === history[n - 2] && lastTick === history[n - 3] && lastTick === history[n - 4]) {
+                trigger_condition = true;
+            }
+        } else if (this.is_tatu_bora_mode) {
+            trigger_name = 'triple';
+            if (n >= 3 && lastTick === history[n - 2] && lastTick === history[n - 3]) {
+                trigger_condition = true;
+            }
+        } else {
+            if (n >= 2 && lastTick === history[n - 2]) {
+                trigger_condition = true;
+            }
+        }
+    
         if (trigger_condition) {
             const barrier_digit = lastTick;
             const history_1000 = data.tick_history.slice(-1000);
@@ -926,11 +938,11 @@ export default class OverUnderStore {
             const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
     
             const reasons_to_skip: string[] = [];
-
+    
             if (barrier_digit === 0 || barrier_digit === 9) {
                 reasons_to_skip.push('digit is 0 or 9');
             }
-
+    
             if (digitPct >= 10.3) {
                 reasons_to_skip.push(`too frequent (${digitPct.toFixed(1)}%)`);
             }
@@ -968,8 +980,10 @@ export default class OverUnderStore {
             this.addLog(`DiffersV2: ${trigger_name} ${lastTick} detected on ${current_symbol} → DIFFER on ${lastTick}`);
             this.executeTrade('DIGITDIFF', String(lastTick), current_symbol);
         } else {
-            const sequence = this.is_tatu_bora_mode ? `${history[n-3]},${history[n-2]},${lastTick}` : `${history[n-2]},${lastTick}`;
-            this.addLog(`DiffersV2 on ${current_symbol}: Waiting for ${trigger_name}... Last: ${sequence}`);
+            const sequence_length = this.is_nne_kwisha_mode ? 4 : (this.is_tatu_bora_mode ? 3 : 2);
+            const sequence = history.slice(-sequence_length).join(',');
+            const current_trigger_name = this.is_nne_kwisha_mode ? 'quad' : (this.is_tatu_bora_mode ? 'triple' : 'double');
+            this.addLog(`DiffersV2 on ${current_symbol}: Waiting for ${current_trigger_name}... Last: ${sequence}`);
         }
     }
 
