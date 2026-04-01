@@ -664,7 +664,6 @@ export default class OverUnderStore {
                             const digit = parseInt(quote_str.slice(-1), 10);
 
                             if (this.is_all_vol_mode) {
-                                // Defensive check to prevent crash on unexpected tick
                                 if (!this.symbol_data[tick_symbol]) {
                                     this.symbol_data[tick_symbol] = { tick_history: [], last_digit: null, last_last_digit: null, _tick_prices: [] };
                                     this.addLog(`Received tick for unsubscribed symbol ${tick_symbol} in All Vol mode. Initializing...`);
@@ -685,48 +684,70 @@ export default class OverUnderStore {
                                 this.differs_v2_post_trade_ticks++;
                             }
                             
-                            const is_busy = this.is_analyzing_volatility || this.symbol_locks[tick_symbol] || this.is_processing_round || this.active_contracts.size > 0;
+                            const is_general_busy = this.is_analyzing_volatility || this.is_processing_round || this.active_contracts.size > 0;
 
-                            if (this.is_auto_running && !is_busy) {
-                                const active_symbol = this.is_all_vol_mode ? tick_symbol : undefined;
-                                if (this.is_rise_fall_mode) {
-                                    this.analyzeAndExecuteRiseFall();
-                                } else if (this.is_differs_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
-                                    this.analyzeAndExecuteDiffers(active_symbol);
-                                } else if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
-                                    this.analyzeAndExecuteDiffersV2(active_symbol);
-                                } else {
-                                    // Recovery mode with trigger wait
-                                    if (this.is_recovery_active && this.use_recovery_delay) {
-                                        const recoveryTrigger = this.use_second_trigger 
-                                            ? (this.last_digit === this.recovery_entry_digit && this.last_last_digit === this.recovery_second_entry_digit)
-                                            : (this.last_digit === this.recovery_entry_digit);
-                                        if (recoveryTrigger) {
-                                            this.addLog(`Recovery Trigger: ${this.recovery_contract_type} ${this.recovery_barrier}`);
-                                            this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
-                                        } else {
-                                            const waitType = this.use_second_trigger ? `${this.recovery_entry_digit},${this.recovery_second_entry_digit}` : this.recovery_entry_digit;
-                                            this.addLog(`Recovery: Waiting trigger ${waitType}...`);
-                                        }
-                                    } else if (this.is_recovery_active && !this.is_differs_mode && !this.is_differs_v2_mode) {
-                                        this.addLog(`Recovery: Executing immediately...`);
-                                        this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
-                                    } else if (this.is_manual_mode && this.is_recovery_active) {
-                                        this.addLog(`Recovery: Executing immediately...`);
-                                        this.executeTrade(this.manual_contract_type, this.manual_barrier);
-                                    } else {
-                                        // Normal or Differs-Recovery mode: wait for trigger
-                                        let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
+                            if (this.is_auto_running && !is_general_busy) {
+                                if (this.is_all_vol_mode) {
+                                    const active_symbol = tick_symbol;
+                                    if (this.symbol_locks[active_symbol]) return;
+
+                                    const symbol_data = this.symbol_data[active_symbol];
+                                    if (!symbol_data) return;
+
+                                    if (this.is_differs_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
+                                        this.analyzeAndExecuteDiffers(active_symbol);
+                                    } else if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
+                                        this.analyzeAndExecuteDiffersV2(active_symbol);
+                                    } else if (!this.is_differs_mode && !this.is_differs_v2_mode && !this.is_rise_fall_mode && !this.is_manual_mode && !this.is_recovery_active) {
+                                        const is_triggered = this.use_second_trigger
+                                            ? (symbol_data.last_digit === this.entry_digit && symbol_data.last_last_digit === this.second_entry_digit)
+                                            : (symbol_data.last_digit === this.entry_digit);
+
                                         if (is_triggered) {
-                                            if (this.is_recovery_active) {
-                                                this.addLog(`Trigger: Recovery ${this.recovery_contract_type} ${this.recovery_barrier}`);
+                                            this.addLog(`Trigger: O5/U4 on ${active_symbol}`);
+                                            this.executeMultiTrade(active_symbol);
+                                        }
+                                    }
+                                } else {
+                                    if (this.symbol_locks[this.selected_symbol]) return;
+
+                                    if (this.is_rise_fall_mode) {
+                                        this.analyzeAndExecuteRiseFall();
+                                    } else if (this.is_differs_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
+                                        this.analyzeAndExecuteDiffers();
+                                    } else if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
+                                        this.analyzeAndExecuteDiffersV2();
+                                    } else {
+                                        if (this.is_recovery_active && this.use_recovery_delay) {
+                                            const recoveryTrigger = this.use_second_trigger 
+                                                ? (this.last_digit === this.recovery_entry_digit && this.last_last_digit === this.recovery_second_entry_digit)
+                                                : (this.last_digit === this.recovery_entry_digit);
+                                            if (recoveryTrigger) {
+                                                this.addLog(`Recovery Trigger: ${this.recovery_contract_type} ${this.recovery_barrier}`);
                                                 this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
-                                            } else if (this.is_manual_mode) {
-                                                this.addLog(`Trigger: Manual ${this.manual_contract_type} ${this.manual_barrier}`);
-                                                this.executeTrade(this.manual_contract_type, this.manual_barrier);
-                                            } else if (!this.is_differs_mode) {
-                                                this.addLog(`Trigger: O5/U4`);
-                                                this.executeMultiTrade();
+                                            } else {
+                                                const waitType = this.use_second_trigger ? `${this.recovery_entry_digit},${this.recovery_second_entry_digit}` : this.recovery_entry_digit;
+                                                this.addLog(`Recovery: Waiting trigger ${waitType}...`);
+                                            }
+                                        } else if (this.is_recovery_active && !this.is_differs_mode && !this.is_differs_v2_mode) {
+                                            this.addLog(`Recovery: Executing immediately...`);
+                                            this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
+                                        } else if (this.is_manual_mode && this.is_recovery_active) {
+                                            this.addLog(`Recovery: Executing immediately...`);
+                                            this.executeTrade(this.manual_contract_type, this.manual_barrier);
+                                        } else {
+                                            const is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
+                                            if (is_triggered) {
+                                                if (this.is_recovery_active) {
+                                                    this.addLog(`Trigger: Recovery ${this.recovery_contract_type} ${this.recovery_barrier}`);
+                                                    this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
+                                                } else if (this.is_manual_mode) {
+                                                    this.addLog(`Trigger: Manual ${this.manual_contract_type} ${this.manual_barrier}`);
+                                                    this.executeTrade(this.manual_contract_type, this.manual_barrier);
+                                                } else if (!this.is_differs_mode && !this.is_rise_fall_mode && !this.is_differs_v2_mode) {
+                                                    this.addLog(`Trigger: O5/U4`);
+                                                    this.executeMultiTrade();
+                                                }
                                             }
                                         }
                                     }
@@ -1151,16 +1172,16 @@ export default class OverUnderStore {
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: tradeSymbol, contract_type, barrier } }));
     }
 
-    executeMultiTrade() {
-        const symbol = this.selected_symbol;
-        if (this.symbol_locks[symbol]) return;
+    executeMultiTrade(symbol?: string) {
+        const tradeSymbol = symbol || this.selected_symbol;
+        if (this.symbol_locks[tradeSymbol]) return;
         const is_logged_in = this.is_authorized || this.root_store.client.is_logged_in || !!localStorage.getItem('active_loginid');
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !is_logged_in) return;
-        this.symbol_locks[symbol] = true;
-        this._armPurchaseTimeout(symbol);
+        this.symbol_locks[tradeSymbol] = true;
+        this._armPurchaseTimeout(tradeSymbol);
         const tradeAmount = Number(this.stake.toFixed(2));
-        this.addLog(`Trade: O5/U4 @ ${tradeAmount}`);
-        const baseParams = { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: this.selected_symbol };
+        this.addLog(`Trade: O5/U4 on ${tradeSymbol} @ ${tradeAmount}`);
+        const baseParams = { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: tradeSymbol };
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITOVER', barrier: '5' } }));
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITUNDER', barrier: '4' } }));
     }

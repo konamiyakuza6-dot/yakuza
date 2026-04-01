@@ -298,22 +298,29 @@ const OverUnder = observer(() => {
                             style={{ overflow: 'hidden' }}>
 
                             {activeStrategy === 'over_under' && (
-                                <div className='ou-row-wrap'>
-                                    <div className='ou-row-label'><Zap size={11} /> Trigger</div>
-                                    <div className='ou-row-fields'>
-                                        <div className='ou-f'>
-                                            <span className='ou-fl'>Digit</span>
-                                            <div className='ou-trig-row'>
-                                                <TriggerInput field='primary' />
-                                                {use_second_trigger && <TriggerInput field='secondary' />}
-                                                <button className={`ou-chip${use_second_trigger ? ' on' : ''}`}
-                                                    onClick={() => setUseSecondTrigger(!use_second_trigger)} disabled={disabled}>
-                                                    2ND
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                 <div className='ou-row-wrap'>
+                                 <div className='ou-row-label'><Zap size={11} /> Trigger</div>
+                                 <div className='ou-row-fields'>
+                                     <div className='ou-f'>
+                                         <span className='ou-fl'>Digit</span>
+                                         <div className='ou-trig-row'>
+                                             <TriggerInput field='primary' />
+                                             {use_second_trigger && <TriggerInput field='secondary' />}
+                                             <button className={`ou-chip${use_second_trigger ? ' on' : ''}`}
+                                                 onClick={() => setUseSecondTrigger(!use_second_trigger)} disabled={disabled}>
+                                                 2ND
+                                             </button>
+                                         </div>
+                                     </div>
+                                     <div className='ou-f'>
+                                         <span className='ou-fl'>All Vol Mode</span>
+                                         <div className='ou-sw-row'>
+                                             <Toggle on={is_all_vol_mode} onToggle={() => setIsAllVolMode(!is_all_vol_mode)} disabled={disabled} />
+                                             <span className={`ou-sw-lbl${is_all_vol_mode ? ' on' : ''}`}>{is_all_vol_mode ? 'ON' : 'OFF'}</span>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
                             )}
 
                             {activeStrategy === 'differs' && (
