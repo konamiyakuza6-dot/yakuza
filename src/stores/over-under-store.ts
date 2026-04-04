@@ -438,46 +438,47 @@ export default class OverUnderStore {
         }
 
         runInAction(() => { this.is_ai_scanning = true; });
-        this.addLog('🤖 AI Engine: Starting advanced analysis... This may take a few seconds.');
+        this.addLog('🤖 AI Engine v2.6: Starting advanced analysis...');
 
+        // 1. Get an instant analysis from the engine
         const history = [...this.tick_history];
+        const result = analyzeDigits(history, this.selected_symbol);
+        this.addLog('Initial analysis complete. Observing live market for 5 seconds to confirm...');
 
-        const analysisPromise = new Promise<AnalysisResult>(resolve => {
-            setTimeout(() => {
-                const result = analyzeDigits(history, this.selected_symbol);
-                resolve(result);
-            }, 50);
-        });
-
-        const timerPromise = new Promise<void>(resolve => setTimeout(resolve, 5000));
-
-        Promise.all([analysisPromise, timerPromise]).then(([result]) => {
+        // 2. Start a 5-second live confirmation period
+        setTimeout(() => {
             runInAction(() => {
                 this.is_ai_scanning = false;
+                this.setAiScanResults(result.goldenEntries);
 
-                if (result.goldenEntries.length > 0) {
-                    let best_entry = result.goldenEntries[0];
-                    
-                    if (best_entry.analysis === this.last_ai_signal_analysis && result.goldenEntries.length > 1) {
-                        this.addLog('AI Engine: Top signal is a repeat. Using second-best option.');
-                        best_entry = result.goldenEntries[1];
-                    }
+                let entryToUse = result.bestEntry;
 
-                    this.last_ai_signal_analysis = best_entry.analysis;
+                if (entryToUse && entryToUse.analysis === this.last_ai_signal_analysis && result.goldenEntries.length > 1) {
+                    this.addLog('AI Engine: Top signal is a repeat. Using second-best option.');
+                    entryToUse = result.goldenEntries[1];
+                }
 
-                    this.setAiScanResults([best_entry, ...result.goldenEntries.slice(1)]);
-                    this.setManualContractType(best_entry.contractType);
-                    this.setManualBarrier(best_entry.barrier);
-                    this.setManualDuration(best_entry.duration);
-                    this.setEntryDigit(best_entry.triggerDigits[0]);
+                if (entryToUse) {
+                    this.last_ai_signal_analysis = entryToUse.analysis;
+
+                    this.setManualContractType(entryToUse.contractType);
+                    this.setManualBarrier(entryToUse.barrier);
+                    this.setManualDuration(entryToUse.duration);
+                    this.setEntryDigit(entryToUse.triggerDigits[0]);
                     this.setUseSecondTrigger(false);
 
-                    this.addLog(`SIGNAL: ${best_entry.analysis}`);
-                    this.addLog('✅ UI configured. Ready to run.');
+                    this.addLog(`SIGNAL (Confirmed): ${entryToUse.analysis}`);
+                    this.addLog('✅ UI configured. Ready to run. Waiting for trigger digit.');
+                } else if (result.goldenEntries.length > 0) {
+                    this.addLog(result.goldenEntries[0].analysis);
+                    this.addLog('🤖 AI Engine: No high-confidence signals found after confirmation.');
+                } else {
+                    this.addLog('🤖 AI Engine: Analysis complete, but no valid signals were found.');
                 }
             });
-        });
+        }, 5000); // 5-second delay
     }
+
 
     setSelectedSymbol(symbol: string) {
         if (this.selected_symbol === symbol) return;
@@ -859,11 +860,12 @@ export default class OverUnderStore {
                 }
             }
         } else {
+            // The main trigger logic. It now considers whether we are using one or two triggers.
             const is_triggered = this.use_second_trigger ? (data.last_digit === this.entry_digit && data.last_last_digit === this.second_entry_digit) : (data.last_digit === this.entry_digit);
             if (is_triggered) {
                 if (this.is_manual_mode) {
                     this.addLog(`Trigger: Manual ${this.manual_contract_type} ${this.manual_barrier} on ${symbol}`);
-                    this.executeTrade(this.manual_contract_type, this.manual_barrier, symbol);
+                    this.executeTrade(this.manual_contract_type, this.manual_barrier, symbol, undefined, false, this.manual_duration);
                 } else {
                     this.addLog(`Trigger: O5/U4 on ${symbol}`);
                     this.executeMultiTrade(symbol);
@@ -1257,7 +1259,7 @@ export default class OverUnderStore {
         this._armPurchaseTimeout(tradeSymbol);
         
         const tradeAmount = stake ?? Number(this.stake.toFixed(2));
-        const tradeDuration = this.is_manual_mode ? this.manual_duration : (duration || 1);
+        const tradeDuration = duration || (this.is_manual_mode ? this.manual_duration : 1);
         this.addLog(`Trade: ${is_fast_recovery ? '⚡Fast Recovery' : ''} ${contract_type} ${barrier} on ${tradeSymbol} @ ${tradeAmount}`);
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: tradeDuration, duration_unit: 't', symbol: tradeSymbol, contract_type, barrier } }));
     }
