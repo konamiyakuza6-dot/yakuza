@@ -5,6 +5,7 @@ import RootStore from './root-store';
 import { getAppId, getSocketURL } from '@/components/shared';
 import { MessageTypes } from '@/external/bot-skeleton';
 import { predictNextDigits } from '@/utils/differs-prediction-engine';
+import { analyzeDigits, AnalysisResult } from '@/utils/ai-analysis-engine';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_CONNECTING = 'Connecting...';
@@ -53,6 +54,7 @@ export default class OverUnderStore {
     is_manual_mode = false;
     manual_contract_type = 'DIGITOVER';
     manual_barrier = '5';
+    manual_duration = 5;
     is_recovery_active = false;
     is_recovery_enabled = false;
     recovery_contract_type = 'DIGITOVER';
@@ -98,6 +100,8 @@ export default class OverUnderStore {
 
     // New feature flags
     is_digit_occurrence_filter_active = false;
+    is_ai_scanning = false;
+    ai_scan_results: { symbol: string; winRate: number; confidence: number; contractType: string; barrier: string; triggerDigits: number[]; duration: number }[] = [];
     is_rebounce_active = false;
     private rebounce_sequences: { [symbol: string]: boolean } = {};
 
@@ -127,6 +131,7 @@ export default class OverUnderStore {
             is_manual_mode: observable,
             manual_contract_type: observable,
             manual_barrier: observable,
+            manual_duration: observable,
             is_recovery_active: observable,
             is_recovery_enabled: observable,
             recovery_contract_type: observable,
@@ -158,6 +163,8 @@ export default class OverUnderStore {
             differs_v2_confidence_wait_start: observable,
             is_digit_occurrence_filter_active: observable,
             is_rebounce_active: observable,
+            is_ai_scanning: observable,
+            ai_scan_results: observable,
             setStake: action.bound,
             setIsRiseFallMode: action.bound,
             setIs2termMode: action.bound,
@@ -173,6 +180,7 @@ export default class OverUnderStore {
             setIsManualMode: action.bound,
             setManualContractType: action.bound,
             setManualBarrier: action.bound,
+            setManualDuration: action.bound,
             setIsRecoveryActive: action.bound,
             setIsRecoveryEnabled: action.bound,
             setRecoveryContractType: action.bound,
@@ -191,6 +199,8 @@ export default class OverUnderStore {
             clearDebug: action.bound,
             setIsDigitOccurrenceFilterActive: action.bound,
             setIsRebounceActive: action.bound,
+            setIsAiScanning: action.bound,
+            setAiScanResults: action.bound,
         });
         this.root_store = root_store;
         this.initializeWorker();
@@ -408,6 +418,7 @@ export default class OverUnderStore {
     setIsManualMode(value: boolean) { this.is_manual_mode = value; }
     setManualContractType(value: string) { this.manual_contract_type = value; }
     setManualBarrier(value: string) { this.manual_barrier = value; }
+    setManualDuration(value: number) { this.manual_duration = value; }
     setIsRecoveryActive(value: boolean) { this.is_recovery_active = value; }
     setIsRecoveryEnabled(value: boolean) { this.is_recovery_enabled = value; }
     setRecoveryContractType(value: string) { this.recovery_contract_type = value; }
@@ -420,6 +431,49 @@ export default class OverUnderStore {
     setIsTurbo(is_turbo: boolean) { this.is_turbo = is_turbo; }
     setIsDigitOccurrenceFilterActive(value: boolean) { this.is_digit_occurrence_filter_active = value; }
     setIsRebounceActive(value: boolean) { this.is_rebounce_active = value; }
+    setIsAiScanning(value: boolean) { this.is_ai_scanning = value; }
+    setAiScanResults(results: { symbol: string; winRate: number; confidence: number; contractType: string; barrier: string; triggerDigits: number[]; duration: number }[]) { this.ai_scan_results = results; }
+
+    startAiManualScan() {
+        if (this.tick_history.length < 100) {
+            this.addLog('Need at least 100 ticks for analysis');
+            return;
+        }
+
+        this.is_ai_scanning = true;
+        this.addLog('AI Analysis: Scanning patterns...');
+
+        const history = [...this.tick_history];
+        
+        setTimeout(() => {
+            const result = analyzeDigits(history, this.selected_symbol);
+            
+            const formattedResults = result.goldenEntries.map(entry => ({
+                symbol: this.selected_symbol,
+                winRate: entry.winRate,
+                confidence: entry.confidence,
+                contractType: entry.contractType,
+                barrier: entry.barrier,
+                triggerDigits: entry.triggerDigits,
+                duration: entry.duration
+            }));
+
+            this.setAiScanResults(formattedResults);
+            this.is_ai_scanning = false;
+
+            if (formattedResults.length > 0) {
+                const best = formattedResults[0];
+                this.manual_contract_type = best.contractType;
+                this.manual_barrier = best.barrier;
+                this.manual_duration = best.duration;
+                this.entry_digit = best.triggerDigits[0];
+                
+                this.addLog(`AI: Applied best config - ${best.contractType} ${best.barrier}, WR:${(best.winRate * 100).toFixed(0)}%`);
+            } else {
+                this.addLog('AI: No high-confidence patterns found');
+            }
+        }, 50);
+    }
 
     setSelectedSymbol(symbol: string) {
         if (this.selected_symbol === symbol) return;
@@ -1188,7 +1242,7 @@ export default class OverUnderStore {
         } else { this.addLog("Waiting for next trigger..."); }
     }
 
-    executeTrade(contract_type: string, barrier: string, symbol?: string, stake?: number, is_fast_recovery = false) {
+    executeTrade(contract_type: string, barrier: string, symbol?: string, stake?: number, is_fast_recovery = false, duration?: number) {
         const tradeSymbol = symbol || this.selected_symbol;
 
         // For fast recovery, we bypass the lock check because we need to trade immediately.
@@ -1209,8 +1263,9 @@ export default class OverUnderStore {
         this._armPurchaseTimeout(tradeSymbol);
         
         const tradeAmount = stake ?? Number(this.stake.toFixed(2));
+        const tradeDuration = this.is_manual_mode ? this.manual_duration : (duration || 1);
         this.addLog(`Trade: ${is_fast_recovery ? '⚡Fast Recovery' : ''} ${contract_type} ${barrier} on ${tradeSymbol} @ ${tradeAmount}`);
-        this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: tradeSymbol, contract_type, barrier } }));
+        this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: tradeDuration, duration_unit: 't', symbol: tradeSymbol, contract_type, barrier } }));
     }
 
     executeMultiTrade(symbol?: string) {

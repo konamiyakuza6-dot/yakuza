@@ -67,14 +67,14 @@ const OverUnder = observer(() => {
         connection_status, tick_history, last_digit,
         is_auto_running, stake, martingale, is_volatility_changer,
         is_differs_mode, is_differs_v2_mode, is_tatu_bora_mode, is_nne_kwisha_mode, is_all_vol_mode, is_2term_mode, is_rise_fall_mode, is_automate,
-        use_second_trigger, is_manual_mode, manual_contract_type, manual_barrier,
+        use_second_trigger, is_manual_mode, manual_contract_type, manual_barrier, manual_duration, is_ai_scanning,
         recovery_contract_type, recovery_barrier, use_recovery_delay, is_recovery_enabled,
         recovery_entry_digit, recovery_second_entry_digit,
         is_turbo, selected_symbol, debug_info, is_analyzing_volatility, is_authorizing,
         differs_predicted_top4, is_digit_occurrence_filter_active, is_rebounce_active,
         setStake, setMartingale, setIsVolatilityChanger,
         setIsDiffersMode, setIsDiffersV2Mode, setIsTatuBoraMode, setIsNneKwishaMode, setIsAllVolMode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
-        setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier,
+        setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier, setManualDuration,
         setRecoveryContractType, setRecoveryBarrier, setUseRecoveryDelay, setIsRecoveryEnabled,
         setRecoveryEntryDigit, setRecoverySecondEntryDigit,
         setIsTurbo, setSelectedSymbol, connectWebSocket, handleStartStop, clearDebug,
@@ -452,6 +452,11 @@ const OverUnder = observer(() => {
                                                 value={manual_barrier} onChange={e => setManualBarrier(e.target.value)} disabled={disabled} />
                                         </div>
                                         <div className='ou-f'>
+                                            <span className='ou-fl'>Ticks</span>
+                                            <input className='ou-inp' type='number' min='1' max='10'
+                                                value={manual_duration} onChange={e => setManualDuration(Number(e.target.value))} disabled={disabled} />
+                                        </div>
+                                        <div className='ou-f'>
                                             <span className='ou-fl'>Trigger</span>
                                             <div className='ou-trig-row'>
                                                <TriggerInput field='primary' over_under={over_under} disabled={disabled} />
@@ -461,6 +466,12 @@ const OverUnder = observer(() => {
                                                     2ND
                                                 </button>
                                             </div>
+                                        </div>
+                                        <div className='ou-f ou-f--grow'>
+                                            <span className='ou-fl'>AI Scan</span>
+                                            <button className='ou-ai-btn' onClick={() => over_under.startAiManualScan()} disabled={disabled || is_ai_scanning}>
+                                                {is_ai_scanning ? 'Scanning...' : 'Scan AI'}
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
