@@ -1,10 +1,11 @@
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Play, Square, Activity, TrendingUp, ShieldCheck, Zap,
     Info, ChevronDown, ChevronUp, Terminal, Trash2,
-    BarChart2, Settings, Layers, Cpu, RefreshCw,
+    BarChart2, Settings, Layers, Cpu, RefreshCw, Bot
 } from 'lucide-react';
 import { useStore } from '@/hooks/useStore';
 import './over-under.scss';
@@ -469,9 +470,22 @@ const OverUnder = observer(() => {
                                         </div>
                                         <div className='ou-f ou-f--grow'>
                                             <span className='ou-fl'>AI Scan</span>
-                                            <button className='ou-ai-btn' onClick={() => over_under.startAiManualScan()} disabled={disabled || is_ai_scanning}>
-                                                {is_ai_scanning ? 'Scanning...' : 'Scan AI'}
-                                            </button>
+                                            <motion.button 
+                                                className={`ou-ai-btn ${is_ai_scanning ? 'scanning' : ''}`}
+                                                onClick={() => over_under.startAiManualScan()}
+                                                disabled={disabled || is_ai_scanning}
+                                                whileHover={{ y: -1, scale: 1.01 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                transition={{ type: 'spring', stiffness: 350, damping: 20 }}
+                                            >
+                                                <span className='ou-ai-btn__bg' />
+                                                <span className='ou-ai-btn__ico'>
+                                                    {is_ai_scanning ? <RefreshCw size={14} className='ou-spin' /> : <Bot size={14} />}
+                                                </span>
+                                                <span className='ou-ai-btn__txt'>
+                                                    {is_ai_scanning ? 'ANALYSING...' : 'SCAN AI'}
+                                                </span>
+                                            </motion.button>
                                         </div>
                                     </div>
                                 </div>

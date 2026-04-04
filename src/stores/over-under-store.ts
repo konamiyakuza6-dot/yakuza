@@ -5,7 +5,7 @@ import RootStore from './root-store';
 import { getAppId, getSocketURL } from '@/components/shared';
 import { MessageTypes } from '@/external/bot-skeleton';
 import { predictNextDigits } from '@/utils/differs-prediction-engine';
-import { analyzeDigits, GoldenEntry } from '@/utils/ai-analysis-engine';
+import { analyzeDigits, GoldenEntry, AnalysisResult } from '@/utils/ai-analysis-engine';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_CONNECTING = 'Connecting...';
@@ -98,12 +98,12 @@ export default class OverUnderStore {
     private is_purchasing = false;
     private pending_instant_result_check: { [symbol: string]: { barrier: string, stake: number, contract_type: string, ticks_to_check: number } } = {};
 
-    // New feature flags
     is_digit_occurrence_filter_active = false;
     is_ai_scanning = false;
     ai_scan_results: GoldenEntry[] = [];
     is_rebounce_active = false;
     private rebounce_sequences: { [symbol: string]: boolean } = {};
+    last_ai_signal_analysis: string | null = null;
 
 
     private _boundAuthHandler: (event: MessageEvent) => void;
@@ -165,6 +165,7 @@ export default class OverUnderStore {
             is_rebounce_active: observable,
             is_ai_scanning: observable,
             ai_scan_results: observable,
+            last_ai_signal_analysis: observable,
             setStake: action.bound,
             setIsRiseFallMode: action.bound,
             setIs2termMode: action.bound,
@@ -262,7 +263,6 @@ export default class OverUnderStore {
                     this.analysis_queue = [];
                 });
                 this._clearAnalysisTimeout();
-                // Recreate the worker so it can be used again
                 this.volatilityAnalyzer?.terminate();
                 this.initializeWorker();
             };
@@ -292,11 +292,10 @@ export default class OverUnderStore {
             if (this.ws?.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
             } else {
-                // WebSocket not ready — wait and retry
                 this.addLog(`⏳ Waiting for WebSocket connection...`);
                 const retryDelay = 500;
                 let retryCount = 0;
-                const maxRetries = 20; // Wait up to 10 seconds
+                const maxRetries = 20;
                 
                 const waitForWs = () => {
                     retryCount++;
@@ -306,7 +305,6 @@ export default class OverUnderStore {
                     } else if (retryCount < maxRetries) {
                         setTimeout(waitForWs, retryDelay);
                     } else {
-                        // Give up after max retries
                         this.addLog(`⚠️ WS connection timeout for ${sym}, using default.`);
                         runInAction(() => {
                             this.best_symbol = 'R_100';
@@ -359,7 +357,6 @@ export default class OverUnderStore {
         }
     }
 
-    // ── Safety timeouts ── prevent flags getting permanently stuck ────────
     private _armPurchaseTimeout(symbol: string) {
         this._clearPurchaseTimeout();
         this._purchaseTimeout = setTimeout(() => {
@@ -435,8 +432,8 @@ export default class OverUnderStore {
     setAiScanResults(results: GoldenEntry[]) { this.ai_scan_results = results; }
 
     startAiManualScan() {
-        if (this.tick_history.length < 200) { // Increased for better analysis
-            this.addLog('AI Scan requires at least 200 historical ticks.');
+        if (this.tick_history.length < 200) {
+            this.addLog('AI Scan requires at least 200 historical ticks for accurate analysis.');
             return;
         }
 
@@ -444,32 +441,42 @@ export default class OverUnderStore {
         this.addLog('🤖 AI Engine: Starting advanced analysis... This may take a few seconds.');
 
         const history = [...this.tick_history];
-        
-        // Run analysis in a non-blocking way
-        setTimeout(() => {
-            const result = analyzeDigits(history, this.selected_symbol);
-            
+
+        const analysisPromise = new Promise<AnalysisResult>(resolve => {
+            setTimeout(() => {
+                const result = analyzeDigits(history, this.selected_symbol);
+                resolve(result);
+            }, 50);
+        });
+
+        const timerPromise = new Promise<void>(resolve => setTimeout(resolve, 5000));
+
+        Promise.all([analysisPromise, timerPromise]).then(([result]) => {
             runInAction(() => {
-                this.setAiScanResults(result.goldenEntries);
                 this.is_ai_scanning = false;
 
                 if (result.goldenEntries.length > 0) {
-                    const best_entry = result.goldenEntries[0];
+                    let best_entry = result.goldenEntries[0];
                     
-                    // Auto-configure the UI with the best signal
+                    if (best_entry.analysis === this.last_ai_signal_analysis && result.goldenEntries.length > 1) {
+                        this.addLog('AI Engine: Top signal is a repeat. Using second-best option.');
+                        best_entry = result.goldenEntries[1];
+                    }
+
+                    this.last_ai_signal_analysis = best_entry.analysis;
+
+                    this.setAiScanResults([best_entry, ...result.goldenEntries.slice(1)]);
                     this.setManualContractType(best_entry.contractType);
                     this.setManualBarrier(best_entry.barrier);
                     this.setManualDuration(best_entry.duration);
                     this.setEntryDigit(best_entry.triggerDigits[0]);
-                    this.setUseSecondTrigger(false); // New engine provides a single, precise trigger
+                    this.setUseSecondTrigger(false);
 
                     this.addLog(`SIGNAL: ${best_entry.analysis}`);
-                    this.addLog(`✅ UI configured. Ready to run.`);
-                } else {
-                    this.addLog('AI Engine: No high-confidence trading signals found in the current market conditions.');
+                    this.addLog('✅ UI configured. Ready to run.');
                 }
             });
-        }, 50); // 50ms timeout to allow UI to update
+        });
     }
 
     setSelectedSymbol(symbol: string) {
@@ -545,13 +552,12 @@ export default class OverUnderStore {
     subscribeToTicks(symbol: string) {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-        // Always forget all previous tick subscriptions to ensure a clean state.
         this.ws.send(JSON.stringify({ forget_all: 'ticks' }));
         this.active_subscription_id = null;
         this.addLog('Cleared all previous tick subscriptions.');
 
         if (this.is_all_vol_mode) {
-            this.symbol_data = {}; // Reset data object
+            this.symbol_data = {};
             for (const sym in pip_sizes) {
                 this.addLog(`Subscribing to: ${sym}`);
                 this.ws.send(JSON.stringify({ ticks_history: sym, count: MAX_TICKS, end: 'latest', style: 'ticks', subscribe: 1 }));
@@ -751,7 +757,6 @@ export default class OverUnderStore {
                                 this._tick_prices = [...this._tick_prices.slice(-MAX_TICKS + 1), Number(tick.quote)];
                             }
                             
-                            // Fast Recovery for Differs V2
                             const pending_check = this.pending_instant_result_check[tick_symbol];
                             if (pending_check) {
                                 const last_digit_for_check = this.is_all_vol_mode ? this.symbol_data[tick_symbol].last_digit : this.last_digit;
@@ -763,18 +768,15 @@ export default class OverUnderStore {
                                 }
                             
                                 if (is_loss) {
-                                    // INSTANT LOSS
                                     this.addLog(`⚡ Instant Result on ${tick_symbol}: LOST (Digit: ${last_digit_for_check}, Barrier: ${barrier})`);
                                     const next_stake = Number((pending_check.stake * this.martingale).toFixed(2));
                                     this.addLog(`⚡ Fast Recovery on ${tick_symbol}: Martingale triggered. New stake: ${next_stake}`);
                             
-                                    // Immediately set up the check for the *next* trade, then execute it.
                                     this.pending_instant_result_check[tick_symbol] = { ...pending_check, stake: next_stake, ticks_to_check: 2 };
                                     this.executeTrade(pending_check.contract_type, barrier, tick_symbol, next_stake, true);
                                 } else {
                                     pending_check.ticks_to_check--;
                                     if (pending_check.ticks_to_check <= 0) {
-                                        // INSTANT WIN
                                         this.addLog(`⚡ Instant Result on ${tick_symbol}: WON (Digit: ${last_digit_for_check}, Barrier: ${barrier})`);
                                          if (!this.is_2term_mode) {
                                             this.stake = this.initial_stake;
@@ -785,7 +787,7 @@ export default class OverUnderStore {
                                         this.addLog(`⚡ Instant Result on ${tick_symbol}: Tick ${last_digit_for_check} is not a loss. Waiting for ${pending_check.ticks_to_check} more ticks.`);
                                     }
                                 }
-                                return; // IMPORTANT: Stop further processing of this tick to avoid conflicts.
+                                return;
                             }
                             
                             const is_general_busy = this.is_analyzing_volatility || this.is_processing_round || this.active_contracts.size > 0 || this.is_purchasing;
@@ -838,7 +840,7 @@ export default class OverUnderStore {
         const data = symbol_data || this;
         const symbol = this.is_all_vol_mode && symbol_data ? Object.keys(this.symbol_data).find(key => this.symbol_data[key] === data) : this.selected_symbol;
     
-        if (!symbol) return; // Should not happen
+        if (!symbol) return;
 
         if (this.is_rebounce_active && this.use_second_trigger) {
             if (this.rebounce_sequences[symbol]) {
@@ -1029,7 +1031,6 @@ export default class OverUnderStore {
     }
 
     executeDiffersV2Trade(contract_type: string, barrier: string, symbol: string, stake: number) {
-        // Set up the instant check for the fast recovery system.
         this.pending_instant_result_check[symbol] = { barrier, stake, contract_type, ticks_to_check: 2 };
         this.executeTrade(contract_type, barrier, symbol, stake);
     }
@@ -1069,7 +1070,6 @@ export default class OverUnderStore {
             const barrier_digit = lastTick;
             let should_execute = true;
 
-            // Only apply restrictions if Nne Kwisha mode is OFF
             if (!this.is_nne_kwisha_mode) {
                 const history_1000 = data.tick_history.slice(-1000);
                 const totalTicks = history_1000.length;
@@ -1144,7 +1144,7 @@ export default class OverUnderStore {
                 if (all_loss) {
                     this.stake = this.initial_stake;
                     this.addLog(`Tatu Bora: Loss! Stake reset to initial: ${this.stake.toFixed(2)}`);
-                } else { // Win
+                } else {
                     if (this.is_2term_mode) {
                         const nextStake = Number((this.stake + roundProfit).toFixed(2));
                         this.stake = nextStake;
@@ -1155,11 +1155,10 @@ export default class OverUnderStore {
                     }
                 }
             } else {
-                // Logic for other DiffersV2 modes (e.g., Nne Kwisha, standard double)
                 if (all_loss) {
                     this.stake = Number((this.stake * this.martingale).toFixed(2));
                     this.addLog(`DiffersV2: Loss! Martingale - Stake: ${this.stake.toFixed(2)}`);
-                } else { // Win
+                } else {
                     if (this.is_2term_mode) {
                         const nextStake = Number((this.stake + roundProfit).toFixed(2));
                         this.stake = nextStake;
@@ -1171,7 +1170,6 @@ export default class OverUnderStore {
                 }
             }
     
-            // Common cleanup logic for all Differs V2 modes
             runInAction(() => {
                 this.differs_predicted_top4 = [];
                 this.differs_v2_predicted_digit = null;
@@ -1219,7 +1217,7 @@ export default class OverUnderStore {
                      this.addLog(`Standard Martingale on Loss: New stake: ${this.stake}`);
                 }
                 if (this.is_volatility_changer && this.is_automate) this.startVolatilityAnalysis();
-        } else { // Win
+        } else {
                 if (this.is_2term_mode) {
                     const nextStake = Number((this.stake + roundProfit).toFixed(2));
                     this.addLog(`2term Applied on Win: Stake updated with profit ${roundProfit.toFixed(2)}. New stake: ${nextStake}`);
@@ -1242,7 +1240,6 @@ export default class OverUnderStore {
     executeTrade(contract_type: string, barrier: string, symbol?: string, stake?: number, is_fast_recovery = false, duration?: number) {
         const tradeSymbol = symbol || this.selected_symbol;
 
-        // For fast recovery, we bypass the lock check because we need to trade immediately.
         if (!is_fast_recovery && this.symbol_locks[tradeSymbol]) {
             return;
         }
@@ -1282,7 +1279,7 @@ export default class OverUnderStore {
                 }
             }
 
-            const history_1000 = data.tick_history; // Full history up to 1000
+            const history_1000 = data.tick_history;
             if (history_1000.length > 0) {
                 const count4 = history_1000.filter(d => d === 4).length;
                 const count5 = history_1000.filter(d => d === 5).length;
