@@ -199,16 +199,16 @@
                         overflow-y: auto !important;
                         overflow-x: hidden !important;
                         -webkit-overflow-scrolling: touch;
-                        height: calc(100vh - 3.5rem - 6rem) !important; // Account for mobile header (3.5rem) and footer (6rem)
-                        max-height: calc(100vh - 3.5rem - 6rem) !important;
+                        height: auto !important; // Let content flow naturally
+                        max-height: none !important;
                         padding-bottom: 0 !important; // Remove padding from container, let content handle it
                     }
 
                     .strategies--standalone {
                         height: auto !important;
-                        min-height: calc(100% + 20rem) !important; // Ensure content extends beyond viewport
+                        min-height: auto !important;
                         width: 100%;
-                        padding-bottom: 25rem !important; // Very large padding to ensure last card button is fully visible
+                        padding-bottom: 8rem !important;
                         box-sizing: border-box;
                     }
 

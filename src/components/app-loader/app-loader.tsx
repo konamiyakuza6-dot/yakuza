@@ -55,7 +55,7 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
                 }, 100);
             }
             onLoadingComplete();
-        }, 10000); // Total duration of the cinematic sequence
+        }, 4000); // Total duration of the cinematic sequence (Reduced for performance and UX)
 
         // --- CLEANUP --- 
         return () => {

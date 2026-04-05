@@ -28,7 +28,7 @@
     top: -60%;
     width: 200%;
     height: 250%;
-    filter: blur(50px); /* Bokeh Effect */
+    filter: blur(20px); /* Reduced blur for performance */
     opacity: 0;
 
     &.blue {
@@ -84,7 +84,7 @@
     left: 50%;
     transform: translate(-50%, -50%) scale(1);
     z-index: 10;
-    animation: dolly-in 8s ease-out forwards, logo-glitch 3.5s infinite alternate;
+    animation: dolly-in 4s ease-out forwards, logo-glitch 3.5s infinite alternate;
     animation-delay: 1.5s;
     opacity: 0; /* Starts invisible */
     display: flex;
@@ -103,7 +103,7 @@
         0 0 15px #fff,
         0 0 30px #0ff,
         0 0 50px #0ff;
-    animation: logo-flash 10s forwards;
+    animation: logo-flash 4s forwards;
     animation-delay: 1.5s;
     margin-bottom: 1rem;
 }

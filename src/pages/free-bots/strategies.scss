@@ -11,8 +11,8 @@
 
     @include mobile-or-tablet-screen {
         padding: 1rem 0.75rem;
-        padding-bottom: 20rem !important; // Very large padding at bottom on mobile to ensure last card button is fully visible
-        min-height: calc(100vh + 15rem) !important; // Extend beyond viewport to allow scrolling
+        padding-bottom: 4rem !important;
+        min-height: auto !important;
     }
 
     &__heading {
@@ -58,7 +58,7 @@
             gap: 1.5rem;
             padding: 0;
             width: 100%;
-            margin-bottom: 12rem !important; // Very large margin at bottom on mobile to ensure last card is fully scrollable
+            margin-bottom: 4rem !important;
         }
 
         @include desktop-screen {

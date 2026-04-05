@@ -163,7 +163,7 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {active_tab !== 8 && hash[active_tab] !== 'makoti_magic' && (
+                {active_tab !== 9 && hash[active_tab] !== 'makoti_magic' && (
                     <div className='main__run-strategy-wrapper'>
                         {active_tab !== 3 && <RunStrategy />}
                         <RunPanel />
@@ -171,7 +171,7 @@ const AppWrapper = observer(() => {
                 )}
                 <ChartModal /><TradingViewModal />
             </DesktopWrapper>
-            <MobileWrapper>{!is_open && active_tab !== 6 && <RunPanel />}</MobileWrapper>
+            <MobileWrapper>{!is_open && active_tab !== 7 && <RunPanel />}</MobileWrapper>
             <SpeedBotFloatingStop />
         </React.Fragment>
     );
