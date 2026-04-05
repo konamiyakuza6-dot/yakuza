@@ -33,8 +33,8 @@ const Strategies: React.FC = () => {
                     parentEl.style.overflowX = 'hidden';
                     parentEl.style.webkitOverflowScrolling = 'touch';
                     // Ensure it can scroll past the viewport
-                    parentEl.style.height = 'calc(100vh - 3.5rem - 6rem)';
-                    parentEl.style.maxHeight = 'calc(100vh - 3.5rem - 6rem)';
+                    parentEl.style.height = 'auto';
+                    parentEl.style.maxHeight = 'none';
                 }
             }
             
@@ -50,8 +50,8 @@ const Strategies: React.FC = () => {
                     tabEl.style.overflowX = 'hidden';
                     tabEl.style.webkitOverflowScrolling = 'touch';
                     // Ensure it can scroll past the viewport
-                    tabEl.style.height = 'calc(100vh - 3.5rem - 6rem)';
-                    tabEl.style.maxHeight = 'calc(100vh - 3.5rem - 6rem)';
+                    tabEl.style.height = 'auto';
+                    tabEl.style.maxHeight = 'none';
                 }
             });
         };

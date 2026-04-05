@@ -163,15 +163,15 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {active_tab !== 9 && hash[active_tab] !== 'makoti_magic' && (
+                {hash[active_tab] !== 'strategies' && hash[active_tab] !== 'makoti_magic' && hash[active_tab] !== 'trading_bots' && (
                     <div className='main__run-strategy-wrapper'>
-                        {active_tab !== 3 && <RunStrategy />}
+                        {hash[active_tab] !== 'trading_bots' && <RunStrategy />}
                         <RunPanel />
                     </div>
                 )}
                 <ChartModal /><TradingViewModal />
             </DesktopWrapper>
-            <MobileWrapper>{!is_open && active_tab !== 7 && <RunPanel />}</MobileWrapper>
+            <MobileWrapper>{!is_open && hash[active_tab] !== 'strategies' && hash[active_tab] !== 'makoti_magic' && hash[active_tab] !== 'trading_bots' && <RunPanel />}</MobileWrapper>
             <SpeedBotFloatingStop />
         </React.Fragment>
     );
