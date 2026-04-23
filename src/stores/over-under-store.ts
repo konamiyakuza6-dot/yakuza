@@ -251,11 +251,17 @@ export default class OverUnderStore {
             this.volatilityAnalyzer = new Worker(new URL('../workers/volatility-analyzer.ts', import.meta.url));
             this.volatilityAnalyzer.onmessage = (event) => {
                 const { score } = event.data;
-                this.addLog(`Analysis for ${this.current_analyzing_symbol}: Score ${score.toFixed(2)}`);
+                const fmtScore = (s: number) => {
+                    if (!isFinite(s)) return String(s);
+                    const abs = Math.abs(s);
+                    if (abs !== 0 && abs < 0.01) return s.toExponential(3);
+                    return s.toFixed(6);
+                };
+                this.addLog(`Analysis for ${this.current_analyzing_symbol}: Score ${fmtScore(score)}`);
                 if (score < this.best_score) {
                     this.best_score = score;
                     this.best_symbol = this.current_analyzing_symbol;
-                    this.addLog(`New best volatility: ${this.best_symbol} (Score: ${score.toFixed(2)})`);
+                    this.addLog(`New best volatility: ${this.best_symbol} (Score: ${fmtScore(score)})`);
                 }
                 this.processAnalysisQueue();
             };
@@ -1262,13 +1268,13 @@ export default class OverUnderStore {
             this.is_processing_round = false;
 
             this.rise_fall_trade_count += 1;
-            if (this.is_volatility_changer && this.rise_fall_trade_count >= 4) {
+            if (this.is_volatility_changer && this.rise_fall_trade_count >= 3) {
                 this.rise_fall_trade_count = 0;
-                this.addLog('Rise/Fall: 4 trades completed — re-voting best volatility...');
+                this.addLog('Rise/Fall: 3 trades completed — re-voting best volatility...');
                 this.startVolatilityAnalysis();
             } else {
                 if (this.is_volatility_changer) {
-                    this.addLog(`Rise/Fall: Trade ${this.rise_fall_trade_count}/4 since last vote. Monitoring MACD...`);
+                    this.addLog(`Rise/Fall: Trade ${this.rise_fall_trade_count}/3 since last vote. Monitoring MACD...`);
                 } else {
                     this.addLog('Rise/Fall: Monitoring MACD for next signal...');
                 }
