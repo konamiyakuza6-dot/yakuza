@@ -1091,11 +1091,11 @@ export default class OverUnderStore {
         const sc = signal_line[signal_line.length - 1];
         const sp = signal_line[signal_line.length - 2];
 
-        if (mp > sp && mc < sc && mc > 0) {
-            this.addLog(`Rise/Fall: MACD crossed BELOW signal (mc=${mc.toFixed(6)}, sc=${sc.toFixed(6)}). FALL!`);
+        if (mp > sp && mc < sc && mc > 0 && sc > 0) {
+            this.addLog(`Rise/Fall: MACD crossed BELOW signal ABOVE zero (mc=${mc.toFixed(6)}, sc=${sc.toFixed(6)}). FALL!`);
             this.executeRiseFallTrade('PUT');
-        } else if (mp < sp && mc > sc && mc < 0) {
-            this.addLog(`Rise/Fall: MACD crossed ABOVE signal (mc=${mc.toFixed(6)}, sc=${sc.toFixed(6)}). RISE!`);
+        } else if (mp < sp && mc > sc && mc < 0 && sc < 0) {
+            this.addLog(`Rise/Fall: MACD crossed ABOVE signal BELOW zero (mc=${mc.toFixed(6)}, sc=${sc.toFixed(6)}). RISE!`);
             this.executeRiseFallTrade('CALL');
         }
     }
