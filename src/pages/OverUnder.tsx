@@ -17,7 +17,7 @@ const STRAT_META: Record<Strategy, { label: string; color: string; glow: string;
     differs:    { label: 'Differs', color: '#a855f7', glow: 'rgba(168,85,247,0.4)', desc: 'Detects pushback reversal pattern (3+ ticks + reversal)' },
     differs_v2: { label: 'Differs V2', color: '#ec4899', glow: 'rgba(236,72,153,0.4)', desc: 'Trades on doubles (e.g., 7,7) or triples (7,7,7)' },
     rise_fall:  { label: 'Rise / Fall', color: '#10b981', glow: 'rgba(16,185,129,0.4)', desc: 'MACD-based trend momentum — places Rise or Fall contract' },
-    rise_fall_v2: { label: 'Rise / Fall V2', color: '#06b6d4', glow: 'rgba(6,182,212,0.4)', desc: 'MACD histogram momentum — catches exhaustion after 4 bars of sustained growth' },
+    rise_fall_v2: { label: 'Rise / Fall V2', color: '#06b6d4', glow: 'rgba(6,182,212,0.4)', desc: 'MACD histogram momentum — fires trade on the exact 4th consecutive growth bar (zero delay). Auto Switch Volatility re-scans all indices after each WIN.' },
     manual:     { label: 'Manual', color: '#f97316', glow: 'rgba(249,115,22,0.4)', desc: 'You choose contract type, barrier digit and trigger' },
 };
 
@@ -546,7 +546,7 @@ const OverUnder = observer(() => {
                                     <div className='ou-row-label'><TrendingUp size={11} /> Options</div>
                                     <div className='ou-strat-info' style={{ '--c': '#06b6d4' } as React.CSSProperties}>
                                         <span className='ou-strat-info__dot' />
-                                        <span>Scans all volatilities for 3 seconds on start, selects the one with the longest MACD histogram bar, then waits for 4 consecutive growing bars before placing a 4-tick Rise or Fall contract.</span>
+                                        <span>Scans all volatilities for 3 seconds on start, selects the one with the longest MACD histogram bar, then fires a 4-tick Rise or Fall contract on the <b>exact same tick</b> the 4th consecutive growing bar is detected — zero delay. When <b>Auto Switch Volatility</b> is ON, a fresh volatility scan runs automatically after every WIN to pick the best momentum index before the next signal.</span>
                                     </div>
                                     <div className='ou-grid' style={{ marginTop: 8 }}>
                                         <SwitchTile label='Auto Switch Volatility' on={is_volatility_changer} onToggle={() => setIsVolatilityChanger(!is_volatility_changer)} disabled={disabled} color='#06b6d4' />

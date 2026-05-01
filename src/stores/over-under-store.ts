@@ -958,7 +958,17 @@ export default class OverUnderStore {
 
                             const is_general_busy = this.is_analyzing_volatility || this.is_processing_round || this.active_contracts.size > 0 || this.is_purchasing;
 
-                            if (this.is_auto_running && !is_general_busy) {
+                            // Rise/Fall V2: bypass the generic busy guard so the 4th consecutive
+                            // histogram bar fires a trade on the EXACT same tick it is detected —
+                            // no delay, no waiting for volatility analysis or other flags.
+                            // The only hard gate is the symbol lock (already checked inside
+                            // analyzeAndExecuteRiseFallV2) and active_contracts (we must not
+                            // stack trades while one is still open).
+                            if (this.is_auto_running && this.is_rise_fall_v2_mode && !this.is_all_vol_mode) {
+                                if (!this.symbol_locks[this.selected_symbol] && this.active_contracts.size === 0 && !this.is_purchasing) {
+                                    this.analyzeAndExecuteRiseFallV2();
+                                }
+                            } else if (this.is_auto_running && !is_general_busy) {
 
                                 if (this.is_all_vol_mode) {
                                     const active_symbol = tick_symbol;
@@ -1663,7 +1673,15 @@ export default class OverUnderStore {
             this.is_processing_round = false;
             // Reset growth counter so we don't re-enter on the same move
             this.rise_fall_v2_growth_counters[this.selected_symbol] = 0;
-            this.addLog('Rise/Fall V2: Monitoring MACD histogram for next entry signal...');
+            this.rise_fall_v2_prev_histogram[this.selected_symbol] = undefined as any;
+            // Auto Switch Volatility: re-scan all volatilities after every WIN
+            // to find the best momentum index before resuming signal detection.
+            if (!all_loss && this.is_volatility_changer) {
+                this.addLog('Rise/Fall V2: WIN detected — auto-scanning all volatilities for best momentum...');
+                this.startRiseFallV2VolatilityScan();
+            } else {
+                this.addLog('Rise/Fall V2: Monitoring MACD histogram for next entry signal...');
+            }
             return;
         }
         
