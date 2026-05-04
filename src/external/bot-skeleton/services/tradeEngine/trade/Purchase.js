@@ -26,16 +26,29 @@ export default Engine =>
             console.log('🤖 [VIRTUAL HOOK] Executing realistic virtual trade simulation.');
             
             let proposal;
-            try {
-                const { id } = this.selectProposal(contract_type);
-                proposal = this.data.proposals.find(p => p.id === id);
-            } catch (e) {
-                console.error('🤖 [VIRTUAL HOOK] Error selecting proposal:', e.message);
-                throw new Error(`Virtual trade failed: ${e.message}. Please ensure your strategy blocks are correctly configured.`);
+            let retries = 0;
+            const maxRetries = 10; // 5 seconds total wait
+
+            while (retries < maxRetries) {
+                try {
+                    const { id } = this.selectProposal(contract_type);
+                    proposal = this.data.proposals.find(p => p.id === id);
+                    if (proposal) break;
+                } catch (e) {
+                    if (e.message === localize('Proposals are not ready') || e.message === 'Proposals are not ready') {
+                        console.log(`⏳ [VIRTUAL HOOK] Proposals not ready, retrying... (${retries + 1}/${maxRetries})`);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        retries++;
+                        continue;
+                    }
+                    console.error('🤖 [VIRTUAL HOOK] Error selecting proposal:', e.message);
+                    throw new Error(`Virtual trade failed: ${e.message}. Please ensure your strategy blocks are correctly configured.`);
+                }
+                retries++;
             }
 
             if (!proposal) {
-                throw new Error('Proposal not found for virtual trade simulation.');
+                throw new Error('Virtual trade failed: Proposals timed out. Please check your internet connection or strategy configuration.');
             }
 
             this.store.dispatch(purchaseSuccessful());

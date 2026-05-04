@@ -52,6 +52,12 @@ export default Engine =>
             const { proposals } = this.data;
 
             if (proposals.length === 0) {
+                // If proposals are not ready, we might be in a race condition.
+                // For virtual trades, we can afford a small wait.
+                console.log('⏳ [PROPOSAL] Proposals not ready, checking templates...');
+                if (this.proposal_templates && this.proposal_templates.length > 0) {
+                    this.requestProposals();
+                }
                 throw Error(localize('Proposals are not ready'));
             }
 
