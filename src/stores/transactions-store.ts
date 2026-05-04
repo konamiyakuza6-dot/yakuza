@@ -148,9 +148,18 @@ export default class TransactionsStore {
                         if (b.type === transaction_elements.DIVIDER) return 1;
                         const aData = a.data as TContractInfo;
                         const bData = b.data as TContractInfo;
+                        
+                        // Handle potential null/undefined data or date_start
+                        if (!aData || !bData) return 0;
+                        
                         const aDate = aData.date_start || 0;
                         const bDate = bData.date_start || 0;
-                        return Number(bDate) - Number(aDate);
+                        
+                        // If dates are strings, try to parse them or compare as strings
+                        const aTime = typeof aDate === 'number' ? aDate : new Date(aDate).getTime() || 0;
+                        const bTime = typeof bDate === 'number' ? bDate : new Date(bDate).getTime() || 0;
+                        
+                        return Number(bTime) - Number(aTime);
                     });
                     return sorted;
                 }
@@ -353,7 +362,11 @@ export default class TransactionsStore {
                     }
                 }
             }
-            this.elements[current_account]?.unshift({
+            // Ensure elements[current_account] is an array before unshifting
+            if (!Array.isArray(this.elements[current_account])) {
+                this.elements[current_account] = [];
+            }
+            this.elements[current_account].unshift({
                 type: transaction_elements.CONTRACT,
                 data: contract,
             });

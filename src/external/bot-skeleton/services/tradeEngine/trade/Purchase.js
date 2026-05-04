@@ -141,15 +141,9 @@ export default Engine =>
                 this.vh_state.loss_count++;
                 this.vh_state.step_count++;
                 
-                // Multiply stake if under max steps
-                if (this.vh_state.step_count < this.vh_state.maxSteps) {
-                    this.vh_state.current_stake = Number((this.vh_state.current_stake * this.vh_state.martingaleFactor).toFixed(2));
-                    console.log(`🤖 [VIRTUAL HOOK] Loss. VH Martingale: ${this.vh_state.current_stake} (Step ${this.vh_state.step_count}/${this.vh_state.maxSteps})`);
-                } else {
-                    this.vh_state.current_stake = this.vh_state.initial_stake;
-                    this.vh_state.step_count = 0;
-                    console.log('🤖 [VIRTUAL HOOK] Max steps reached. Resetting VH stake.');
-                }
+                // Virtual Hook should never increase stake
+                this.vh_state.current_stake = this.vh_state.initial_stake;
+                console.log(`🤖 [VIRTUAL HOOK] Loss. VH stake remains: ${this.vh_state.current_stake}`);
 
                 // 2. Check for switch to REAL trades
                 if (this.vh_state.loss_count >= this.vh_state.threshold) {
@@ -359,14 +353,12 @@ export default Engine =>
                         this.vh_state.real_trade_count = (this.vh_state.real_trade_count || 0) + 1;
                         const minReal = this.vh_state.minTradesOnReal || 1;
 
-                        if (win && this.vh_state.real_trade_count >= minReal) {
-                            console.log(`🤖 [VIRTUAL HOOK] REAL WIN after ${this.vh_state.real_trade_count} trades. Going back to VIRTUAL mode.`);
+                        if (win) {
+                            console.log(`🤖 [VIRTUAL HOOK] REAL WIN. Going back to VIRTUAL mode.`);
                             this.vh_state.is_virtual = true;
                             this.vh_state.loss_count = 0;
                             this.vh_state.step_count = 0;
                             this.vh_state.current_stake = this.vh_state.initial_stake;
-                        } else if (win) {
-                            console.log(`🤖 [VIRTUAL HOOK] REAL WIN but only ${this.vh_state.real_trade_count}/${minReal} real trades. Staying in REAL mode.`);
                         } else {
                             console.log('🤖 [VIRTUAL HOOK] REAL LOSS. Staying in REAL mode until win.');
                         }
