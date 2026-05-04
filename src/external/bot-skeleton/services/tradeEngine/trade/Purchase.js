@@ -68,7 +68,7 @@ export default Engine =>
 
             const entry_spot = proposal.spot;
 
-            return new Promise(resolve => {
+            await new Promise(resolve => {
                 const onContractEnd = end_spot => {
                     let is_win;
                     const last_digit = Number(String(end_spot).slice(-1));
@@ -126,6 +126,13 @@ export default Engine =>
                     }, duration_ms);
                 }
             });
+
+            // After virtual trade is finished, we MUST call afterPromise to let the bot continue
+            if (this.afterPromise) {
+                const currentAfterPromise = this.afterPromise;
+                this.afterPromise = null;
+                currentAfterPromise();
+            }
         }
 
         updateVirtualTotals(contract) {
@@ -190,13 +197,6 @@ export default Engine =>
 
             this.store.dispatch(sell());
             this.renewProposalsOnPurchase();
-
-            // Ensure afterPromise is called to continue the bot loop
-            if (this.afterPromise) {
-                const currentAfterPromise = this.afterPromise;
-                this.afterPromise = null; // Clear to prevent double calls
-                currentAfterPromise();
-            }
         }
 
         applyAlternateMarketsToCurrentTradeOptions() {
