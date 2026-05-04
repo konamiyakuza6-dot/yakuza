@@ -162,11 +162,13 @@ export default Engine =>
             }
 
             const now = Math.floor(Date.now() / 1000);
+            const virtual_id = 1000000000 + Math.floor(Math.random() * 900000000);
             const virtual_contract = {
                 ...contract,
                 buy_price: contract.ask_price,
                 sell_price: contract.profit > 0 ? contract.payout : 0,
-                transaction_ids: { buy: 'VIRTUAL', sell: 'VIRTUAL' },
+                transaction_ids: { buy: virtual_id, sell: virtual_id + 1 },
+                display_transaction_ids: { buy: `V${virtual_id}`, sell: `V${virtual_id + 1}` },
                 entry_tick: contract.entry_spot,
                 exit_tick: contract.exit_spot,
                 entry_tick_time: now - 1,
