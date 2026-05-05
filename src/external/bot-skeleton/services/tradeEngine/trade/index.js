@@ -50,7 +50,7 @@ const watchScope = ({ store, stopScope, passScope, passFlag }) => {
             if (newState.newTick === prevTick) return;
             prevTick = newState.newTick;
 
-            if (newState.scope === passScope && newState[passFlag]) {
+            if (newState.scope === passScope && (passFlag === undefined || newState[passFlag])) {
                 unsubscribe();
                 resolve(true);
             }
@@ -89,6 +89,18 @@ export default class TradeEngine extends Balance(Purchase(Sell(OpenContract(Prop
             current_stake: 0,
             initial_stake: 0,
             step_count: 0,
+            // Tick-driven virtual trade fields
+            virtual_trade_active: false,
+            virtual_entry_digit: null,
+            virtual_tick_count: 0,
+            virtual_target_duration: 0,
+            virtual_contract_type: null,
+            virtual_prediction: null,
+            virtual_entry_spot: null,
+            virtual_entry_epoch: null,
+            virtual_resolve: null,
+            virtual_reject: null,
+            virtual_timeout: null,
         };
     }
 

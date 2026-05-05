@@ -32,114 +32,197 @@ export default Engine =>
                 prediction,
             } = this.tradeOptions;
 
-            console.log(`🤖 [VIRTUAL HOOK] Executing virtual trade for ${symbol} (${trade_contract_type})`);
-            
+            console.log(`🤖 [VIRTUAL HOOK] Starting tick-driven virtual trade for ${symbol} (${trade_contract_type})`);
+
+            // Get proposal for stake tracking
             let proposal;
-            let retries = 0;
-            const maxRetries = 10;
-
-            while (retries < maxRetries) {
-                try {
-                    const { id } = this.selectProposal(contract_type);
-                    proposal = this.data.proposals.find(p => p.id === id);
-                    if (proposal) break;
-                } catch (e) {
-                    if (e.message === localize('Proposals are not ready') || e.message === 'Proposals are not ready') {
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        retries++;
-                        continue;
-                    }
-                    throw new Error(`Virtual trade failed: ${e.message}`);
-                }
-                retries++;
-            }
-
-            if (!proposal) {
-                throw new Error('Virtual trade failed: Proposals timed out.');
+            try {
+                const { id } = this.selectProposal(contract_type);
+                proposal = this.data.proposals.find(p => p.id === id);
+            } catch (e) {
+                console.warn('🤖 [VIRTUAL HOOK] Proposal not ready, using default values');
             }
 
             // Initialize VH stake tracking if not set
-            if (!this.vh_state.initial_stake) {
+            if (proposal && !this.vh_state.initial_stake) {
                 this.vh_state.initial_stake = Number(proposal.ask_price);
                 this.vh_state.current_stake = this.vh_state.initial_stake;
             }
 
+            const entry_spot = proposal ? proposal.spot : 0;
+
+            // Calculate target duration in ticks
+            let target_ticks = 0;
+            if (duration_unit === 't') {
+                target_ticks = duration;
+            } else {
+                // Convert time-based duration to approximate ticks
+                const duration_seconds = duration * (duration_unit === 'm' ? 60 : 1);
+                target_ticks = Math.ceil(duration_seconds); // ~1 tick per second for standard volatility
+            }
+
+            // Capture entry digit
+            const entry_digit = entry_spot ? Number(String(entry_spot).slice(-1)) : null;
+
+            console.log(`🤖 [VIRTUAL HOOK] Virtual trade setup: duration=${target_ticks} ticks, entry_digit=${entry_digit}`);
+
+            // Set up virtual trade state for tick-driven execution
+            this.vh_state.virtual_trade_active = true;
+            this.vh_state.virtual_entry_digit = entry_digit;
+            this.vh_state.virtual_tick_count = 0;
+            this.vh_state.virtual_target_duration = target_ticks;
+            this.vh_state.virtual_contract_type = trade_contract_type;
+            this.vh_state.virtual_prediction = prediction;
+            this.vh_state.virtual_entry_spot = entry_spot;
+            this.vh_state.virtual_entry_epoch = Date.now();
+            this.vh_state.last_tick_epoch = null; // Deduplication flag
+
             // 1. Signal Purchase Successful
             this.store.dispatch(purchaseSuccessful());
-            
-            // 2. Mimic "Open Contract" signal
-            // This satisfies watchDuring and allows the interpreter to proceed to the next block
+
+            // 2. Mimic "Open Contract" signal - this allows watchDuring to proceed
             this.store.dispatch(openContractReceived());
 
-            const entry_spot = proposal.spot;
-
-            // 3. Wait for contract duration
-            const end_spot = await new Promise(resolve => {
-                if (duration_unit === 't') {
-                    let tick_count = 0;
-                    const tick_subscriber = api_base.api.onMessage().subscribe(({ data }) => {
-                        if (data.msg_type === 'tick' && data.tick.symbol === symbol) {
-                            tick_count++;
-                            if (tick_count >= duration) {
-                                tick_subscriber.unsubscribe();
-                                resolve(data.tick.quote);
-                            }
-                        }
-                    });
-                    api_base.pushSubscription(tick_subscriber);
-                    api_base.api.send({ ticks: symbol, subscribe: 1 });
-                } else {
-                    let duration_ms = duration * 1000 * (duration_unit === 'm' ? 60 : 1);
-                    setTimeout(() => {
-                        const tick_subscriber = api_base.api.onMessage().subscribe(({ data }) => {
-                            if (data.msg_type === 'tick' && data.tick.symbol === symbol) {
-                                tick_subscriber.unsubscribe();
-                                resolve(data.tick.quote);
-                            }
-                        });
-                        api_base.pushSubscription(tick_subscriber);
-                        api_base.api.send({ ticks: symbol, subscribe: 1 });
-                    }, duration_ms);
+            // 3. Subscribe to API ticks as backup to ensure we don't miss any ticks
+            this.vh_state.virtual_tick_subscription = api_base.api.onMessage().subscribe(({ data }) => {
+                if (data.msg_type === 'tick' && data.tick.symbol === symbol) {
+                    const tickData = {
+                        quote: data.tick.quote,
+                        symbol: data.tick.symbol,
+                        epoch: data.tick.epoch,
+                        tick: data.tick,
+                    };
+                    this.processVirtualTick(tickData);
                 }
             });
+            api_base.pushSubscription(this.vh_state.virtual_tick_subscription);
+            api_base.api.send({ ticks: symbol, subscribe: 1 });
 
-            // 4. Calculate Result
-            let is_win;
-            const last_digit = Number(String(end_spot).slice(-1));
-            switch (trade_contract_type) {
-                case 'CALL': is_win = end_spot > entry_spot; break;
-                case 'PUT': is_win = end_spot < entry_spot; break;
-                case 'DIGITMATCH': is_win = last_digit === prediction; break;
-                case 'DIGITDIFF': is_win = last_digit !== prediction; break;
-                case 'DIGITOVER': is_win = last_digit > prediction; break;
-                case 'DIGITUNDER': is_win = last_digit < prediction; break;
-                case 'DIGITODD': is_win = last_digit % 2 !== 0; break;
-                case 'DIGITEVEN': is_win = last_digit % 2 === 0; break;
-                default: is_win = Math.random() > 0.5; break;
+            // 4. Return a promise that will be resolved by the tick handler
+            return new Promise((resolve, reject) => {
+                this.vh_state.virtual_resolve = resolve;
+                this.vh_state.virtual_reject = reject;
+
+                // Set timeout to prevent permanent freeze (max 5 minutes for safety)
+                this.vh_state.virtual_timeout = setTimeout(() => {
+                    if (this.vh_state.virtual_trade_active) {
+                        console.error('🤖 [VIRTUAL HOOK] Virtual trade timed out after 5 minutes');
+                        this.resetVirtualTrade();
+                        reject(new Error('Virtual trade timed out'));
+                    }
+                }, 300000); // 5 minute timeout
+            });
+        }
+
+        // Process virtual trade on each tick - called from Ticks.js callback
+        processVirtualTick(tick_data) {
+            if (!this.vh_state.virtual_trade_active) return;
+
+            const { symbol } = this.tradeOptions;
+            if (tick_data.symbol !== symbol) return;
+
+            // Deduplicate ticks based on epoch to avoid double-counting from multiple subscriptions
+            const tick_epoch = tick_data.epoch || tick_data.tick?.epoch;
+            if (tick_epoch && tick_epoch === this.vh_state.last_tick_epoch) return;
+            if (tick_epoch) this.vh_state.last_tick_epoch = tick_epoch;
+
+            // Increment tick count
+            this.vh_state.virtual_tick_count++;
+            const current_tick = this.vh_state.virtual_tick_count;
+            const target = this.vh_state.virtual_target_duration;
+
+            console.log(`🤖 [VIRTUAL HOOK] Tick ${current_tick}/${target} for ${symbol} (epoch: ${tick_epoch})`);
+
+            // Check if we've reached the target duration
+            if (current_tick >= target) {
+                const end_spot = tick_data.quote || tick_data.tick?.quote;
+                const entry_spot = this.vh_state.virtual_entry_spot;
+                const trade_contract_type = this.vh_state.virtual_contract_type;
+                const prediction = this.vh_state.virtual_prediction;
+
+                // Calculate result
+                let is_win;
+                const last_digit = Number(String(end_spot).slice(-1));
+                const entry_digit = this.vh_state.virtual_entry_digit;
+
+                switch (trade_contract_type) {
+                    case 'CALL': is_win = end_spot > entry_spot; break;
+                    case 'PUT': is_win = end_spot < entry_spot; break;
+                    case 'DIGITMATCH': is_win = last_digit === prediction; break;
+                    case 'DIGITDIFF': is_win = last_digit !== prediction; break;
+                    case 'DIGITOVER': is_win = last_digit > prediction; break;
+                    case 'DIGITUNDER': is_win = last_digit < prediction; break;
+                    case 'DIGITODD': is_win = last_digit % 2 !== 0; break;
+                    case 'DIGITEVEN': is_win = last_digit % 2 === 0; break;
+                    case 'DIGITOVERLE': is_win = last_digit >= prediction; break;
+                    case 'DIGITUNDERLE': is_win = last_digit <= prediction; break;
+                    default: is_win = Math.random() > 0.5; break;
+                }
+
+                console.log(`🤖 [VIRTUAL HOOK] Virtual trade completed: ${is_win ? 'WIN' : 'LOSS'} (exit_digit=${last_digit}, entry_digit=${entry_digit})`);
+
+                // Create simulated contract
+                const proposal = this.data.proposals.find(p => p.id === this.getPurchaseReference());
+                const simulated_contract = {
+                    ask_price: proposal ? proposal.ask_price : this.vh_state.current_stake,
+                    payout: proposal ? proposal.payout : this.vh_state.current_stake * 1.95,
+                    profit: is_win
+                        ? (proposal ? Number(proposal.payout) - Number(proposal.ask_price) : this.vh_state.current_stake * 0.95)
+                        : -(proposal ? Number(proposal.ask_price) : this.vh_state.current_stake),
+                    status: 'sold',
+                    is_sold: true,
+                    entry_spot,
+                    exit_spot: end_spot,
+                    is_virtual: true,
+                    contract_type: trade_contract_type,
+                    symbol,
+                };
+
+                // Update totals and emit contract
+                this.updateVirtualTotals(simulated_contract);
+
+                // Signal "Sold" to the state machine (sets scope to STOP)
+                this.store.dispatch(sell());
+
+                // Allow event loop to process the state change before continuing
+                setTimeout(() => {
+                    // Resolve the promise to continue bot execution
+                    const resolve = this.vh_state.virtual_resolve;
+                    this.resetVirtualTrade();
+
+                    if (resolve) resolve();
+
+                    // Signal completion to the interpreter
+                    if (this.afterPromise) {
+                        const currentAfterPromise = this.afterPromise;
+                        this.afterPromise = null;
+                        currentAfterPromise();
+                    }
+                }, 0);
             }
+        }
 
-            const simulated_contract = {
-                ...proposal,
-                profit: is_win ? Number(proposal.payout) - Number(proposal.ask_price) : -Number(proposal.ask_price),
-                status: 'sold',
-                is_sold: true,
-                entry_spot,
-                exit_spot: end_spot,
-                is_virtual: true,
-            };
-
-            // 5. Update Totals and Emit Contract
-            this.updateVirtualTotals(simulated_contract);
-
-            // 6. Signal "Sold" to the state machine
-            this.store.dispatch(sell());
-
-            // 7. Signal completion to the interpreter
-            if (this.afterPromise) {
-                const currentAfterPromise = this.afterPromise;
-                this.afterPromise = null;
-                currentAfterPromise();
+        // Reset virtual trade state
+        resetVirtualTrade() {
+            if (this.vh_state.virtual_timeout) {
+                clearTimeout(this.vh_state.virtual_timeout);
             }
+            if (this.vh_state.virtual_tick_subscription) {
+                this.vh_state.virtual_tick_subscription.unsubscribe();
+                this.vh_state.virtual_tick_subscription = null;
+            }
+            this.vh_state.virtual_trade_active = false;
+            this.vh_state.virtual_entry_digit = null;
+            this.vh_state.virtual_tick_count = 0;
+            this.vh_state.virtual_target_duration = 0;
+            this.vh_state.virtual_contract_type = null;
+            this.vh_state.virtual_prediction = null;
+            this.vh_state.virtual_entry_spot = null;
+            this.vh_state.virtual_entry_epoch = null;
+            this.vh_state.virtual_resolve = null;
+            this.vh_state.virtual_reject = null;
+            this.vh_state.virtual_timeout = null;
+            this.vh_state.last_tick_epoch = null;
         }
 
         updateVirtualTotals(contract) {
@@ -160,8 +243,8 @@ export default Engine =>
                 this.vh_state.current_stake = this.vh_state.initial_stake;
                 console.log(`🤖 [VIRTUAL HOOK] Loss. VH stake remains: ${this.vh_state.current_stake}`);
 
-                // 2. Check for switch to REAL trades
-                if (this.vh_state.loss_count >= this.vh_state.threshold) {
+                // 2. Check for switch to REAL trades (threshold check)
+                if (this.vh_state.threshold > 0 && this.vh_state.loss_count >= this.vh_state.threshold) {
                     this.vh_state.is_virtual = false;
                     this.vh_state.real_trade_count = 0; // Reset real trade counter
                     console.log('🤖 [VIRTUAL HOOK] THRESHOLD REACHED. Switching to REAL trades.');
@@ -169,9 +252,18 @@ export default Engine =>
             }
 
             // 3. Global VH limits check (Take Profit / Stop Loss)
-            // Note: These are simplified for the VH session. 
-            // In a full implementation, you'd track cumulative VH profit/loss.
-            // For now, we focus on the core requirement: isolating martingale and balance.
+            // Track cumulative virtual profit for TP/SL
+            if (!this.vh_state.cumulative_profit) {
+                this.vh_state.cumulative_profit = 0;
+            }
+            this.vh_state.cumulative_profit += contract.profit;
+
+            if (this.vh_state.takeProfit > 0 && this.vh_state.cumulative_profit >= this.vh_state.takeProfit) {
+                console.log(`🤖 [VIRTUAL HOOK] Take Profit reached: ${this.vh_state.cumulative_profit}`);
+            }
+            if (this.vh_state.stopLoss > 0 && this.vh_state.cumulative_profit <= -this.vh_state.stopLoss) {
+                console.log(`🤖 [VIRTUAL HOOK] Stop Loss reached: ${this.vh_state.cumulative_profit}`);
+            }
 
             const now = Math.floor(Date.now() / 1000);
             const virtual_id = 1000000000 + Math.floor(Math.random() * 900000000);
@@ -196,7 +288,6 @@ export default Engine =>
                 underlying: this.tradeOptions.symbol,
                 contract_type: this.tradeOptions.contract_type,
                 currency: this.tradeOptions.currency || 'USD',
-                contract_type: this.tradeOptions.contract_type,
                 shortcode: `VIRTUAL_${this.tradeOptions.contract_type}_${this.tradeOptions.symbol}`,
             };
 
