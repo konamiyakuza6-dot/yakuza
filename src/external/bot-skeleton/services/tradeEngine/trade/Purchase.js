@@ -54,6 +54,18 @@ export default Engine =>
                 `🤖 [VIRTUAL HOOK] Initiating trade: type=${contract_type}, prediction=${resolved_prediction}, duration=${target_ticks} ticks.`
             );
 
+            // Sync stake from tradeOptions on every virtual purchase so the displayed
+            // stake always matches what the user configured in the bot.
+            // initial_stake is anchored on the very first trade (or after a win reset)
+            // so martingale multiplications stay relative to the original stake.
+            const configured_stake = Number(this.tradeOptions.amount) || 1;
+            if (!this.vh_state.initial_stake || this.vh_state.initial_stake === 0) {
+                this.vh_state.initial_stake = configured_stake;
+            }
+            if (!this.vh_state.current_stake || this.vh_state.current_stake === 0) {
+                this.vh_state.current_stake = configured_stake;
+            }
+
             this.vh_state.virtual_trade_active = true;
             this.vh_state.virtual_tick_count = 0;
             this.vh_state.virtual_target_duration = target_ticks;
