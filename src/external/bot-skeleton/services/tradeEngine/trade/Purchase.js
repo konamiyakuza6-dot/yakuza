@@ -61,7 +61,7 @@ export default Engine =>
                 }
             });
             api_base.pushSubscription(this.vh_state.virtual_tick_subscription);
-            if (!api_base.api.sent_requests.some(req => req.ticks === symbol)) {
+            if (!api_base.api.sent_requests?.some(req => req.ticks === symbol)) {
                 api_base.api.send({ ticks: symbol, subscribe: 1 });
             }
 
