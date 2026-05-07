@@ -65,7 +65,7 @@ export async function redirectToNewAccountsLogin() {
     new_auth_url.searchParams.set('response_type', 'code');
     new_auth_url.searchParams.set('client_id', client_id);
     new_auth_url.searchParams.set('redirect_uri', redirect_uri);
-    new_auth_url.searchParams.set('scope', 'trade payments account_manage');
+    new_auth_url.searchParams.set('scope', 'trade account_manage');
     new_auth_url.searchParams.set('state', state);
     new_auth_url.searchParams.set('code_challenge', challenge);
     new_auth_url.searchParams.set('code_challenge_method', 'S256');
