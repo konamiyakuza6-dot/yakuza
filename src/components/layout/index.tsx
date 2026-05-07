@@ -130,7 +130,11 @@ const Layout = () => {
             sessionStorage.setItem('query_param_currency', currency);
         }
 
-        const checkOIDCEnabledWithMissingAccount = !isEndpointPage && !isCallbackPage && !clientHasCurrency;
+        // Only auto-redirect if the user was previously logged in (cookie present) but
+        // their account data is now missing — do NOT redirect fresh unauthenticated visitors
+        // so they can choose their login flow from the header buttons.
+        const checkOIDCEnabledWithMissingAccount =
+            isLoggedInCookie && !isEndpointPage && !isCallbackPage && !clientHasCurrency;
         const shouldAuthenticate =
             (isLoggedInCookie && !isClientAccountsPopulated && !isEndpointPage && !isCallbackPage) ||
             checkOIDCEnabledWithMissingAccount;
