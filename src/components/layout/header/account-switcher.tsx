@@ -86,7 +86,10 @@ const RenderAccountItems = ({
 
     const isTrickActive = isCustomDemoIconActive();
 
-    if (is_virtual && !isTrickActive) {
+    if (is_virtual) {
+        // Demo tab: always show DemoAccounts regardless of trick state.
+        // When trick is active the cursor moves to Real (via isVirtual:false on the account object),
+        // but the Demo tab content still shows the demo account with its real balance (e.g. 10,000 USD).
         return (
             <>
                 <DemoAccounts
@@ -101,6 +104,8 @@ const RenderAccountItems = ({
             </>
         );
     } else {
+        // Real tab: when trick is active, append the VRT accounts so the demo account
+        // appears in the Real tab with its demo balance.
         const combinedCRAccountList = isTrickActive 
             ? [...(modifiedCRAccountList ?? []), ...(modifiedVRTCRAccountList ?? [])]
             : (modifiedCRAccountList ?? []);
