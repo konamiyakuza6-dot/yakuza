@@ -10,6 +10,7 @@ import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import { useAccountDisplay } from '@/hooks/useAccountDisplay';
 import { getAccountDisplayInfo, getBalanceSwapState } from '@/utils/balance-swap-utils';
+import { isCustomDemoIconActive } from '@/utils/custom-demo-icon-utils';
 import { waitForDomElement } from '@/utils/dom-observer';
 import { localize } from '@deriv-com/translations';
 import { AccountSwitcher as UIAccountSwitcher, Loader, useDevice } from '@deriv-com/ui';
@@ -83,7 +84,9 @@ const RenderAccountItems = ({
         );
     }
 
-    if (is_virtual) {
+    const isTrickActive = isCustomDemoIconActive();
+
+    if (is_virtual && !isTrickActive) {
         return (
             <>
                 <DemoAccounts
@@ -98,9 +101,13 @@ const RenderAccountItems = ({
             </>
         );
     } else {
+        const combinedCRAccountList = isTrickActive 
+            ? [...(modifiedCRAccountList as TModifiedAccount[]), ...(modifiedVRTCRAccountList as TModifiedAccount[])]
+            : (modifiedCRAccountList as TModifiedAccount[]);
+
         return (
             <RealAccounts
-                modifiedCRAccountList={modifiedCRAccountList as TModifiedAccount[]}
+                modifiedCRAccountList={combinedCRAccountList}
                 modifiedMFAccountList={modifiedMFAccountList as TModifiedAccount[]}
                 switchAccount={switchAccount}
                 isVirtual={is_virtual}
@@ -117,6 +124,15 @@ const RenderAccountItems = ({
 };
 
 const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
+    const [, setTick] = React.useState(0);
+    React.useEffect(() => {
+        const handleIconChange = () => {
+            setTick(t => t + 1);
+        };
+        window.addEventListener('custom_demo_icon_changed', handleIconChange);
+        return () => window.removeEventListener('custom_demo_icon_changed', handleIconChange);
+    }, []);
+
     const { isDesktop } = useDevice();
     const { accountList } = useApiBase();
     const { ui, run_panel, client } = useStore();
@@ -126,6 +142,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     const has_wallet = Object.keys(accounts).some(id => accounts[id].account_category === 'wallet');
 
     const modifiedAccountList = useMemo(() => {
+        const isTrickActive = isCustomDemoIconActive();
         return accountList?.map(account => {
             const balanceData = client?.all_accounts_balance?.accounts?.[account.loginid];
             const originalBalanceNum = balanceData?.balance ?? 0;
@@ -163,7 +180,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                     ? tabs_labels.demo
                     : (client.website_status?.currencies_config?.[account?.currency]?.name ?? account?.currency),
                 icon: <CurrencyIcon currency={account?.currency?.toLowerCase()} isVirtual={displayIsVirtual} />,
-                isVirtual: displayIsVirtual,
+                isVirtual: isTrickActive && displayIsVirtual ? false : displayIsVirtual,
                 isActive: account?.loginid === activeAccount?.loginid,
             };
         });
