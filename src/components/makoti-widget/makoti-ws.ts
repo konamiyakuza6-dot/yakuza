@@ -258,7 +258,7 @@ export function analyzeSignal(ticks: number[], prices: number[]): TradeSignal | 
     const voteMargin = Math.abs(bullVotes - bearVotes);
     const totalVotes = bullVotes + bearVotes;
 
-    if (bullVotes > bearVotes && totalVotes >= 4 && voteMargin >= 3) {
+    if (bullVotes > bearVotes && totalVotes >= 3 && voteMargin >= 2) {
         const conf = Math.min(92, 65 + bullVotes * 3 + voteMargin * 2);
         return {
             contract_type: 'CALL',
@@ -269,7 +269,7 @@ export function analyzeSignal(ticks: number[], prices: number[]): TradeSignal | 
         };
     }
 
-    if (bearVotes > bullVotes && totalVotes >= 4 && voteMargin >= 3) {
+    if (bearVotes > bullVotes && totalVotes >= 3 && voteMargin >= 2) {
         const conf = Math.min(92, 65 + bearVotes * 3 + voteMargin * 2);
         return {
             contract_type: 'PUT',

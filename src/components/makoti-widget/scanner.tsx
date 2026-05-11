@@ -117,8 +117,8 @@ export const Scanner: React.FC = () => {
             const best: string[] = [];
 
             collectedRef.current.forEach((candles: any[], sym) => {
-                if (!candles || candles.length < 10) return;
-                const recent = candles.slice(-60);
+                if (!candles || candles.length < 5) return;
+                const recent = candles.slice(-10);
                 let up = 0, down = 0, totalBody = 0, totalRange = 0;
 
                 for (const c of recent) {
@@ -196,7 +196,7 @@ export const Scanner: React.FC = () => {
                         // 1 000 ticks — matches MAX_TICKS in over-under-store
                         mws.send({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' });
                     } else {
-                        mws.send({ ticks_history: sym, count: 60, end: 'latest', style: 'candles', granularity: 60 });
+                        mws.send({ ticks_history: sym, count: 10, end: 'latest', style: 'candles', granularity: 60 });
                     }
                 });
             },
@@ -238,7 +238,7 @@ export const Scanner: React.FC = () => {
                 <div className='mw-scanner__desc'>
                     {bot === 'pvty_kill'
                         ? 'Scans 1 000 ticks per volatility. Finds markets where digits 7, 8 and 9 each exceed 10% — ideal for high-digit strategies.'
-                        : 'Analyzes 60 candles per volatility. Finds markets with no clear direction — balanced up/down with small candle bodies.'}
+                        : 'Analyzes the last 10 candles per volatility. Finds markets with no clear direction — balanced up/down with small candle bodies.'}
                 </div>
 
                 <button

@@ -84,9 +84,16 @@ export const MakotiWidget: React.FC = () => {
 
     /* ── Window header pointer down ───────────────────────── */
     const onWinPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        // Only drag from the header row, not from body content
+        // Only drag from the header strip — never intercept tabs, body, or any interactive element
         const target = e.target as HTMLElement;
-        if (target.closest('.mw-win-body') || target.closest('.mw-win-action')) return;
+        if (
+            target.closest('.mw-win-body')    ||
+            target.closest('.mw-win-actions') ||
+            target.closest('.mw-tabs')        ||
+            (target as HTMLElement).tagName === 'BUTTON' ||
+            (target as HTMLElement).tagName === 'INPUT'  ||
+            (target as HTMLElement).tagName === 'SELECT'
+        ) return;
         e.preventDefault();
         winDragging.current = true;
         winMoved.current    = false;
