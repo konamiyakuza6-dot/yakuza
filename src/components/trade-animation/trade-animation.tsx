@@ -38,8 +38,10 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
         is_stop_button_visible,
         is_stop_button_disabled,
         is_running,
+        is_bot_paused,
         onRunButtonClick,
         onStopBotClick,
+        toggleBotPause,
         performSelfExclusionCheck,
     } = run_panel;
     const { account_status } = client;
@@ -144,13 +146,21 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                 icon: <LabelPairedSquareLgFillIcon fill='#fff' />,
             };
         }
+        if (is_bot_paused && !is_stop_button_visible) {
+            return {
+                id: 'db-animation__resume-button',
+                class: 'animation__run-button',
+                text: <Localize i18n_default_text='Resume' />,
+                icon: <LabelPairedPlayLgFillIcon fill='#fff' />,
+            };
+        }
         return {
             id: 'db-animation__run-button',
             class: 'animation__run-button',
             text: <Localize i18n_default_text='Run' />,
             icon: <LabelPairedPlayLgFillIcon fill='#fff' />,
         };
-    }, [is_stop_button_visible]);
+    }, [is_stop_button_visible, is_bot_paused]);
     const show_overlay = should_show_overlay && is_contract_completed;
 
     // Fix TypeScript error by ensuring active_tab is a number
@@ -221,6 +231,13 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                     id={button_props.id}
                     icon={button_props.icon}
                     onClick={() => {
+                        // Resume from pause
+                        if (is_bot_paused && !is_stop_button_visible) {
+                            toggleBotPause();
+                            onRunButtonClick();
+                            rudderStackSendRunBotEvent({ subpage_name: safeActiveTab } as any);
+                            return;
+                        }
                         // CRITICAL: Prevent multiple clicks when already running
                         if (is_running && !is_stop_button_visible) {
                             console.warn('[Trade Animation] ⚠️ Bot is already running, ignoring click');
@@ -254,6 +271,18 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                 <span className='animation__text'>
                     <ContractStageText contract_stage={contract_stage} />
                 </span>
+                {is_stop_button_visible && (
+                    <button
+                        className='animation__pause-button'
+                        onClick={() => {
+                            toggleBotPause();
+                            onStopBotClick();
+                        }}
+                        title={localize('Pause the bot after this contract completes')}
+                    >
+                        ⏸ <Localize i18n_default_text='Pause' />
+                    </button>
+                )}
                 <div className='animation__progress'>
                     <div className='animation__progress-line'>
                         <div className={`animation__progress-bar animation__progress-${contract_stage}`} />

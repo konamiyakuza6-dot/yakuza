@@ -255,9 +255,13 @@ const OverUnder = observer(() => {
             {/* ── GUIDE FAB ── */}
             <motion.button
                 className='ou-fab'
+                drag
+                dragMomentum={false}
+                dragElastic={0}
                 onClick={() => setShowGuide(true)}
                 whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.95 }}
+                style={{ cursor: 'grab' }}
             >
                 <span className='ou-fab__pulse' />
                 <Info size={17} /><span>Strategy Guide</span>

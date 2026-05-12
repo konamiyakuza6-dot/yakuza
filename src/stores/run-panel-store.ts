@@ -89,6 +89,8 @@ export default class RunPanelStore {
             preloadAudio: action,
             onMount: action,
             onUnmount: action,
+            is_bot_paused: observable,
+            toggleBotPause: action,
         });
 
         this.root_store = root_store;
@@ -109,6 +111,11 @@ export default class RunPanelStore {
     is_sell_requested = false;
     show_bot_stop_message = false;
     is_contracy_buying_in_progress = false;
+    is_bot_paused = false;
+
+    toggleBotPause = () => {
+        this.is_bot_paused = !this.is_bot_paused;
+    };
 
     run_id = '';
     onOkButtonClick: (() => void) | null = null;

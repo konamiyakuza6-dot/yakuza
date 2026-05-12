@@ -59,7 +59,11 @@ export async function redirectToNewAccountsLogin(): Promise<void> {
     url.searchParams.set('state',                 state);
     url.searchParams.set('code_challenge',        challenge);
     url.searchParams.set('code_challenge_method', 'S256');
-    url.searchParams.set('prompt',                'login');
+    url.searchParams.set('prompt',                'registration');
+    url.searchParams.set('sidc',                  crypto.randomUUID());
+    url.searchParams.set('utm_source',            'makotitraders');
+    url.searchParams.set('utm_medium',            'affiliate');
+    url.searchParams.set('utm_campaign',          'signup');
 
     window.location.assign(url.toString());
 }

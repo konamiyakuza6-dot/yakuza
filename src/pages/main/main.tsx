@@ -59,17 +59,17 @@ const AppWrapper = observer(() => {
     const pendingXmlRef = useRef<string | null>(null);
 
     const hash = [
-        'dashboard',
-        'bot_builder',
-        'chart',
-        'trading_bots',
-        'over_under',
-        'analysis_tool',
-        'strategies',
-        'copy_trading',
-        'dtrader',
-        'tradingview',
-        'makoti_magic', 
+        'dashboard',     // 0 - Dashboard
+        'bot_builder',   // 1 - Bot Builder
+        'chart',         // 2 - Charts
+        'trading_bots',  // 3 - Trading Bots
+        'over_under',    // 4 - Over/Under
+        'makoti_magic',  // 5 - Makoti Magic
+        'analysis_tool', // 6 - Analysis Tool
+        'strategies',    // 7 - Strategies
+        'copy_trading',  // 8 - Copy Trading
+        'dtrader',       // 9 - DTrader
+        'tradingview',   // 10 - TradingView
     ];
     
     const { isDesktop } = useDevice();
@@ -163,7 +163,7 @@ const AppWrapper = observer(() => {
                 </div>
             </div>
             <DesktopWrapper>
-                {hash[active_tab] !== 'strategies' && hash[active_tab] !== 'makoti_magic' && hash[active_tab] !== 'trading_bots' && (
+                {hash[active_tab] !== 'strategies' && hash[active_tab] !== 'makoti_magic' && hash[active_tab] !== 'trading_bots' && hash[active_tab] !== 'dtrader' && hash[active_tab] !== 'copy_trading' && hash[active_tab] !== 'tradingview' && (
                     <div className='main__run-strategy-wrapper'>
                         {hash[active_tab] !== 'trading_bots' && <RunStrategy />}
                         <RunPanel />
@@ -171,7 +171,7 @@ const AppWrapper = observer(() => {
                 )}
                 <ChartModal /><TradingViewModal />
             </DesktopWrapper>
-            <MobileWrapper>{!is_open && hash[active_tab] !== 'strategies' && hash[active_tab] !== 'makoti_magic' && hash[active_tab] !== 'trading_bots' && <RunPanel />}</MobileWrapper>
+            <MobileWrapper>{!is_open && hash[active_tab] !== 'strategies' && hash[active_tab] !== 'makoti_magic' && hash[active_tab] !== 'trading_bots' && hash[active_tab] !== 'dtrader' && hash[active_tab] !== 'copy_trading' && hash[active_tab] !== 'tradingview' && <RunPanel />}</MobileWrapper>
             <SpeedBotFloatingStop />
         </React.Fragment>
     );

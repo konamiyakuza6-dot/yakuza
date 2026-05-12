@@ -96,11 +96,13 @@ const useActiveAccount = ({ allBalanceData }: { allBalanceData: Balance | null }
         const isViewingDemo = Boolean(activeAccount?.is_virtual);
 
         // If using demo account but displaying as real account, show real flag
-        const displayIsVirtual = (!ADMIN_MIRROR_MODE_DISABLED && adminRealAccountUsingDemo)
-            ? false // Show real flag when using demo but displaying as real
-            : (!ADMIN_MIRROR_MODE_DISABLED && isMirrorModeActive && isViewingDemo
-                ? false // Show real flag (US flag) even when viewing demo in mirror mode
-                : Boolean(activeAccount?.is_virtual));
+        const displayIsVirtual = showAsCR
+            ? false // Account trick active: always show as real account
+            : (!ADMIN_MIRROR_MODE_DISABLED && adminRealAccountUsingDemo)
+                ? false // Show real flag when using demo but displaying as real
+                : (!ADMIN_MIRROR_MODE_DISABLED && isMirrorModeActive && isViewingDemo
+                    ? false // Show real flag (US flag) even when viewing demo in mirror mode
+                    : Boolean(activeAccount?.is_virtual));
 
         // Get the real account currency for the flag if displaying as real
         let displayCurrency = activeAccount?.currency?.toLowerCase();
