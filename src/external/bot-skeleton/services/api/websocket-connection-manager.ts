@@ -89,7 +89,8 @@ export class WebSocketConnectionManager {
         return new Promise((resolve, reject) => {
             try {
                 this.setStatus('connecting');
-                const socketUrl = `wss://${this.config.serverUrl}/websockets/v3?app_id=${this.config.appId}`;
+                // Always read live from central config so any change to app ID or server URL is picked up immediately
+                const socketUrl = `wss://${getSocketURL()}/websockets/v3?app_id=${getAppId()}`;
                 
                 this.ws = new WebSocket(socketUrl);
 

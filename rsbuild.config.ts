@@ -109,6 +109,11 @@ export default defineConfig({
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/esm/react/Illustrative'
             ),
+            // Shim for the "Illustration" sub-path removed in the installed version
+            '@deriv/quill-icons/Illustration': path.resolve(
+                __dirname,
+                'src/components/shims/quill-icons-illustration/index.js'
+            ),
             '@deriv/quill-icons/TradeTypes': path.resolve(
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/esm/react/TradeTypes'

@@ -12,6 +12,8 @@
  *   2. Connect to that URL with connectTradingWebSocket()
  */
 
+import { PUBLIC_TRADING_WS_URL } from '@/components/shared/utils/config/config';
+
 const API_BASE = '/api';
 
 export type DerivOptionsAccount = {
@@ -116,7 +118,7 @@ export function connectPublicWebSocket(
     onStatus?: WsStatusHandler
 ): () => void {
     return connectTradingWebSocket(
-        'wss://api.derivws.com/trading/v1/options/ws/public',
+        PUBLIC_TRADING_WS_URL,
         onMessage,
         onStatus
     );

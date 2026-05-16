@@ -6,7 +6,8 @@ import { observer as globalObserver } from '@/external/bot-skeleton/utils/observ
 import { clearAuthData } from '@/utils/auth-utils';
 import { Callback } from '@deriv-com/auth-client';
 import { Button } from '@deriv-com/ui';
-import { PKCE_VERIFIER_KEY, PKCE_STATE_KEY, PKCE_CLIENT_ID } from '@/utils/pkce';
+import { PKCE_VERIFIER_KEY, PKCE_STATE_KEY } from '@/utils/pkce';
+import { OAUTH_CLIENT_ID, OAUTH_TOKEN_URL, getCallbackURL } from '@/components/shared/utils/config/config';
 
 const getSelectedCurrency = (
     tokens: Record<string, string>,
@@ -94,17 +95,17 @@ const PkceCallbackHandler = () => {
             }
 
             // Step 6 — exchange code for access_token directly with Deriv (PKCE public client)
-            const redirectUri = `${window.location.origin}/callback`;
+            const redirectUri = getCallbackURL();
             let response: Response;
             try {
-                response = await fetch('https://auth.deriv.com/oauth2/token', {
+                response = await fetch(OAUTH_TOKEN_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: new URLSearchParams({
                         grant_type:    'authorization_code',
                         code,
                         redirect_uri:  redirectUri,
-                        client_id:     PKCE_CLIENT_ID,
+                        client_id:     OAUTH_CLIENT_ID,
                         code_verifier: codeVerifier,
                     }).toString(),
                 });

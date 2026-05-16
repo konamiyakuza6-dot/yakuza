@@ -448,7 +448,7 @@ const CopyTrading = observer(() => {
 
             // Deriv config-aware endpoint
             const APP_ID = String(getAppId());
-            const server = getSocketURL?.() || 'ws.derivws.com';
+            const server = getSocketURL();
             const ws_url = `wss://${server}/websockets/v3?app_id=${APP_ID}`;
 
             let ws: WebSocket | null = null;

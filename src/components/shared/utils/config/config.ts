@@ -2,8 +2,28 @@
 import { LocalStorageConstants, LocalStorageUtils, URLUtils } from '@deriv-com/utils';
 import { isStaging } from '../url/helpers';
 
-// This is the single, correct App ID for this application.
+// ─── SINGLE SOURCE OF TRUTH ───────────────────────────────────────────────────
+// Change any value here and it propagates to every tool, tab, and widget.
+
+/** The app ID registered with Deriv for this application. */
 const APP_ID = 101585;
+
+/** OAuth client ID for PKCE flows (matches the registered app). */
+export const OAUTH_CLIENT_ID = '337DJLKi2OJ4VsyFSLIt9';
+
+/** The Deriv OAuth2 authorization endpoint (redirects the user to login). */
+export const OAUTH_AUTH_URL = 'https://auth.deriv.com/oauth2/auth';
+
+/** The Deriv OAuth2 token endpoint (exchanges auth code for access token). */
+export const OAUTH_TOKEN_URL = 'https://auth.deriv.com/oauth2/token';
+
+/** The public Deriv trading WebSocket (no auth required). */
+export const PUBLIC_TRADING_WS_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
+
+/** Returns the full OAuth2 callback URL for the current origin. */
+export const getCallbackURL = () => `${window.location.origin}/callback`;
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const livechat_license_id = 12049137;
 export const livechat_client_id = '66aa088aad5a414484c1fd1fa8a5ace7';

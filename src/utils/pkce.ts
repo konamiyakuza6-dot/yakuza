@@ -10,11 +10,12 @@
  *   6. On /callback: verify state, exchange code for token via direct POST
  */
 
+import { OAUTH_AUTH_URL, OAUTH_CLIENT_ID, getCallbackURL } from '@/components/shared/utils/config/config';
+
 export const PKCE_VERIFIER_KEY = 'deriv_code_verifier';
 export const PKCE_STATE_KEY    = 'deriv_oauth_state';
-export const PKCE_CLIENT_ID    = '337DJLKi2OJ4VsyFSLIt9';
-
-const DERIV_AUTH_URL = 'https://auth.deriv.com/oauth2/auth';
+/** @deprecated Import OAUTH_CLIENT_ID from @/components/shared instead. */
+export const PKCE_CLIENT_ID    = OAUTH_CLIENT_ID;
 
 // URL-safe alphabet for the code verifier (RFC 7636)
 const VERIFIER_CHARS =
@@ -62,10 +63,10 @@ async function startPkceFlow(prompt?: 'registration'): Promise<void> {
     sessionStorage.setItem(PKCE_STATE_KEY,    state);
 
     // Step 8 — build the authorization URL
-    const redirectUri = `${window.location.origin}/callback`;
+    const redirectUri = getCallbackURL();
     const params = new URLSearchParams({
         response_type:         'code',
-        client_id:             PKCE_CLIENT_ID,
+        client_id:             OAUTH_CLIENT_ID,
         redirect_uri:          redirectUri,
         scope:                 'trade',
         state,
@@ -75,7 +76,7 @@ async function startPkceFlow(prompt?: 'registration'): Promise<void> {
     if (prompt) params.set('prompt', prompt);
 
     // Step 9 — same-tab redirect (sessionStorage is tab-specific; never use window.open)
-    window.location.href = `${DERIV_AUTH_URL}?${params.toString()}`;
+    window.location.href = `${OAUTH_AUTH_URL}?${params.toString()}`;
 }
 
 /** Start OAuth2 PKCE login and redirect to Deriv. */
