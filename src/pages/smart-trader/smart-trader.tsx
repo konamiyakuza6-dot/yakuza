@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { localize } from '@deriv-com/translations';
 import IframeWrapper from '@/components/iframe-wrapper';
+import { getAppId, getSocketURL } from '@/components/shared';
 import './smart-trader.scss';
 
 const SmartTrader = observer(() => {
@@ -23,7 +24,7 @@ const SmartTrader = observer(() => {
                 // Store ticks per subscribed symbol (filled dynamically)
                 const ticksStorage: { [key: string]: number[] } = {};
 
-                const ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=80058');
+                const ws = new WebSocket(`wss://${getSocketURL()}/websockets/v3?app_id=${getAppId()}`);
 
                 const subscribeTicks = (symbol: string) => {
                     ws.send(

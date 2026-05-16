@@ -1,5 +1,6 @@
 import { makeAutoObservable, action, runInAction } from 'mobx';
 import { predictNextDigits } from '@/utils/differs-prediction-engine';
+import { getAppId, getSocketURL } from '@/components/shared';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_LIVE = 'Live';
@@ -126,8 +127,8 @@ class MakotiMagicStore {
             this.ws.close();
         }
 
-        const server_url = localStorage.getItem('config.server_url') || 'ws.binaryws.com';
-        const app_id = 101585;
+        const server_url = getSocketURL();
+        const app_id = getAppId();
 
         runInAction(() => {
             this.connection_status = 'Connecting...';

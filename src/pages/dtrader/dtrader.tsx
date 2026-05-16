@@ -40,7 +40,7 @@ const Dtrader = observer(() => {
             console.error('Error parsing clientAccounts:', error);
         }
 
-        const appId = getAppId() || 114292;
+        const appId = getAppId();
         const params = new URLSearchParams({
             acct1: loginId,
             token1: token,
