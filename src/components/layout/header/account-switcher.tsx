@@ -41,13 +41,6 @@ const RenderAccountItems = ({
     const is_virtual = !!isVirtual;
     const residence = client.residence;
 
-    const adminMirrorModeEnabled =
-        typeof window !== 'undefined' && localStorage.getItem('adminMirrorModeEnabled') === 'true';
-    const swapState = getBalanceSwapState();
-    
-    const ADMIN_MIRROR_MODE_DISABLED = true;
-    const isAdminMode = !ADMIN_MIRROR_MODE_DISABLED && adminMirrorModeEnabled && swapState?.isSwapped && swapState?.isMirrorMode;
-
     useEffect(() => {
         const parent_container = document.getElementsByClassName('account-switcher-panel')?.[0] as HTMLDivElement;
         if (!isVirtual && parent_container) {
@@ -61,33 +54,7 @@ const RenderAccountItems = ({
         }
     }, [isVirtual]);
 
-    if (false && isAdminMode) {
-        const wrappedSwitchAccount = (loginId: number) => {
-            if (typeof window !== 'undefined') {
-                localStorage.setItem('adminSwitchingFromRealTab', (!isVirtual).toString());
-            }
-            switchAccount(loginId);
-        };
-        
-        return (
-            <>
-                <DemoAccounts
-                    modifiedVRTCRAccountList={modifiedVRTCRAccountList as TModifiedAccount[]}
-                    switchAccount={wrappedSwitchAccount}
-                    activeLoginId={activeLoginId}
-                    isVirtual={isVirtual ?? false}
-                    tabs_labels={tabs_labels}
-                    oAuthLogout={oAuthLogout}
-                    is_logging_out={client.is_logging_out}
-                />
-            </>
-        );
-    }
-
     if (is_virtual) {
-        // Demo tab: always show DemoAccounts regardless of trick state.
-        // When trick is active the cursor moves to Real (via isVirtual:false on the account object),
-        // but the Demo tab content still shows the demo account with its real balance (e.g. 10,000 USD).
         return (
             <>
                 <DemoAccounts
@@ -102,14 +69,11 @@ const RenderAccountItems = ({
             </>
         );
     } else {
-        // Real tab: when trick is active, append the VRT accounts so the demo account
-        // appears in the Real tab with its demo balance.
-        // Also mask the VRT loginid to look like a CR account (CR6779123).
-
         return (
             <RealAccounts
                 modifiedCRAccountList={modifiedCRAccountList as TModifiedAccount[]}
                 modifiedMFAccountList={modifiedMFAccountList as TModifiedAccount[]}
+                modifiedVRTCRAccountList={modifiedVRTCRAccountList as TModifiedAccount[]}
                 switchAccount={switchAccount}
                 isVirtual={is_virtual}
                 tabs_labels={tabs_labels}
@@ -147,39 +111,14 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
         return accountList?.map(account => {
             const balanceData = client?.all_accounts_balance?.accounts?.[account.loginid];
             const originalBalanceNum = balanceData?.balance ?? 0;
-            const originalBalance = originalBalanceNum.toString();
-
-            const accountDataWithBalance = {
-                ...account,
-                balance: originalBalance,
-                is_virtual: account.is_virtual,
-            };
-
-            const accountDisplay = getAccountDisplayInfo(
-                account.loginid,
-                accountDataWithBalance,
-                client?.all_accounts_balance,
-                false
-            );
-
-            let displayBalance: number;
-            if (accountDisplay.isSwapped && accountDisplay.balance) {
-                displayBalance =
-                    typeof accountDisplay.balance === 'string'
-                        ? parseFloat(accountDisplay.balance) || 0
-                        : accountDisplay.balance || 0;
-            } else {
-                displayBalance = originalBalanceNum;
-            }
-
             const displayIsVirtual = Boolean(account?.is_virtual);
 
             return {
                 ...account,
-                balance: addComma(displayBalance?.toFixed(getDecimalPlaces(account.currency)) ?? '0'),
+                balance: addComma(originalBalanceNum?.toFixed(getDecimalPlaces(account.currency)) ?? '0'),
                 currencyLabel: displayIsVirtual
                     ? tabs_labels.demo
-                    : (client.website_status?.currencies_config?.[account?.currency]?.name ?? account?.currency),
+                    : client.website_status?.currencies_config?.[account?.currency]?.name ?? account?.currency,
                 icon: <CurrencyIcon currency={account?.currency?.toLowerCase()} isVirtual={displayIsVirtual} />,
                 isVirtual: showAsReal && displayIsVirtual ? false : displayIsVirtual,
                 isActive: account?.loginid === activeAccount?.loginid,
@@ -187,10 +126,20 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
         });
     }, [accountList, client?.all_accounts_balance, client.website_status?.currencies_config, activeAccount?.loginid, showAsReal]);
 
-    const adminMirrorModeEnabled =
-        typeof window !== 'undefined' && localStorage.getItem('adminMirrorModeEnabled') === 'true';
-    const swapState = getBalanceSwapState();
-    const isAdminMode = adminMirrorModeEnabled && swapState?.isSwapped && swapState?.isMirrorMode;
+    const activeModifiedAccount = useMemo(() => {
+        const active_account = modifiedAccountList?.find(account => account.isActive);
+        if (!active_account) return activeAccount;
+
+        const original_is_virtual = !!active_account.is_virtual;
+
+        if (showAsReal && original_is_virtual) {
+            return {
+                ...active_account,
+                icon: <CurrencyIcon currency={active_account?.currency?.toLowerCase()} isVirtual={false} />,
+            };
+        }
+        return active_account;
+    }, [modifiedAccountList, showAsReal, activeAccount]);
 
     const modifiedCRAccountList = useMemo(() => {
         return modifiedAccountList?.filter(account => account?.loginid?.includes('CR')) ?? [];
@@ -206,171 +155,28 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
 
     const switchAccount = async (loginId: number) => {
         const loginIdStr = loginId.toString();
-        console.log('🔄 [ACCOUNT SWITCH] Starting switch to:', loginIdStr);
-        
-        const normalizedLoginId = loginIdStr;
-        
-        const currentShowAsCR = localStorage.getItem('show_as_cr');
-        const isCurrentlyOnCR = currentShowAsCR === 'CR6779123' && activeAccount?.loginid === 'VRTC10109979';
-        const isSwitchingToCR = normalizedLoginId === 'CR6779123';
-        
-        if (normalizedLoginId === activeAccount?.loginid || (isCurrentlyOnCR && isSwitchingToCR)) {
-            console.log('🔄 [ACCOUNT SWITCH] Same account, skipping');
+        if (loginIdStr === activeAccount?.loginid) return;
+
+        if (api_base?.api?.connection) {
+            api_base.api.connection.close();
+        }
+
+        const account_list = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
+        const token = account_list[loginIdStr];
+        if (!token) {
+            console.error('❌ [ACCOUNT SWITCH] Token not found for:', loginIdStr);
             return;
         }
 
-        if (api_base?.api?.connection) {
-            console.log('🔌 [ACCOUNT SWITCH] Closing existing WebSocket connection...');
-            api_base.api.connection.close();
-        }
-        
-        const account_list = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
-        
-        const adminMirrorModeEnabled =
-            typeof window !== 'undefined' && localStorage.getItem('adminMirrorModeEnabled') === 'true';
-        const swapState = getBalanceSwapState();
-        
-        const ADMIN_MIRROR_MODE_DISABLED = true;
-        
-        let actualLoginId = normalizedLoginId;
-        let token = account_list[normalizedLoginId];
-        let account_param: string;
-        
-        if (false && adminMirrorModeEnabled && swapState?.isSwapped && swapState?.isMirrorMode && !ADMIN_MIRROR_MODE_DISABLED) {
-            const selected_account = modifiedAccountList.find(acc => acc.loginid === normalizedLoginId);
-            if (!selected_account) return;
-            
-            actualLoginId = selected_account.is_virtual ? normalizedLoginId : swapState.demoAccount.loginId;
-            token = account_list[actualLoginId] || account_list[swapState.demoAccount.loginId];
-            
-            const switchingFromRealTab = typeof window !== 'undefined' && 
-                localStorage.getItem('adminSwitchingFromRealTab') === 'true';
-            
-            if (switchingFromRealTab && selected_account.is_virtual) {
-                localStorage.setItem('adminRealAccountUsingDemo', 'true');
-                const realDisplayLoginId = swapState.realAccount.loginId;
-                localStorage.setItem('adminRealAccountDisplayLoginId', realDisplayLoginId);
-                const real_account = accountList?.find(acc => acc.loginid === realDisplayLoginId);
-                account_param = real_account?.currency || 'USD';
-            } else {
-                localStorage.removeItem('adminRealAccountUsingDemo');
-                localStorage.removeItem('adminRealAccountDisplayLoginId');
-                account_param = 'demo';
-            }
-            
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem('adminSwitchingFromRealTab');
-            }
-        } else {
-            let selected_account = modifiedAccountList.find(acc => acc.loginid === normalizedLoginId);
-            
-            if (!selected_account) {
-                const accountFromList = accountList?.find(acc => acc.loginid === normalizedLoginId);
-                if (accountFromList) {
-                    selected_account = {
-                        loginid: accountFromList.loginid,
-                        is_virtual: accountFromList.is_virtual ?? false,
-                        currency: accountFromList.currency || 'USD',
-                    } as any;
-                }
-            }
-            
-            if (!selected_account) {
-                console.error('❌ [ACCOUNT SWITCH] Account not found:', normalizedLoginId);
-                return;
-            }
-            
-            const isSwitchingToCR6779123 = normalizedLoginId === 'CR6779123';
-            
-            if (isSwitchingToCR6779123) {
-                const demoToken = account_list['VRTC10109979'];
-                
-                if (demoToken) {
-                    token = demoToken;
-                    actualLoginId = 'VRTC10109979';
-                    account_param = selected_account.currency || 'USD';
-                    localStorage.setItem('show_as_cr', 'CR6779123');
-                } else {
-                    console.error('❌ [CR6779123] Demo token not found!');
-                    account_param = selected_account.currency;
-                    localStorage.removeItem('show_as_cr');
-                }
-            } else {
-                localStorage.removeItem('show_as_cr');
-                token = account_list[normalizedLoginId];
-                if (!token) {
-                    console.error('❌ [ACCOUNT SWITCH] Token not found for:', normalizedLoginId);
-                    return;
-                }
-                actualLoginId = normalizedLoginId;
-                account_param = selected_account.is_virtual ? 'demo' : selected_account.currency;
-            }
-            
-            localStorage.removeItem('adminRealAccountUsingDemo');
-            localStorage.removeItem('adminRealAccountDisplayLoginId');
-        }
-        
-        if (!token) {
-            console.error('❌ [ACCOUNT SWITCH] No token found!');
-            return;
-        }
-        
         localStorage.setItem('authToken', token);
-        localStorage.setItem('active_loginid', actualLoginId);
-        
-        try {
-            await api_base?.init(true);
-            
-            let authAttempts = 0;
-            const maxAuthAttempts = 10;
-            while (!api_base?.is_authorized && authAttempts < maxAuthAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 200));
-                authAttempts++;
-            }
-            
-            if (!api_base?.is_authorized) {
-                console.warn('⚠️ [ACCOUNT SWITCH] API not authorized after init, but continuing...');
-            }
-        } catch (error) {
-            console.error('❌ [ACCOUNT SWITCH] API initialization error:', error);
-        }
-        
-        if (client) {
-            setTimeout(() => {
-                const isSwitchingToCR6779123 = normalizedLoginId === 'CR6779123';
-                const displayLoginId = isSwitchingToCR6779123 ? 'CR6779123' : (api_base.account_info?.loginid || actualLoginId);
-                client.setLoginId(displayLoginId);
-                
-                setTimeout(() => {
-                    const balanceData = client.all_accounts_balance?.accounts?.[displayLoginId];
-                    if (balanceData) {
-                        const balance = balanceData.balance?.toString() || '0';
-                        const currency = balanceData.currency || 'USD';
-                        client.setBalance(balance);
-                        client.setCurrency(currency);
-                    } else {
-                        if (api_base.account_info?.balance) {
-                            const balance = api_base.account_info.balance.toString();
-                            const currency = api_base.account_info.currency || 'USD';
-                            client.setBalance(balance);
-                            client.setCurrency(currency);
-                        } else {
-                            console.warn('⚠️ [ACCOUNT SWITCH] Balance not found for:', displayLoginId);
-                            client.setBalance('0');
-                        }
-                    }
-                }, 300);
-            }, 200);
-        }
-        
-        const search_params = new URLSearchParams(window.location.search);
-        search_params.set('account', account_param);
-        window.history.pushState({}, '', `${window.location.pathname}?${search_params.toString()}`);
+        localStorage.setItem('active_loginid', loginIdStr);
+
+        await api_base?.init(true);
         window.location.reload();
     };
 
     return (
-        activeAccount &&
+        activeModifiedAccount &&
         (has_wallet ? (
             <Suspense fallback={<Loader />}>
                 <AccountInfoWallets is_dialog_on={is_accounts_switcher_on} toggleDialog={toggleAccountsDialog} />
@@ -384,7 +190,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                 zIndex='5'
             >
                 <UIAccountSwitcher
-                    activeAccount={activeAccount}
+                    activeAccount={activeModifiedAccount}
                     isDisabled={is_stop_button_visible}
                     tabsLabels={tabs_labels}
                     modalContentStyle={{
@@ -398,11 +204,13 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                         <RenderAccountItems
                             modifiedCRAccountList={modifiedCRAccountList as TModifiedAccount[]}
                             modifiedMFAccountList={modifiedMFAccountList as TModifiedAccount[]}
-                            modifiedVRTCRAccountList={isAdminMode ? modifiedVRTCRAccountList as TModifiedAccount[] : undefined}
+                            modifiedVRTCRAccountList={
+                                showAsReal ? (modifiedVRTCRAccountList as TModifiedAccount[]) : undefined
+                            }
                             switchAccount={switchAccount}
                             activeLoginId={activeAccount?.loginid}
                             client={client}
-                            isVirtual={isAdminMode ? false : undefined}
+                            isVirtual={false}
                         />
                     </UIAccountSwitcher.Tab>
                     <UIAccountSwitcher.Tab title={tabs_labels.demo}>
