@@ -8,10 +8,7 @@ import { api_base } from '@/external/bot-skeleton';
 import { useOauth2 } from '@/hooks/auth/useOauth2';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
-import { useAccountDisplay } from '@/hooks/useAccountDisplay';
-import { getAccountDisplayInfo, getBalanceSwapState } from '@/utils/balance-swap-utils';
 import { isCustomDemoIconActive } from '@/utils/custom-demo-icon-utils';
-import { waitForDomElement } from '@/utils/dom-observer';
 import { localize } from '@deriv-com/translations';
 import { AccountSwitcher as UIAccountSwitcher, Loader, useDevice } from '@deriv-com/ui';
 import DemoAccounts from './common/demo-accounts';
@@ -41,51 +38,35 @@ const RenderAccountItems = ({
     const is_virtual = !!isVirtual;
     const residence = client.residence;
 
-    useEffect(() => {
-        const parent_container = document.getElementsByClassName('account-switcher-panel')?.[0] as HTMLDivElement;
-        if (!isVirtual && parent_container) {
-            parent_container.style.maxHeight = '70vh';
-            waitForDomElement('.deriv-accordion__content', parent_container)?.then((accordionElement: unknown) => {
-                const element = accordionElement as HTMLDivElement;
-                if (element) {
-                    element.style.maxHeight = '70vh';
-                }
-            });
-        }
-    }, [isVirtual]);
-
     if (is_virtual) {
         return (
-            <>
-                <DemoAccounts
-                    modifiedVRTCRAccountList={modifiedVRTCRAccountList as TModifiedAccount[]}
-                    switchAccount={switchAccount}
-                    activeLoginId={activeLoginId}
-                    isVirtual={is_virtual}
-                    tabs_labels={tabs_labels}
-                    oAuthLogout={oAuthLogout}
-                    is_logging_out={client.is_logging_out}
-                />
-            </>
-        );
-    } else {
-        return (
-            <RealAccounts
-                modifiedCRAccountList={modifiedCRAccountList as TModifiedAccount[]}
-                modifiedMFAccountList={modifiedMFAccountList as TModifiedAccount[]}
+            <DemoAccounts
                 modifiedVRTCRAccountList={modifiedVRTCRAccountList as TModifiedAccount[]}
                 switchAccount={switchAccount}
+                activeLoginId={activeLoginId}
                 isVirtual={is_virtual}
                 tabs_labels={tabs_labels}
-                is_low_risk_country={is_low_risk_country}
                 oAuthLogout={oAuthLogout}
-                loginid={activeLoginId}
                 is_logging_out={client.is_logging_out}
-                upgradeable_landing_companies={client?.landing_companies?.all_company ?? null}
-                residence={residence}
             />
         );
     }
+    return (
+        <RealAccounts
+            modifiedCRAccountList={modifiedCRAccountList as TModifiedAccount[]}
+            modifiedMFAccountList={modifiedMFAccountList as TModifiedAccount[]}
+            modifiedVRTCRAccountList={modifiedVRTCRAccountList as TModifiedAccount[]}
+            switchAccount={switchAccount}
+            isVirtual={is_virtual}
+            tabs_labels={tabs_labels}
+            is_low_risk_country={is_low_risk_country}
+            oAuthLogout={oAuthLogout}
+            loginid={activeLoginId}
+            is_logging_out={client.is_logging_out}
+            upgradeable_landing_companies={client?.landing_companies?.all_company ?? null}
+            residence={residence}
+        />
+    );
 };
 
 const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
@@ -95,7 +76,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
             setShowAsReal(isCustomDemoIconActive());
         };
         window.addEventListener('custom_demo_icon_changed', handleIconChange);
-        handleIconChange(); // Initial check
+        handleIconChange();
         return () => window.removeEventListener('custom_demo_icon_changed', handleIconChange);
     }, []);
 
@@ -125,11 +106,11 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                     ? tabs_labels.demo
                     : client.website_status?.currencies_config?.[account?.currency]?.name ?? account?.currency,
                 icon: <CurrencyIcon currency={account?.currency?.toLowerCase()} isVirtual={isOriginalVirtual} />,
-                isVirtual: showAsReal && isOriginalVirtual ? false : isOriginalVirtual,
+                isVirtual: isOriginalVirtual,
                 isActive: account?.loginid === activeAccount?.loginid,
             };
         });
-    }, [accountList, client?.all_accounts_balance, client.website_status?.currencies_config, activeAccount?.loginid, showAsReal]);
+    }, [accountList, client, activeAccount?.loginid, showAsReal]);
 
     const activeModifiedAccount = useMemo(() => {
         const activeFromList = modifiedAccountList?.find(account => account.isActive);
@@ -140,6 +121,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
         if (showAsReal && isOriginalVirtual) {
             return {
                 ...activeFromList,
+                isVirtual: false, // To show real icon in header
                 icon: <CurrencyIcon currency={activeFromList?.currency?.toLowerCase()} isVirtual={false} />,
             };
         }
@@ -198,7 +180,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                     activeAccount={activeModifiedAccount}
                     isDisabled={is_stop_button_visible}
                     tabsLabels={tabs_labels}
-                    defaultTab={showAsReal ? tabs_labels.real : undefined}
+                    defaultTab={showAsReal && activeAccount?.is_virtual ? tabs_labels.real : undefined}
                     modalContentStyle={{
                         content: {
                             top: isDesktop ? '30%' : '50%',
@@ -210,9 +192,6 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
                         <RenderAccountItems
                             modifiedCRAccountList={modifiedCRAccountList as TModifiedAccount[]}
                             modifiedMFAccountList={modifiedMFAccountList as TModifiedAccount[]}
-                            modifiedVRTCRAccountList={
-                                showAsReal ? (modifiedVRTCRAccountList as TModifiedAccount[]) : undefined
-                            }
                             switchAccount={switchAccount}
                             activeLoginId={activeAccount?.loginid}
                             client={client}

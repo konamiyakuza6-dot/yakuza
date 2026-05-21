@@ -15,14 +15,9 @@ const DemoAccounts = ({
     oAuthLogout,
     is_logging_out,
 }: TDemoAccounts) => {
-    // Check if CR6779123 is currently displayed (show_as_cr flag is set)
-    // If so, hide "Reset balance" button and show demo balance instead
-    const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-    const isCRDisplayed = showAsCR === 'CR6779123';
-    
     const handleResetBalance = async (loginId: string) => {
         if (!api_base?.api) return;
-        
+
         try {
             console.log('🔄 [RESET BALANCE] Resetting demo balance for:', loginId);
             const { topup_virtual, error } = await api_base.api.send({ topup_virtual: 1 });
@@ -30,10 +25,9 @@ const DemoAccounts = ({
                 console.error('❌ [RESET BALANCE] Error resetting balance:', error);
                 return;
             }
-            
+
             console.log('✅ [RESET BALANCE] Balance reset successful, waiting for balance update...');
-            // Don't reload - the balance will be updated via the balance subscription
-            // The CoreStoreProvider will handle the balance update automatically
+            // No reload needed, balance is updated via subscription.
         } catch (error) {
             console.error('❌ [RESET BALANCE] Error resetting balance:', error);
         }
@@ -49,10 +43,6 @@ const DemoAccounts = ({
             >
                 {modifiedVRTCRAccountList &&
                     modifiedVRTCRAccountList.map(account => {
-                                // If CR6779123 is displayed on top, hide "Reset balance" button
-                                // Show it only when demo account is actually active (not CR6779123)
-                        const shouldShowResetButton = account.isVirtual && !isCRDisplayed;
-                        
                         return (
                             <span
                                 className={clsx('account-switcher__item', {
@@ -65,7 +55,7 @@ const DemoAccounts = ({
                                     onSelectAccount={() => {
                                         if (!account.is_disabled) switchAccount(account.loginid);
                                     }}
-                                    onResetBalance={shouldShowResetButton ? () => handleResetBalance(account.loginid) : undefined}
+                                    onResetBalance={account.isVirtual ? () => handleResetBalance(account.loginid) : undefined}
                                 />
                             </span>
                         );
