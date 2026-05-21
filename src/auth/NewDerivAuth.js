@@ -51,6 +51,20 @@ export async function startNewLogin() {
   sessionStorage.setItem(K.verifier, verifier)
   sessionStorage.setItem(K.state, state)
   sessionStorage.setItem(K.active, "true")
+
+  // Verify values were actually saved
+  const savedVerifier = sessionStorage.getItem('NEW_AUTH_verifier')
+  const savedActive = sessionStorage.getItem('NEW_AUTH_active')
+  
+  console.log('[NEW AUTH] Pre-redirect verification:')
+  console.log('[NEW AUTH] verifier saved:', !!savedVerifier)
+  console.log('[NEW AUTH] active saved:', savedActive)
+  
+  if (!savedVerifier) {
+    throw new Error('Failed to save login data to sessionStorage. ' +
+      'Your browser may be blocking storage. Try disabling ' +
+      'private browsing or browser extensions.')
+  }
   
   const params = new URLSearchParams({
     response_type:         "code",

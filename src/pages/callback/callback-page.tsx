@@ -10,6 +10,33 @@ import { PKCE_VERIFIER_KEY, PKCE_STATE_KEY } from '@/utils/pkce';
 import { OAUTH_CLIENT_ID, OAUTH_TOKEN_URL, getCallbackURL } from '@/components/shared/utils/config/config';
 import { handleNewCallback } from '@/auth/NewDerivAuth';
 
+class CallbackErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: string }
+> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false, error: '' }
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error: String(error) }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '40px', textAlign: 'center' }}>
+          <h2 style={{ color: 'red' }}>Login Error</h2>
+          <p>{this.state.error}</p>
+          <a href="/">Go back and try again</a>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 const getSelectedCurrency = (
     tokens: Record<string, string>,
     clientAccounts: Record<string, any>,
@@ -253,13 +280,33 @@ const PkceCallbackHandler = () => {
     Legacy callback — handles existing Deriv OAuth redirects.
 ───────────────────────────────────────────────────────── */
 const CallbackPage = () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasCode = urlParams.has('code');
-    const hasNewAuthActive = sessionStorage.getItem('NEW_AUTH_active') === 'true';
-
-    // NEW SYSTEM: if code is present AND NEW_AUTH_active flag set, use new system handler
-    if (hasCode && hasNewAuthActive) {
-        return <NewSystemCallbackHandler />;
+    const urlParams = new URLSearchParams(window.location.search)
+    const hasCode = urlParams.has('code')
+    const hasOldTokens = urlParams.has('token1') || urlParams.has('acct1')
+    
+    // New system detection - check multiple signals
+    const hasNewAuthActive = sessionStorage.getItem('NEW_AUTH_active') === 'true'
+    const hasNewVerifier = !!sessionStorage.getItem('NEW_AUTH_verifier')
+    const hasNewState = !!sessionStorage.getItem('NEW_AUTH_state')
+    
+    // If URL has ?code= and ANY new system signal exists → new system
+    const isNewSystemCallback = hasCode && 
+      (hasNewAuthActive || hasNewVerifier || hasNewState)
+    
+    // If URL has ?code= but NO new system signals → could be old PKCE
+    // If URL has old token format → definitely old system
+    
+    console.log('[CALLBACK] Detection:', {
+      hasCode,
+      hasOldTokens,
+      hasNewAuthActive,
+      hasNewVerifier,
+      hasNewState,
+      isNewSystemCallback
+    })
+    
+    if (isNewSystemCallback) {
+      return <NewSystemCallbackHandler />
     }
 
     // OLD SYSTEM: check for legacy PKCE flow (acct1/token1 params)
@@ -271,89 +318,91 @@ const CallbackPage = () => {
 
     // LEGACY: use old Deriv auth-client Callback component
     return (
-        <Callback
-            onSignInSuccess={async (tokens: Record<string, string>, rawState: unknown) => {
-                const state = rawState as { account?: string } | null;
-                const accountsList: Record<string, string> = {};
-                const clientAccounts: Record<string, { loginid: string; token: string; currency: string }> = {};
+        <CallbackErrorBoundary>
+            <Callback
+                onSignInSuccess={async (tokens: Record<string, string>, rawState: unknown) => {
+                    const state = rawState as { account?: string } | null;
+                    const accountsList: Record<string, string> = {};
+                    const clientAccounts: Record<string, { loginid: string; token: string; currency: string }> = {};
 
-                for (const [key, value] of Object.entries(tokens)) {
-                    if (key.startsWith('acct')) {
-                        const tokenKey = key.replace('acct', 'token');
-                        if (tokens[tokenKey]) {
-                            accountsList[value] = tokens[tokenKey];
-                            clientAccounts[value] = {
-                                loginid: value,
-                                token: tokens[tokenKey],
-                                currency: '',
-                            };
-                        }
-                    } else if (key.startsWith('cur')) {
-                        const accKey = key.replace('cur', 'acct');
-                        if (tokens[accKey]) {
-                            clientAccounts[tokens[accKey]].currency = value;
-                        }
-                    }
-                }
-
-                localStorage.setItem('accountsList', JSON.stringify(accountsList));
-                localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts));
-
-                let is_token_set = false;
-                const api = await generateDerivApiInstance();
-                if (api) {
-                    const { authorize, error } = await api.authorize(tokens.token1);
-                    api.disconnect();
-                    if (error) {
-                        if (error.code === 'InvalidToken') {
-                            is_token_set = true;
-                            const is_tmb_enabled = window.is_tmb_enabled === true;
-                            if (Cookies.get('logged_state') === 'true' && !is_tmb_enabled) {
-                                globalObserver.emit('InvalidToken', { error });
+                    for (const [key, value] of Object.entries(tokens)) {
+                        if (key.startsWith('acct')) {
+                            const tokenKey = key.replace('acct', 'token');
+                            if (tokens[tokenKey]) {
+                                accountsList[value] = tokens[tokenKey];
+                                clientAccounts[value] = {
+                                    loginid: value,
+                                    token: tokens[tokenKey],
+                                    currency: '',
+                                };
                             }
-                            if (Cookies.get('logged_state') === 'false') {
-                                clearAuthData();
+                        } else if (key.startsWith('cur')) {
+                            const accKey = key.replace('cur', 'acct');
+                            if (tokens[accKey]) {
+                                clientAccounts[tokens[accKey]].currency = value;
                             }
                         }
-                    } else {
-                        localStorage.setItem('callback_token', authorize.toString());
-                        const clientAccountsArray = Object.values(clientAccounts);
-                        const firstId = authorize?.account_list[0]?.loginid;
-                        const filteredTokens = clientAccountsArray.filter(account => account.loginid === firstId);
-                        if (filteredTokens.length) {
-                            localStorage.setItem('authToken', filteredTokens[0].token);
-                            localStorage.setItem('active_loginid', filteredTokens[0].loginid);
-                            is_token_set = true;
+                    }
+
+                    localStorage.setItem('accountsList', JSON.stringify(accountsList));
+                    localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts));
+
+                    let is_token_set = false;
+                    const api = await generateDerivApiInstance();
+                    if (api) {
+                        const { authorize, error } = await api.authorize(tokens.token1);
+                        api.disconnect();
+                        if (error) {
+                            if (error.code === 'InvalidToken') {
+                                is_token_set = true;
+                                const is_tmb_enabled = window.is_tmb_enabled === true;
+                                if (Cookies.get('logged_state') === 'true' && !is_tmb_enabled) {
+                                    globalObserver.emit('InvalidToken', { error });
+                                }
+                                if (Cookies.get('logged_state') === 'false') {
+                                    clearAuthData();
+                                }
+                            }
+                        } else {
+                            localStorage.setItem('callback_token', authorize.toString());
+                            const clientAccountsArray = Object.values(clientAccounts);
+                            const firstId = authorize?.account_list[0]?.loginid;
+                            const filteredTokens = clientAccountsArray.filter(account => account.loginid === firstId);
+                            if (filteredTokens.length) {
+                                localStorage.setItem('authToken', filteredTokens[0].token);
+                                localStorage.setItem('active_loginid', filteredTokens[0].loginid);
+                                is_token_set = true;
+                            }
                         }
                     }
-                }
-                if (!is_token_set) {
-                    localStorage.setItem('authToken', tokens.token1);
-                    localStorage.setItem('active_loginid', tokens.acct1);
-                }
+                    if (!is_token_set) {
+                        localStorage.setItem('authToken', tokens.token1);
+                        localStorage.setItem('active_loginid', tokens.acct1);
+                    }
 
-                Cookies.set('logged_state', 'true', {
-                    domain: window.location.hostname,
-                    expires: 30,
-                    path: '/',
-                    secure: window.location.protocol === 'https:',
-                });
+                    Cookies.set('logged_state', 'true', {
+                        domain: window.location.hostname,
+                        expires: 30,
+                        path: '/',
+                        secure: window.location.protocol === 'https:',
+                    });
 
-                const selected_currency = getSelectedCurrency(tokens, clientAccounts, state);
-                await new Promise(resolve => setTimeout(resolve, 100));
-                window.location.replace(window.location.origin + `/?account=${selected_currency}`);
-            }}
-            renderReturnButton={() => {
-                return (
-                    <Button
-                        className='callback-return-button'
-                        onClick={() => { window.location.href = '/'; }}
-                    >
-                        {'Return to Bot'}
-                    </Button>
-                );
-            }}
-        />
+                    const selected_currency = getSelectedCurrency(tokens, clientAccounts, state);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    window.location.replace(window.location.origin + `/?account=${selected_currency}`);
+                }}
+                renderReturnButton={() => {
+                    return (
+                        <Button
+                            className='callback-return-button'
+                            onClick={() => { window.location.href = '/'; }}
+                        >
+                            {'Return to Bot'}
+                        </Button>
+                    );
+                }}
+            />
+        </CallbackErrorBoundary>
     );
 };
 
