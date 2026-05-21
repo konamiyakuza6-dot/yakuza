@@ -15,6 +15,7 @@ const getSelectedCurrency = (
     clientAccounts: Record<string, any>,
     state: any
 ): string => {
+    console.log('[NEW AUTH] handleNewCallback called');
     const getQueryParams = new URLSearchParams(window.location.search);
     const currency =
         (state && state?.account) ||

@@ -41,6 +41,7 @@ function generateVerifier() {
 }
 
 export async function startNewLogin() {
+  console.log('[NEW AUTH] Login started...');
   clearNewAuthStorage()
   
   const verifier = generateVerifier()
