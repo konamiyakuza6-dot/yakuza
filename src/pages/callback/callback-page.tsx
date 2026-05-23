@@ -68,6 +68,8 @@ const NewSystemCallbackHandler = () => {
     const attempted = useRef(false);
 
     useEffect(() => {
+        console.log('[NEW AUTH] NewSystemCallbackHandler mounted')
+        console.log('[NEW AUTH] URL:', window.location.search)
         if (attempted.current) return;
         attempted.current = true;
 
@@ -284,31 +286,7 @@ const CallbackPage = () => {
     const hasCode = urlParams.has('code')
     const hasOldTokens = urlParams.has('token1') || urlParams.has('acct1')
     
-    // New system detection - check multiple signals
-    const hasNewVerifier = 
-      !!localStorage.getItem('NEW_AUTH_verifier')
-    const hasNewState = 
-      !!localStorage.getItem('NEW_AUTH_state')
-    const hasNewAuthActive = 
-      localStorage.getItem('NEW_AUTH_active') === 'true'
-    
-    // If URL has ?code= and ANY new system signal exists → new system
-    const isNewSystemCallback = hasCode && 
-      (hasNewAuthActive || hasNewVerifier || hasNewState)
-    
-    // If URL has ?code= but NO new system signals → could be old PKCE
-    // If URL has old token format → definitely old system
-    
-    console.log('[CALLBACK] Detection:', {
-      hasCode,
-      hasOldTokens,
-      hasNewAuthActive,
-      hasNewVerifier,
-      hasNewState,
-      isNewSystemCallback
-    })
-    
-    if (isNewSystemCallback) {
+    if (hasCode && !hasOldTokens) {
       return <NewSystemCallbackHandler />
     }
 
