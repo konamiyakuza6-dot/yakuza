@@ -6,6 +6,7 @@ import { getAppId, getSocketURL } from '@/components/shared';
 import { MessageTypes } from '@/external/bot-skeleton';
 import { predictNextDigits } from '@/utils/differs-prediction-engine';
 import { analyzeDigits, GoldenEntry, AnalysisResult } from '@/utils/ai-analysis-engine';
+import { isNewLoggedIn } from '@/auth/NewDerivAuth';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_CONNECTING = 'Connecting...';
@@ -229,6 +230,7 @@ export default class OverUnderStore {
         this._loginReaction = reaction(
             () => this.root_store.client.is_logged_in,
             (is_logged_in) => {
+                if (isNewLoggedIn()) return;
                 if (is_logged_in && !this.is_authorized) {
                     this.addLog('Global login detected, reconnecting...');
                     this.connectWebSocket();
@@ -239,6 +241,7 @@ export default class OverUnderStore {
         this._accountReaction = reaction(
             () => this.root_store.client.loginid,
             (loginid) => {
+                if (isNewLoggedIn()) return;
                 if (loginid) {
                     this.addLog(`Account switched to ${loginid}, reconnecting...`);
                     this.connectWebSocket();
@@ -686,6 +689,10 @@ export default class OverUnderStore {
     }
 
     connectWebSocket() {
+        if (isNewLoggedIn()) {
+            this.addLog('[NEW AUTH] New auth user - skipping legacy WS connection');
+            return;
+        }
         if (this.ws && this.ws.readyState === WebSocket.OPEN && this.is_authorized) {
             this.addLog('Already connected and authorized.');
             return;

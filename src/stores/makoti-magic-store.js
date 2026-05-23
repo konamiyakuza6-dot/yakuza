@@ -1,6 +1,7 @@
 import { makeAutoObservable, action, runInAction } from 'mobx';
 import { predictNextDigits } from '@/utils/differs-prediction-engine';
 import { getAppId, getSocketURL } from '@/components/shared';
+import { isNewLoggedIn } from '@/auth/NewDerivAuth';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_LIVE = 'Live';
@@ -118,6 +119,10 @@ class MakotiMagicStore {
     }
 
     connectWebSocket = () => {
+        if (isNewLoggedIn()) {
+            console.log('[MakotiMagic] New auth user - skipping legacy WS connection');
+            return;
+        }
         if (this.ws && this.ws.readyState === WebSocket.OPEN && this.is_initialized) {
             return;
         }

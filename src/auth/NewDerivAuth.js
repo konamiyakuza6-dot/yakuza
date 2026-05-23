@@ -344,6 +344,29 @@ export async function createNewWebSocket() {
     localStorage.setItem('active_loginid', accountId)
     localStorage.setItem('authToken', accountId)
     
+    // Save cached balances from REST API so CoreStoreProvider can display them
+    // without needing the legacy WebSocket balance subscription
+    try {
+      const cachedBalances = {}
+      accountsArray.forEach(acc => {
+        const lid = acc.account_id || acc.id
+        if (lid) {
+          const decimals = (acc.currency === 'BTC' || acc.currency === 'ETH') ? 8 : 2
+          cachedBalances[lid] = {
+            balance:   parseFloat(acc.balance || '0').toFixed(decimals),
+            currency:  acc.currency || 'USD',
+            timestamp: Date.now()
+          }
+        }
+      })
+      if (Object.keys(cachedBalances).length > 0) {
+        sessionStorage.setItem('cached_balances', JSON.stringify(cachedBalances))
+        console.log("[NEW WS] Cached balances saved:", cachedBalances)
+      }
+    } catch(e) {
+      console.warn("[NEW WS] Could not cache balances:", e)
+    }
+    
     // Notify the legacy auth observables so useApiBase / useActiveAccount pick it up
     try {
       const { setAuthData, setAccountList } = await import(
