@@ -12,7 +12,7 @@ import useTMB from '@/hooks/useTMB';
 import { getBalanceSwapState, getAccountDisplayInfo } from '@/utils/balance-swap-utils';
 import { SPECIAL_CR_ACCOUNTS } from '@/utils/special-accounts-config';
 import { TLandingCompany, TSocketResponseData } from '@/types/api-types';
-import { isNewLoggedIn } from '@/auth/NewDerivAuth';
+import { isNewLoggedIn, subscribeNewSystemTopics } from '@/auth/NewDerivAuth';
 import { useTranslations } from '@deriv-com/translations';
 
 type TClientInformation = {
@@ -476,6 +476,13 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
         if (!isAuthorizing && client) {
             const subscription = api_base?.api?.onMessage().subscribe(handleMessages);
             msg_listener.current = { unsubscribe: subscription?.unsubscribe };
+
+            // Now that handleMessages is in otpCallbacks, subscribe to balance/POC
+            // on the OTP WS. This ensures the subscription is sent AFTER the handler
+            // is registered, so no balance responses are missed.
+            if (isNewLoggedIn()) {
+                subscribeNewSystemTopics();
+            }
         }
 
         return () => {

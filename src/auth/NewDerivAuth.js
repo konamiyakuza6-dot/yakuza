@@ -119,11 +119,13 @@ export function sendViaNewSystemWithPromise(data) {
  * to api.onMessage() subscribers like handleMessages in CoreStoreProvider.
  */
 export function subscribeNewSystemTopics() {
+  if (window._newSystemTopicsSubscribed) return true
   const ws = window._newSystemWS
   if (!ws || ws.readyState !== WebSocket.OPEN) return false
   try {
     ws.send(JSON.stringify({ balance: 1, subscribe: 1, account: 'all' }))
     ws.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }))
+    window._newSystemTopicsSubscribed = true
     console.log("[NEW WS] Subscribed to balance & POC updates")
   } catch(e) {
     console.warn("[NEW WS] Could not subscribe:", e)
@@ -579,20 +581,10 @@ export async function createNewWebSocket() {
       console.warn("[NEW WS] Could not wire legacy auth state:", e)
     }
 
-    // Don't subscribe to balance/POC here — the proxy bridge in api-base.ts
-    // might not be set up yet. Instead, wait for it and subscribe when ready.
-    // See subscribeNewSystemTopics() and _setupNewSystemApiProxy().
-    if (window._newSystemProxyReady) {
-      subscribeNewSystemTopics()
-    } else {
-      // Check periodically until the proxy is ready
-      const checkProxy = setInterval(() => {
-        if (window._newSystemProxyReady || !window._newSystemWS) {
-          clearInterval(checkProxy)
-          subscribeNewSystemTopics()
-        }
-      }, 200)
-    }
+    // Subscription to balance/POC is handled by CoreStoreProvider.tsx after it
+    // registers handleMessages in the proxy bridge's otpCallbacks.
+    // _setupNewSystemApiProxy() also calls subscribeNewSystemTopics() as a safety
+    // net; the function is idempotent (window._newSystemTopicsSubscribed flag).
   }
   
   // Dispatch messages to all registered handlers (survives reconnection)
