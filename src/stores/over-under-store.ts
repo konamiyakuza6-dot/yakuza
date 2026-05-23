@@ -724,10 +724,16 @@ export default class OverUnderStore {
                             // the blanket subscription was rejected by the OTP WS
                             sendViaNewSystem({ proposal_open_contract: 1, contract_id, subscribe: 1 });
                         }
+                        // Request current balance after stake deduction
+                        sendViaNewSystem({ balance: 1 });
                     }
                     return;
                 }
                 if (data.msg_type === 'proposal_open_contract') {
+                    // Request balance when contract settles
+                    if (data.proposal_open_contract?.is_sold) {
+                        sendViaNewSystem({ balance: 1 });
+                    }
                     // Forward to the legacy WS handler for full contract lifecycle processing
                     const handler = this.ws?.onmessage;
                     if (handler) {
