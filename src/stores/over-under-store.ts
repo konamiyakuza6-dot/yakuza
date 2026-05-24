@@ -750,7 +750,9 @@ export default class OverUnderStore {
     }
 
     connectWebSocket() {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN && this.is_authorized) {
+        // For new auth users is_authorized is never set (auth step is skipped),
+        // so also treat an open WS as "already connected" when using new login.
+        if (this.ws && this.ws.readyState === WebSocket.OPEN && (this.is_authorized || isNewLoggedIn())) {
             this.addLog('Already connected and authorized.');
             return;
         }
@@ -831,6 +833,19 @@ export default class OverUnderStore {
                     if (data.subscription?.id) this.active_subscription_id = data.subscription.id;
                     if (data.error) {
                         this.addLog(`Error: ${data.error.message}`);
+                        // Recover from duplicate tick subscription — forget all ticks
+                        // and resubscribe so the tick stream continues working.
+                        if (
+                            data.error.code === 'SubscriptionAlreadyExists' ||
+                            (typeof data.error.message === 'string' &&
+                                data.error.message.toLowerCase().includes('already subscribed'))
+                        ) {
+                            this.addLog('Duplicate subscription detected — clearing and resubscribing...');
+                            if (this.ws?.readyState === WebSocket.OPEN) {
+                                this.ws.send(JSON.stringify({ forget_all: 'ticks' }));
+                                setTimeout(() => this.subscribeToTicks(this.selected_symbol), 300);
+                            }
+                        }
                         if (data.msg_type === 'buy') {
                              const symbol = data.echo_req?.parameters?.underlying_symbol
                                  || data.echo_req?.parameters?.symbol
