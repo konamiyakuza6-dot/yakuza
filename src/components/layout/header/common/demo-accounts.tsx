@@ -23,35 +23,18 @@ const DemoAccounts = ({
             console.log('🔄 [RESET BALANCE] Resetting demo balance for:', loginId);
 
             if (isNewLoggedIn()) {
-                // topup_virtual is not supported by the OTP WS (returned "Unrecognised request").
-                // Try the REST API with multiple endpoint patterns.
-                const headers = { ...getNewAuthHeaders(), 'Content-Type': 'application/json' };
-
-                const endpoints = [
-                    `${REST_BASE}/options/accounts/${loginId}/topup-virtual`,
-                    `${REST_BASE}/options/accounts/${loginId}/topup`,
-                    `${REST_BASE.replace('/trading/', '/account/')}accounts/${loginId}/topup-virtual`,
-                    `${REST_BASE}/account/topup-virtual`,
-                    `${REST_BASE}/options/demo/topup`,
-                ];
-
-                for (const url of endpoints) {
-                    const body = url.includes('/account/topup-virtual') || url.includes('/options/demo/topup')
-                        ? JSON.stringify({ loginid: loginId })
-                        : undefined;
-                    try {
-                        const res = await fetch(url, { method: 'POST', headers, body });
-                        const text = await res.text();
-                        console.log(`[RESET BALANCE] ${url} => ${res.status}: ${text.slice(0, 200)}`);
-                        if (res.ok) {
-                            console.log('✅ [RESET BALANCE] Success via:', url);
-                            return;
-                        }
-                    } catch (e) {
-                        console.log(`[RESET BALANCE] ${url} => network error:`, e);
-                    }
+                // Use the correct REST endpoint from Deriv docs:
+                // POST /trading/v1/options/accounts/{account_id}/reset-demo-balance
+                const res = await fetch(
+                    `${REST_BASE}/options/accounts/${loginId}/reset-demo-balance`,
+                    { method: 'POST', headers: getNewAuthHeaders() }
+                );
+                const text = await res.text();
+                if (res.ok) {
+                    console.log('✅ [RESET BALANCE] Success via REST API:', text.slice(0, 200));
+                } else {
+                    console.error('❌ [RESET BALANCE] Failed:', res.status, text.slice(0, 300));
                 }
-                console.error('❌ [RESET BALANCE] All REST API endpoints failed');
                 return;
             }
 
