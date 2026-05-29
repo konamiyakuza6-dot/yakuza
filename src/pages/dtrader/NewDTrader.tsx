@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { getSocketURL, getAppId } from '@/components/shared';
 import { sendViaNewSystemWithPromise, onNewSystemMessage, sendViaNewSystem } from '@/auth/NewDerivAuth';
+import { AVAILABLE_INDICATORS, calcSMA, calcEMA, calcRSI, calcMACD, calcBB, calcStoch, calcATR, calcCCI, type IndicatorConfig } from './indicators';
 
 const pip_sizes: Record<string, number> = {
   R_100: 2, R_75: 4, R_50: 4, R_25: 3, R_10: 3,
@@ -92,6 +93,19 @@ const NewDTrader: React.FC = () => {
   const [takeProfit, setTakeProfit] = useState('');
   const [chartStyle, setChartStyle] = useState<'line' | 'candle'>('line');
   const [timeframe, setTimeframe] = useState(60);
+  const [showIndicators, setShowIndicators] = useState(false);
+  const [activeIndicators, setActiveIndicators] = useState<IndicatorConfig[]>([]);
+  const indicatorRef = useRef<IndicatorConfig[]>([]);
+  const indicatorValues = useRef<Map<string, (number | null)[]>>(new Map());
+  const panPx = useRef(0);
+  const isPanning = useRef(false);
+  const panStartX = useRef(0);
+  const panStartPx = useRef(0);
+  const chartHeightPct = useRef(1);
+  const isResizing = useRef(false);
+  const resizeStartY = useRef(0);
+  const resizeStartPct = useRef(1);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
   const isPhone = typeof window !== 'undefined' && window.innerWidth < 768;
   const contractTypes = TRADE_TYPES.find(t => t.value === tradeType)?.label || 'Rise/Fall';
@@ -101,6 +115,7 @@ const NewDTrader: React.FC = () => {
   tradeTypeRef.current = tradeType; pipSizeRef.current = getPipSize(symbol);
   growthRateRef.current = growthRate;
   chartStyleRef.current = chartStyle; timeframeRef.current = timeframe;
+  indicatorRef.current = activeIndicators;
 
   const drawChart = useCallback(() => {
     const canvas = canvasRef.current;
@@ -114,9 +129,11 @@ const NewDTrader: React.FC = () => {
     ctx.scale(dpr, dpr);
     const W = rect.width;
     const H = rect.height;
+    const hasBelow = indicatorRef.current.some(i => i.pane === 'below');
+    const paneH = hasBelow ? Math.max(60, H * 0.25) : 0;
     const pad = { top: 10, right: 60, bottom: 20, left: 5 };
     const chartW = W - pad.left - pad.right;
-    const chartH = H - pad.top - pad.bottom;
+    const chartH = H - pad.top - pad.bottom - paneH;
     ctx.clearRect(0, 0, W, H);
 
     if (chartStyleRef.current === 'candle') {
@@ -187,6 +204,13 @@ const NewDTrader: React.FC = () => {
       ctx.font = '11px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(label, lx + tw / 2, ly + 13);
+
+      // Candle overlay indicators
+      const cCandleToX = (i: number) => pad.left + i * ((chartW / vis.length)) + (Math.max(2, (chartW / vis.length) - 1)) / 2;
+      const cCandleToY = cToY;
+      drawOverlayIndicators(ctx, W, pad, chartW, chartH, chartH, cCandleToX, cCandleToY);
+
+      if (hasBelow) drawBelowIndicators(ctx, W, H, paneH, pad, chartW, chartH);
       return;
     }
 
@@ -272,7 +296,212 @@ const NewDTrader: React.FC = () => {
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(label, lx + tw / 2, ly + 13);
+
+    // Overlay indicators
+    drawOverlayIndicators(ctx, W, pad, chartW, chartH, chartH, toX, toY);
+
+    // Below-pane indicators
+    if (hasBelow) drawBelowIndicators(ctx, W, H, paneH, pad, chartW, chartH);
+    return;
   }, []);
+
+  function drawOverlayIndicators(ctx: CanvasRenderingContext2D, W: number, pad: any, chartW: number, chartH: number, totalH: number, toX: (i: number) => number, toY: (v: number) => number) {
+    const inds = indicatorRef.current;
+    if (inds.length === 0) return;
+    const vals = indicatorValues.current;
+    const prices = tickPrices.current;
+    const pOff = panOffset.current;
+    const sliceStart = Math.max(0, prices.length - 300 - pOff);
+    const visible = prices.slice(sliceStart);
+    if (visible.length < 2) return;
+    const minP = Math.min(...visible), maxP = Math.max(...visible);
+    const range = maxP - minP || 1;
+    const padding = range * 0.05;
+    const yMin = minP - padding, yMax = maxP + padding;
+    const yRange = yMax - yMin;
+    const lToY = (v: number) => pad.top + chartH - ((v - yMin) / yRange) * chartH;
+
+    for (const ind of inds) {
+      if (ind.pane !== 'overlay') continue;
+      if (ind.id === 'sma') {
+        const v = vals.get('sma'); if (!v) continue;
+        ctx.strokeStyle = ind.color; ctx.lineWidth = 1.5;
+        ctx.beginPath(); let started = false;
+        v.forEach((val, i) => {
+          if (val === null) { started = false; return; }
+          const x = toX(i), y = lToY(val);
+          if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+      if (ind.id === 'ema') {
+        const v = vals.get('ema'); if (!v) continue;
+        ctx.strokeStyle = ind.color; ctx.lineWidth = 1.5;
+        ctx.beginPath(); let started = false;
+        v.forEach((val, i) => {
+          if (val === null) { started = false; return; }
+          const x = toX(i), y = lToY(val);
+          if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+      if (ind.id === 'bb') {
+        const up = vals.get('bb_up'), mid = vals.get('bb_mid'), low = vals.get('bb_low');
+        if (!up || !mid || !low) continue;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = ind.color;
+        // Upper
+        ctx.beginPath(); let s = false;
+        up.forEach((val, i) => { if (val === null) { s = false; return; } const x = toX(i), y = lToY(val); if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y); });
+        ctx.stroke();
+        // Lower
+        ctx.beginPath(); s = false;
+        low.forEach((val, i) => { if (val === null) { s = false; return; } const x = toX(i), y = lToY(val); if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y); });
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Middle
+        ctx.strokeStyle = ind.color; ctx.lineWidth = 0.5;
+        ctx.beginPath(); s = false;
+        mid.forEach((val, i) => { if (val === null) { s = false; return; } const x = toX(i), y = lToY(val); if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y); });
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawBelowIndicators(ctx: CanvasRenderingContext2D, W: number, H: number, paneH: number, pad: any, chartW: number, chartH: number) {
+    const inds = indicatorRef.current.filter(i => i.pane === 'below');
+    const paneTop = pad.top + chartH + 5;
+    const panePad = { top: 2, bottom: 2, left: pad.left, right: pad.right };
+    const paneChartH = paneH - panePad.top - panePad.bottom;
+    const prices = tickPrices.current;
+    const visible = prices.slice(-300);
+
+    if (visible.length < 2) return;
+    let pMin = Infinity, pMax = -Infinity;
+    visible.forEach(v => { pMin = Math.min(pMin, v); pMax = Math.max(pMax, v); });
+    const pRange = pMax - pMin || 1;
+
+    for (const ind of inds) {
+      let values: (number | null)[] | undefined;
+      let extraValues: (number | null)[] | undefined;
+      let extraValues2: (number | null)[] | undefined;
+      let minVal = Infinity, maxVal = -Infinity;
+
+      if (ind.id === 'rsi') {
+        values = indicatorValues.current.get('rsi');
+        minVal = 0; maxVal = 100;
+      } else if (ind.id === 'macd') {
+        values = indicatorValues.current.get('macd_hist');
+        extraValues = indicatorValues.current.get('macd_line');
+        extraValues2 = indicatorValues.current.get('macd_signal');
+        const all = [values, extraValues, extraValues2];
+        all.forEach(arr => arr?.forEach(v => { if (v !== null) { minVal = Math.min(minVal, v); maxVal = Math.max(maxVal, v); } }));
+        if (minVal === Infinity) { minVal = -1; maxVal = 1; }
+        const m = Math.max(Math.abs(minVal), Math.abs(maxVal));
+        minVal = -m; maxVal = m;
+      } else if (ind.id === 'stoch') {
+        values = indicatorValues.current.get('stoch_k');
+        extraValues = indicatorValues.current.get('stoch_d');
+        minVal = 0; maxVal = 100;
+      } else if (ind.id === 'atr') {
+        values = indicatorValues.current.get('atr');
+        values?.forEach(v => { if (v !== null) { minVal = Math.min(minVal, v); maxVal = Math.max(maxVal, v); } });
+        if (minVal === Infinity) { minVal = 0; maxVal = 1; }
+      } else if (ind.id === 'cci') {
+        values = indicatorValues.current.get('cci');
+        values?.forEach(v => { if (v !== null) { minVal = Math.min(minVal, v); maxVal = Math.max(maxVal, v); } });
+        if (minVal === Infinity) { minVal = -100; maxVal = 100; }
+      }
+      if (!values) continue;
+
+      const tMin = minVal, tMax = maxVal, tRange = tMax - tMin || 1;
+      const toPaneY = (v: number) => paneTop + panePad.top + paneChartH - ((v - tMin) / tRange) * paneChartH;
+      const toPaneX = (i: number) => pad.left + (i / (visible.length - 1)) * chartW;
+
+      // Background
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(pad.left, paneTop + panePad.top, chartW, paneChartH);
+
+      // Grid
+      ctx.strokeStyle = '#2a2a2a';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, paneTop + panePad.top);
+      ctx.lineTo(W - pad.right, paneTop + panePad.top);
+      ctx.stroke();
+
+      // Label
+      ctx.fillStyle = '#666';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(ind.label, pad.left + 2, paneTop + panePad.top + 10);
+
+      // Reference lines (RSI 30/70, etc)
+      if (ind.id === 'rsi') {
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 0.5; ctx.setLineDash([2, 2]);
+        [30, 50, 70].forEach(lv => { const y = toPaneY(lv); ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke(); });
+        ctx.setLineDash([]);
+      }
+
+      // Draw MACD histogram
+      if (ind.id === 'macd' && values) {
+        const zeroY = toPaneY(0);
+        values.forEach((v, i) => {
+          if (v === null) return;
+          const x = toPaneX(i);
+          ctx.fillStyle = v >= 0 ? '#26a69a' : '#ef5350';
+          ctx.fillRect(x - 1, v >= 0 ? zeroY - v / tRange * paneChartH : zeroY, 3, Math.abs(v) / tRange * paneChartH);
+        });
+        // MACD line
+        if (extraValues) {
+          ctx.strokeStyle = '#00bcd4'; ctx.lineWidth = 1;
+          ctx.beginPath(); let s = false;
+          extraValues.forEach((v, i) => {
+            if (v === null) { s = false; return; }
+            const x = toPaneX(i), y = toPaneY(v);
+            if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        }
+        // Signal line
+        if (extraValues2) {
+          ctx.strokeStyle = '#ff7043'; ctx.lineWidth = 1;
+          ctx.beginPath(); let s = false;
+          extraValues2.forEach((v, i) => {
+            if (v === null) { s = false; return; }
+            const x = toPaneX(i), y = toPaneY(v);
+            if (!s) { ctx.moveTo(x, y); s = true; } else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        }
+        return;
+      }
+
+      // Draw line
+      ctx.strokeStyle = ind.color; ctx.lineWidth = 1.5;
+      ctx.beginPath(); let started = false;
+      values.forEach((v, i) => {
+        if (v === null) { started = false; return; }
+        const x = toPaneX(i), y = toPaneY(v);
+        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Second line (for stoch)
+      if (ind.id === 'stoch' && extraValues) {
+        ctx.strokeStyle = '#ff9800'; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+        ctx.beginPath(); started = false;
+        extraValues.forEach((v, i) => {
+          if (v === null) { started = false; return; }
+          const x = toPaneX(i), y = toPaneY(v);
+          if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  }
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -288,6 +517,48 @@ const NewDTrader: React.FC = () => {
     });
     return () => cancelAnimationFrame(animRef.current);
   }, [drawChart]);
+
+  // Chart panning via mouse drag on canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onDown = (e: MouseEvent) => {
+      isPanning.current = true;
+      panStartX.current = e.clientX;
+      panStartPx.current = panPx.current;
+      canvas.style.cursor = 'grabbing';
+    };
+    const onMove = (e: MouseEvent) => {
+      if (!isPanning.current) return;
+      panPx.current = panStartPx.current + (e.clientX - panStartX.current);
+    };
+    const onUp = () => {
+      isPanning.current = false;
+      const c = canvasRef.current;
+      if (c) c.style.cursor = 'crosshair';
+    };
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    canvas.style.cursor = 'crosshair';
+    return () => {
+      canvas.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  // Resize handle
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      chartHeightPct.current = Math.max(0.3, Math.min(1, resizeStartPct.current + (e.clientY - resizeStartY.current) / window.innerHeight));
+    };
+    const onUp = () => { isResizing.current = false; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
 
   const connectTicks = useCallback((sym: string) => {
     if (wsRef.current) { try { wsRef.current.onclose = null; wsRef.current.close(); } catch {} }
@@ -383,6 +654,38 @@ const NewDTrader: React.FC = () => {
     candleData.current = [];
     wsRef.current.send(JSON.stringify({ ticks_history: symbolRef.current, style: 'candles', granularity: timeframe, count: 500, end: 'latest' }));
   }, [chartStyle, timeframe]);
+
+  // Recalculate indicators when data or active indicators change
+  useEffect(() => {
+    const inds = activeIndicators;
+    if (inds.length === 0) { indicatorValues.current.clear(); return; }
+    const prices = tickPrices.current;
+    const candles = candleData.current;
+    if (prices.length < 2 && candles.length < 2) return;
+    const vals = new Map<string, (number | null)[]>();
+    for (const ind of inds) {
+      if (ind.id === 'sma') vals.set('sma', calcSMA(prices, ind.params.period));
+      else if (ind.id === 'ema') vals.set('ema', calcEMA(prices, ind.params.period));
+      else if (ind.id === 'bb') {
+        const bb = calcBB(prices, ind.params.period, ind.params.stddev);
+        vals.set('bb_mid', bb.middle); vals.set('bb_up', bb.upper); vals.set('bb_low', bb.lower);
+      } else if (ind.id === 'rsi') vals.set('rsi', calcRSI(prices, ind.params.period));
+      else if (ind.id === 'macd') {
+        const m = calcMACD(prices, ind.params.fast, ind.params.slow, ind.params.signal);
+        vals.set('macd_line', m.macdLine); vals.set('macd_signal', m.signalLine); vals.set('macd_hist', m.histogram);
+      } else if (ind.id === 'stoch' && candles.length > 0) {
+        const ch = candles.map(c => c.high), cl = candles.map(c => c.low), cc = candles.map(c => c.close);
+        const s = calcStoch(ch, cl, cc, ind.params.k, ind.params.d);
+        vals.set('stoch_k', s.k); vals.set('stoch_d', s.d);
+      } else if (ind.id === 'atr' && candles.length > 0) {
+        vals.set('atr', calcATR(candles, ind.params.period));
+      } else if (ind.id === 'cci' && candles.length > 0) {
+        const ch = candles.map(c => c.high), cl = candles.map(c => c.low), cc = candles.map(c => c.close);
+        vals.set('cci', calcCCI(ch, cl, cc, ind.params.period));
+      }
+    }
+    indicatorValues.current = vals;
+  }, [activeIndicators, tickPrices.current.length, candleData.current.length]);
 
   useEffect(() => {
     const unsub = onNewSystemMessage((event: MessageEvent) => {
@@ -605,11 +908,57 @@ const NewDTrader: React.FC = () => {
                       color: timeframe === g.value ? '#fff' : '#666',
                     }}>{g.label}</button>
                 ))}
+                <button onClick={() => setShowIndicators(!showIndicators)}
+                  style={{
+                    padding: '2px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                    fontSize: '10px', fontWeight: showIndicators ? 'bold' : 'normal',
+                    background: showIndicators ? '#333' : 'transparent',
+                    color: showIndicators ? '#fff' : '#666',
+                  }}>Indicators</button>
               </div>
             </div>
             <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
               <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
             </div>
+            {/* Resize handle */}
+            <div onMouseDown={(e) => { isResizing.current = true; resizeStartY.current = e.clientY; resizeStartPct.current = chartHeightPct.current; e.preventDefault(); }}
+              style={{ height: '4px', background: '#333', cursor: 'ns-resize', flexShrink: 0 }} />
+            {showIndicators && (
+              <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 100, background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px', minWidth: '220px', maxWidth: '300px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                <div style={{ color: '#aaa', fontSize: '10px', marginBottom: '6px', fontWeight: 'bold' }}>Add Indicator</div>
+                {AVAILABLE_INDICATORS.map(ind => {
+                  const isActive = activeIndicators.some(a => a.id === ind.id);
+                  return (
+                    <div key={ind.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: ind.color }} />
+                      <span style={{ color: '#ccc', fontSize: '11px', flex: 1 }}>{ind.label}</span>
+                      <button onClick={() => {
+                        if (isActive) setActiveIndicators(prev => prev.filter(a => a.id !== ind.id));
+                        else setActiveIndicators(prev => [...prev, { ...ind }]);
+                      }} style={{
+                        padding: '1px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                        fontSize: '9px', background: isActive ? '#f44336' : '#333', color: '#fff',
+                      }}>{isActive ? '×' : '+'}</button>
+                    </div>
+                  );
+                })}
+                {activeIndicators.length > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px solid #333', margin: '6px 0', paddingTop: '6px' }}>
+                      <div style={{ color: '#aaa', fontSize: '10px', marginBottom: '4px', fontWeight: 'bold' }}>Active</div>
+                      {activeIndicators.map(ind => (
+                        <div key={ind.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0' }}>
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: ind.color }} />
+                          <span style={{ color: '#ccc', fontSize: '11px', flex: 1 }}>{ind.label}</span>
+                          <button onClick={() => setActiveIndicators(prev => prev.filter(a => a.id !== ind.id))}
+                            style={{ padding: '1px 6px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '9px', background: '#f44336', color: '#fff' }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0', background: '#1a1a1a', borderTop: '1px solid #333' }}>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {Array.from({ length: 10 }, (_, i) => {
@@ -861,11 +1210,55 @@ const NewDTrader: React.FC = () => {
                   color: timeframe === g.value ? '#fff' : '#888',
                 }}>{g.label}</button>
             ))}
-            <span style={{ marginLeft: 'auto', color: '#666', fontSize: '8px' }}>{chartStyle === 'candle' ? GRANULARITIES.find(g => g.value === timeframe)?.label : ''}</span>
+            <button onClick={() => setShowIndicators(!showIndicators)}
+              style={{
+                padding: '2px 6px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                fontSize: '9px', fontWeight: showIndicators ? 'bold' : 'normal',
+                background: showIndicators ? '#333' : 'transparent',
+                color: showIndicators ? '#fff' : '#888',
+              }}>Indicators</button>
+            <span style={{ color: '#666', fontSize: '8px' }}>{chartStyle === 'candle' ? GRANULARITIES.find(g => g.value === timeframe)?.label : ''}</span>
           </div>
           <div style={{ flex: '1 1 auto', position: 'relative', minHeight: 0, background: '#111' }}>
             <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
           </div>
+          {/* Resize handle */}
+          <div onMouseDown={(e) => { isResizing.current = true; resizeStartY.current = e.clientY; resizeStartPct.current = chartHeightPct.current; e.preventDefault(); }}
+            style={{ height: '4px', background: '#ccc', cursor: 'ns-resize', flexShrink: 0 }} />
+          {showIndicators && (
+            <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 100, background: '#fff', border: '1px solid #ddd', borderRadius: '6px', padding: '8px', minWidth: '200px', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+              <div style={{ color: '#333', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}>Indicators</div>
+              {AVAILABLE_INDICATORS.map(ind => {
+                const isActive = activeIndicators.some(a => a.id === ind.id);
+                return (
+                  <div key={ind.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: ind.color }} />
+                    <span style={{ color: '#555', fontSize: '11px', flex: 1 }}>{ind.label}</span>
+                    <button onClick={() => {
+                      if (isActive) setActiveIndicators(prev => prev.filter(a => a.id !== ind.id));
+                      else setActiveIndicators(prev => [...prev, { ...ind }]);
+                    }} style={{
+                      padding: '1px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                      fontSize: '9px', background: isActive ? '#f44336' : '#4caf50', color: '#fff',
+                    }}>{isActive ? '×' : '+'}</button>
+                  </div>
+                );
+              })}
+              {activeIndicators.length > 0 && (
+                <div style={{ borderTop: '1px solid #e0e0e0', margin: '6px 0', paddingTop: '6px' }}>
+                  <div style={{ color: '#333', fontSize: '10px', marginBottom: '4px', fontWeight: 'bold' }}>Active</div>
+                  {activeIndicators.map(ind => (
+                    <div key={ind.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: ind.color }} />
+                      <span style={{ color: '#555', fontSize: '11px', flex: 1 }}>{ind.label}</span>
+                      <button onClick={() => setActiveIndicators(prev => prev.filter(a => a.id !== ind.id))}
+                        style={{ padding: '1px 6px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '9px', background: '#f44336', color: '#fff' }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 8px', background: '#fff', minHeight: 0 }}>
