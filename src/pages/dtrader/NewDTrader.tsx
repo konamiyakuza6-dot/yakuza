@@ -27,8 +27,10 @@ function extractDigit(quote: number, pip_size: number): number {
 
 interface ContractInfo {
   id: string; contract_type: string; stake: number; symbol: string;
-  entry_tick: number; entry_digit: number; exit_tick?: number;
+  entry_tick: number; entry_digit: number; entry_epoch?: number;
+  entry_index?: number; exit_tick?: number; exit_epoch?: number;
   exit_digit?: number; profit?: number; is_sold: boolean; is_win?: boolean;
+  duration?: number; duration_unit?: 't' | 'm';
 }
 
 const contractLabels: Record<string, string> = {
@@ -51,6 +53,7 @@ const NewDTrader: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const tickPrices = useRef<number[]>([]);
+  const tickEpochs = useRef<number[]>([]);
   const candleData = useRef<Candle[]>([]);
   const animRef = useRef<number>(0);
   const priceRef = useRef<number | null>(null);
@@ -211,6 +214,8 @@ const NewDTrader: React.FC = () => {
       drawOverlayIndicators(ctx, W, pad, chartW, chartH, chartH, cCandleToX, cCandleToY);
 
       if (hasBelow) drawBelowIndicators(ctx, W, H, paneH, pad, chartW, chartH);
+      drawContractOverlays(ctx, W, H, pad, chartW, chartH, cToY);
+      drawExitOverlay(ctx, W, pad, chartW, cToY);
       return;
     }
 
@@ -302,6 +307,8 @@ const NewDTrader: React.FC = () => {
 
     // Below-pane indicators
     if (hasBelow) drawBelowIndicators(ctx, W, H, paneH, pad, chartW, chartH);
+    drawContractOverlays(ctx, W, H, pad, chartW, chartH, toY);
+    drawExitOverlay(ctx, W, pad, chartW, toY);
     return;
   }, []);
 
@@ -310,7 +317,7 @@ const NewDTrader: React.FC = () => {
     if (inds.length === 0) return;
     const vals = indicatorValues.current;
     const prices = tickPrices.current;
-    const pOff = panOffset.current;
+    const pOff = panPx.current;
     const sliceStart = Math.max(0, prices.length - 300 - pOff);
     const visible = prices.slice(sliceStart);
     if (visible.length < 2) return;
@@ -503,6 +510,107 @@ const NewDTrader: React.FC = () => {
     }
   }
 
+  function drawContractOverlays(ctx: CanvasRenderingContext2D, W: number, H: number, pad: any, chartW: number, chartH: number, toY: (v: number) => number) {
+    const contracts = activeContractsRef.current;
+    if (contracts.length === 0) return;
+
+    contracts.forEach(c => {
+      if (c.is_sold) return;
+      const entryPrice = c.entry_tick;
+      if (!entryPrice) return;
+
+      // Entry horizontal line
+      const ey = toY(entryPrice);
+      ctx.strokeStyle = '#4fc3f7';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pad.left, ey);
+      ctx.lineTo(W - pad.right, ey);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Entry label
+      ctx.fillStyle = '#4fc3f7';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'right';
+      const entryLabel = `ENTRY ${entryPrice.toFixed(2)}`;
+      ctx.fillText(entryLabel, W - pad.right - 4, ey - 4);
+
+      // Small circle at entry price on current visible edge
+      const lastIdx = tickPrices.current.length - 1;
+      if (c.entry_index != null) {
+        const relPos = (c.entry_index - Math.max(0, lastIdx - 299)) / 299;
+        if (relPos >= 0 && relPos <= 1) {
+          const ex = pad.left + relPos * chartW;
+          ctx.beginPath();
+          ctx.arc(ex, ey, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#4fc3f7';
+          ctx.fill();
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
+
+      // Countdown
+      let remaining = '';
+      const dur = c.duration || 0;
+      if (dur > 0 && c.duration_unit === 't' && c.entry_index != null) {
+        const elapsed = tickPrices.current.length - c.entry_index;
+        const rem = Math.max(0, dur - elapsed);
+        remaining = `${rem}t`;
+      } else if (dur > 0 && c.duration_unit === 'm' && c.entry_epoch) {
+        const now = tickEpochs.current[tickEpochs.current.length - 1] || 0;
+        if (now > 0) {
+          const elapsed = Math.floor((now - c.entry_epoch) / 60);
+          const rem = Math.max(0, dur - elapsed);
+          remaining = `${rem}m`;
+        }
+      }
+
+      if (remaining) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.font = 'bold 11px sans-serif';
+        const tw = ctx.measureText(remaining).width + 12;
+        const rx = W - pad.right - tw - 4;
+        const ry = pad.top + 4;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.beginPath();
+        ctx.roundRect(rx, ry, tw, 20, 4);
+        ctx.fill();
+        ctx.fillStyle = '#ffeb3b';
+        ctx.textAlign = 'center';
+        ctx.fillText(remaining, rx + tw / 2, ry + 14);
+        ctx.textAlign = 'right';
+      }
+    });
+  }
+
+  function drawExitOverlay(ctx: CanvasRenderingContext2D, W: number, pad: any, chartW: number, toY: (v: number) => number) {
+    const lastResult = contractHistory.length > 0 ? contractHistory[contractHistory.length - 1] : null;
+    if (!lastResult || !lastResult.exit_tick) return;
+
+    const exitPrice = lastResult.exit_tick;
+    const ey = toY(exitPrice);
+    const isWin = lastResult.is_win;
+
+    ctx.strokeStyle = isWin ? '#4caf50' : '#f44336';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, ey);
+    ctx.lineTo(W - pad.right, ey);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = isWin ? '#4caf50' : '#f44336';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'left';
+    const exitLabel = `EXIT ${exitPrice.toFixed(2)}`;
+    ctx.fillText(exitLabel, pad.left + 4, ey - 4);
+  }
+
   useEffect(() => {
     if (!canvasRef.current) return;
     const ro = new ResizeObserver(() => drawChart());
@@ -563,6 +671,7 @@ const NewDTrader: React.FC = () => {
   const connectTicks = useCallback((sym: string) => {
     if (wsRef.current) { try { wsRef.current.onclose = null; wsRef.current.close(); } catch {} }
     tickPrices.current = [];
+    tickEpochs.current = [];
     priceRef.current = null; digitRef.current = null;
     setCurrentPrice(null); setCurrentDigit(null);
     setTickHistory([]); setDigitCounts(Array(10).fill(0));
@@ -591,6 +700,7 @@ const NewDTrader: React.FC = () => {
           const ps = tick.pip_size || getPipSize(tick.symbol || sym);
           const digit = extractDigit(tick.quote, ps);
           tickPrices.current = [...tickPrices.current.slice(-MAX_TICKS + 1), tick.quote];
+          tickEpochs.current = [...tickEpochs.current.slice(-MAX_TICKS + 1), tick.epoch || 0];
           priceRef.current = tick.quote; digitRef.current = digit;
           setCurrentPrice(tick.quote); setCurrentDigit(digit);
           setTickHistory(prev => {
@@ -617,6 +727,7 @@ const NewDTrader: React.FC = () => {
           const prices: number[] = data.history.prices;
           const ps = getPipSize(sym);
           tickPrices.current = prices.slice(-MAX_TICKS);
+          tickEpochs.current = data.history.times ? data.history.times.slice(-MAX_TICKS) : [];
           if (prices.length > 0) {
             const lastP = prices[prices.length - 1];
             const digits = prices.map((p: number) => extractDigit(p, ps));
@@ -700,10 +811,16 @@ const NewDTrader: React.FC = () => {
           setIsTrading(false);
           if (!data.error && data.buy?.contract_id) {
             const cid = String(data.buy.contract_id);
+            const entryPrice = data.buy.entry_tick || priceRef.current || 0;
+            const entryEpoch = data.buy.entry_tick_time || tickEpochs.current[tickEpochs.current.length - 1] || 0;
             const nc: ContractInfo = {
               id: cid, contract_type: '', stake: stakeRef.current,
-              symbol: symbolRef.current, entry_tick: priceRef.current || 0,
-              entry_digit: digitRef.current || 0, is_sold: false,
+              symbol: symbolRef.current, entry_tick: entryPrice,
+              entry_digit: digitRef.current || extractDigit(entryPrice, pipSizeRef.current),
+              entry_epoch: entryEpoch,
+              entry_index: tickPrices.current.length,
+              is_sold: false,
+              duration: durationRef.current, duration_unit: durationUnitRef.current,
             };
             setActiveContracts(prev => { activeContractsRef.current = [...prev, nc]; return activeContractsRef.current; });
             sendViaNewSystem({ proposal_open_contract: 1, contract_id: data.buy.contract_id, subscribe: 1 });
@@ -714,26 +831,46 @@ const NewDTrader: React.FC = () => {
         if (data.msg_type === 'proposal_open_contract' && data.proposal_open_contract) {
           const poc = data.proposal_open_contract;
           const cid = String(poc.contract_id);
+          const ac = activeContractsRef.current.find(c => c.id === cid);
+
+          // Fallback chain for entry/exit tick values (matches transactions-store.ts)
+          const entryTick = poc.entry_tick_display_value || poc.entry_tick || poc.entry_spot_display_value || poc.entry_spot || ac?.entry_tick || 0;
+          const exitTick = poc.exit_tick_display_value || poc.exit_tick || poc.exit_spot_display_value || poc.exit_spot || 0;
+          const entryD = entryTick ? extractDigit(Number(entryTick), pipSizeRef.current) : 0;
+          const exitD = exitTick ? extractDigit(Number(exitTick), pipSizeRef.current) : 0;
+
           if (poc.is_sold) {
-            const exitTick = poc.exit_tick ?? 0;
-            const exitDigit = exitTick ? extractDigit(exitTick, pipSizeRef.current) : 0;
             const profit = Number(poc.profit ?? 0);
             const isWin = profit >= 0;
-            const ac = activeContractsRef.current.find(c => c.id === cid);
-            const entryTickRaw = poc.entry_tick ?? ac?.entry_tick;
-            const entryDigit = entryTickRaw ? extractDigit(entryTickRaw, pipSizeRef.current) : (ac?.entry_digit ?? 0);
-            setExitHighlight({ digit: exitDigit, win: isWin });
+            setExitHighlight({ digit: exitD, win: isWin });
             setTimeout(() => setExitHighlight(null), 3000);
-            setTradeResult({ isWin, profit, contract_type: poc.contract_type || ac?.contract_type || '', entry_digit: entryDigit, exit_digit: exitDigit });
+            setTradeResult({ isWin, profit, contract_type: poc.contract_type || ac?.contract_type || '', entry_digit: entryD, exit_digit: exitD });
             setActiveContracts(prev => { activeContractsRef.current = prev.filter(c => c.id !== cid); return activeContractsRef.current; });
             setContractHistory(prev => {
               if (prev.find(c => c.id === cid)) return prev;
-              return [...prev, { id: cid, contract_type: poc.contract_type || ac?.contract_type || '', stake: Number(poc.buy_price ?? ac?.stake ?? 0), symbol: poc.symbol || ac?.symbol || '', entry_tick: entryTickRaw || 0, exit_tick: exitTick, profit, is_sold: true, entry_digit: entryDigit, exit_digit: exitDigit, is_win: isWin }];
+              return [...prev, {
+                id: cid, contract_type: poc.contract_type || ac?.contract_type || '',
+                stake: Number(poc.buy_price ?? ac?.stake ?? 0),
+                symbol: poc.symbol || ac?.symbol || '',
+                entry_tick: Number(entryTick), entry_digit: entryD,
+                entry_epoch: poc.entry_tick_time || ac?.entry_epoch,
+                entry_index: ac?.entry_index,
+                exit_tick: Number(exitTick), exit_epoch: poc.exit_tick_time,
+                exit_digit: exitD, profit, is_sold: true, is_win: isWin,
+                duration: ac?.duration, duration_unit: ac?.duration_unit,
+              }];
             });
             setSessionStats(prev => ({ wins: prev.wins + (isWin ? 1 : 0), losses: prev.losses + (isWin ? 0 : 1), profit: prev.profit + profit }));
             sendViaNewSystem({ balance: 1 });
           } else {
-            setActiveContracts(prev => { const u = prev.map(c => c.id === cid ? { ...c, entry_tick: poc.entry_tick ?? c.entry_tick } : c); activeContractsRef.current = u; return u; });
+            setActiveContracts(prev => {
+              const u = prev.map(c => c.id === cid ? {
+                ...c, entry_tick: Number(entryTick) || c.entry_tick,
+                entry_digit: entryD || c.entry_digit,
+                entry_epoch: poc.entry_tick_time || c.entry_epoch,
+              } : c);
+              activeContractsRef.current = u; return u;
+            });
           }
           return;
         }
@@ -924,8 +1061,11 @@ const NewDTrader: React.FC = () => {
             <div onMouseDown={(e) => { isResizing.current = true; resizeStartY.current = e.clientY; resizeStartPct.current = chartHeightPct.current; e.preventDefault(); }}
               style={{ height: '4px', background: '#333', cursor: 'ns-resize', flexShrink: 0 }} />
             {showIndicators && (
-              <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 100, background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px', minWidth: '220px', maxWidth: '300px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-                <div style={{ color: '#aaa', fontSize: '10px', marginBottom: '6px', fontWeight: 'bold' }}>Add Indicator</div>
+               <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 100, background: '#1a1a1a', border: '1px solid #333', borderRadius: '6px', padding: '8px', minWidth: '220px', maxWidth: '300px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: '#aaa', fontSize: '10px', fontWeight: 'bold' }}>Add Indicator</span>
+                  <button onClick={() => setShowIndicators(false)} style={{ padding: '0 4px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '12px', background: 'transparent', color: '#888' }}>\u2715</button>
+                </div>
                 {AVAILABLE_INDICATORS.map(ind => {
                   const isActive = activeIndicators.some(a => a.id === ind.id);
                   return (
@@ -1137,10 +1277,10 @@ const NewDTrader: React.FC = () => {
                   padding: '2px 4px', marginBottom: '2px', borderLeft: `2px solid ${c.is_win ? '#4caf50' : '#f44336'}`,
                   color: '#888', fontSize: '10px',
                 }}>
-                  {c.contract_type === 'ACCU'
-                    ? `ACCU ${c.is_win ? `+$${c.profit?.toFixed(2) || '0'}` : `-$${Math.abs(c.profit || 0).toFixed(2)}`}`
-                    : `${c.contract_type} ${c.entry_digit}→${c.exit_digit ?? '?'} ${c.is_win ? `+$${c.profit?.toFixed(2) || '0'}` : `-$${Math.abs(c.profit || 0).toFixed(2)}`}`
-                  }
+              {c.contract_type === 'ACCU'
+                ? `ACCU ${c.is_win ? `+$${c.profit?.toFixed(2) || '0'}` : `-$${Math.abs(c.profit || 0).toFixed(2)}`}`
+                : `${c.contract_type} ${c.entry_tick.toFixed(2)}→${c.exit_tick?.toFixed(2) ?? '?'} ${c.is_win ? `+$${c.profit?.toFixed(2) || '0'}` : `-$${Math.abs(c.profit || 0).toFixed(2)}`}`
+              }
                 </div>
               ))}
             </div>
@@ -1226,8 +1366,11 @@ const NewDTrader: React.FC = () => {
           <div onMouseDown={(e) => { isResizing.current = true; resizeStartY.current = e.clientY; resizeStartPct.current = chartHeightPct.current; e.preventDefault(); }}
             style={{ height: '4px', background: '#ccc', cursor: 'ns-resize', flexShrink: 0 }} />
           {showIndicators && (
-            <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 100, background: '#fff', border: '1px solid #ddd', borderRadius: '6px', padding: '8px', minWidth: '200px', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-              <div style={{ color: '#333', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}>Indicators</div>
+               <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 100, background: '#fff', border: '1px solid #ddd', borderRadius: '6px', padding: '8px', minWidth: '200px', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ color: '#333', fontSize: '11px', fontWeight: 'bold' }}>Indicators</span>
+                <button onClick={() => setShowIndicators(false)} style={{ padding: '0 4px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '12px', background: 'transparent', color: '#888' }}>\u2715</button>
+              </div>
               {AVAILABLE_INDICATORS.map(ind => {
                 const isActive = activeIndicators.some(a => a.id === ind.id);
                 return (
