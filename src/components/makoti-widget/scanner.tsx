@@ -177,28 +177,46 @@ export const Scanner: React.FC = () => {
     const applySwitch = useCallback((sym: string) => {
         currentBestRef.current = sym;
         clearPending();
-        // Update runtime override (affects next purchase)
+        console.log(`[Makoti] Auto-switch → ${sym}`);
+        // 1. Runtime override — affects next purchase in running bot
         try {
             window.DBot = window.DBot || {};
             (window.DBot as any).__force_symbol = sym;
+            console.log('[Makoti] __force_symbol set');
         } catch (_) { }
-        // Update QuickStrategy form
+        // 2. QuickStrategy store — updates the form model
         try {
             const rootStore = (window as any).__store_instance;
-            if (rootStore?.quick_strategy) rootStore.quick_strategy.setValue('symbol', sym);
+            if (rootStore?.quick_strategy) {
+                rootStore.quick_strategy.setValue('symbol', sym);
+                console.log('[Makoti] quick_strategy.symbol updated');
+            }
         } catch (_) { }
-        // Update Blockly workspace block so the UI dropdown reflects the change
+        // 3. Blockly workspace — updates the UI dropdown
         try {
             const workspace = (window as any).Blockly?.derivWorkspace;
             if (workspace) {
                 const blocks = workspace.getAllBlocks();
                 const marketBlock = blocks.find((b: any) => b.type === 'trade_definition_market');
                 if (marketBlock) {
-                    marketBlock.setFieldValue(sym, 'SYMBOL_LIST');
+                    marketBlock.setFieldValue('SYMBOL_LIST', sym);
+                    console.log('[Makoti] Blockly SYMBOL_LIST updated');
+                } else {
+                    console.warn('[Makoti] trade_definition_market block not found');
                 }
+            } else {
+                console.warn('[Makoti] Blockly workspace not available');
             }
         } catch (_) { }
-        (window as any).__makoti_lastTradeWon = false; // reset until next win
+        // 4. Dashboard store — updates chart symbol
+        try {
+            const rootStore = (window as any).__store_instance;
+            if (rootStore?.dashboard?.setBotBuilderSymbol) {
+                rootStore.dashboard.setBotBuilderSymbol(sym);
+                console.log('[Makoti] dashboard.setBotBuilderSymbol called');
+            }
+        } catch (_) { }
+        (window as any).__makoti_lastTradeWon = false;
         showNotify(`Volatility Updated: ${SYMBOL_LABELS[sym]}`, 'success');
     }, [showNotify, clearPending]);
 
@@ -282,19 +300,18 @@ export const Scanner: React.FC = () => {
                 }
             }
 
-            if (isAuto) {
+            if (autoSwitchRef.current) {
                 const ps2 = pendingSymbolRef.current;
                 const status = ps2
                     ? `Pending: ${SYMBOL_LABELS[ps2]} (waiting for win)`
                     : `Best: ${bestLabel} (${bestScore}%)`;
                 setProgress(`Auto: ${status}`);
-                if (autoSwitchRef.current) {
-                    autoIntervalRef.current = setTimeout(() => performScan(true), 30000);
-                }
+                cleanup(); // close this scan's WS before scheduling next
+                autoIntervalRef.current = setTimeout(() => performScan(true), 3000);
             } else {
                 setProgress(`Top choppy: ${bestLabel} (${bestScore}%)`);
+                cleanup();
             }
-            if (!isAuto) cleanup();
         };
 
         const handleMessage = (data: any) => {
