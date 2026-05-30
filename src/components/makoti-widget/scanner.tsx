@@ -37,12 +37,10 @@ function calcDigitPcts(digits: number[]): number[] {
     return counts.map(c => (c / total) * 100);
 }
 
-/* ── Deep choppiness analysis (50 candles, extra weight on recent) ──────── */
+/* ── Deep choppiness analysis ────────────────────────────────────────────── */
 function calcChoppiness(candles: any[]): SymbolDirectionResult {
-    const totalCandles = candles.length;
-    const lookback = Math.min(50, totalCandles);
+    const lookback = Math.min(50, candles.length);
     const recent = candles.slice(-lookback);
-
     const bodyRatios = recent.map(c => {
         const range = Number(c.high) - Number(c.low);
         if (range <= 0) return 1;
@@ -52,9 +50,9 @@ function calcChoppiness(candles: any[]): SymbolDirectionResult {
 
     let directionChanges = 0;
     for (let i = 1; i < recent.length; i++) {
-        const prevDir = Number(recent[i - 1].close) - Number(recent[i - 1].open);
-        const currDir = Number(recent[i].close) - Number(recent[i].open);
-        if ((prevDir > 0 && currDir < 0) || (prevDir < 0 && currDir > 0)) directionChanges++;
+        const pd = Number(recent[i - 1].close) - Number(recent[i - 1].open);
+        const cd = Number(recent[i].close) - Number(recent[i].open);
+        if ((pd > 0 && cd < 0) || (pd < 0 && cd > 0)) directionChanges++;
     }
     const dirChangeRatio = directionChanges / (recent.length - 1);
 
@@ -67,63 +65,55 @@ function calcChoppiness(candles: any[]): SymbolDirectionResult {
     const sumI2 = indices.reduce((a, b) => a + b * b, 0);
     const sumC2 = closes.reduce((a, b) => a + b * b, 0);
     const denom = Math.sqrt((n * sumI2 - sumI * sumI) * (n * sumC2 - sumC * sumC));
-    const correlation = denom === 0 ? 0 : (n * sumIC - sumI * sumC) / denom;
-    const trendStrength = Math.abs(correlation);
+    const corr = denom === 0 ? 0 : (n * sumIC - sumI * sumC) / denom;
+    const trendStrength = Math.abs(corr);
 
     const last3 = candles.slice(-3);
-    const last3BodyRatios = last3.map(c => {
-        const range = Number(c.high) - Number(c.low);
-        if (range <= 0) return 1;
-        return Math.abs(Number(c.close) - Number(c.open)) / range;
+    const l3br = last3.map(c => {
+        const r = Number(c.high) - Number(c.low);
+        return r <= 0 ? 1 : Math.abs(Number(c.close) - Number(c.open)) / r;
     });
-    const avgRecentBodyRatio = last3BodyRatios.reduce((a, b) => a + b, 0) / last3BodyRatios.length;
+    const avgRecentBodyRatio = l3br.reduce((a, b) => a + b, 0) / l3br.length;
 
     const ranges = recent.map(c => Number(c.high) - Number(c.low));
     const half = Math.floor(ranges.length / 2);
-    const firstHalfAvg = ranges.slice(0, half).reduce((a, b) => a + b, 0) / half;
-    const secondHalfAvg = ranges.slice(-half).reduce((a, b) => a + b, 0) / half;
-    const rangeNarrowing = firstHalfAvg > 0 ? Math.min(1, secondHalfAvg / firstHalfAvg) : 1;
+    const fha = ranges.slice(0, half).reduce((a, b) => a + b, 0) / half;
+    const sha = ranges.slice(-half).reduce((a, b) => a + b, 0) / half;
+    const rn = fha > 0 ? Math.min(1, sha / fha) : 1;
 
-    const choppinessScore = Math.min(100,
-        (1 - avgBodyRatio) * 30 +
-        dirChangeRatio * 25 +
-        (1 - trendStrength) * 20 +
-        (1 - avgRecentBodyRatio) * 15 +
-        (1 - rangeNarrowing) * 10
-    );
+    const score = Math.min(100,
+        (1 - avgBodyRatio) * 30 + dirChangeRatio * 25 +
+        (1 - trendStrength) * 20 + (1 - avgRecentBodyRatio) * 15 + (1 - rn) * 10);
 
     return {
-        symbol: '', label: '',
-        choppinessScore: Math.round(choppinessScore),
-        bodyRatio: Math.round(avgBodyRatio * 100),
-        directionChanges,
+        symbol: '', label: '', choppinessScore: Math.round(score),
+        bodyRatio: Math.round(avgBodyRatio * 100), directionChanges,
         trendStrength: Math.round(trendStrength * 100),
         recentBodyRatio: Math.round(avgRecentBodyRatio * 100),
-        qualifies: true, // always qualifies — we always pick the best
-        detail: `Choppy: ${Math.round(choppinessScore)}% | Body ${Math.round(avgBodyRatio * 100)}% | Δ ${directionChanges}/${lookback - 1} | Trend ${Math.round(trendStrength * 100)}%`,
+        qualifies: true,
+        detail: `Choppy: ${Math.round(score)}% | Body ${Math.round(avgBodyRatio * 100)}% | Δ ${directionChanges}/${lookback - 1} | Trend ${Math.round(trendStrength * 100)}%`,
     };
 }
 
-// ─── Global trade-result tracking via POC messages on the main OTP WS ─────
-// Initialised to true so first switch works immediately (no trades yet = OK to switch).
+// ─── Global POC listener ─────────────────────────────────────────────────
 (window as any).__makoti_lastTradeWon = true;
 
 function startPocListener() {
-    const ws = (window as any)._newSystemWS as WebSocket | undefined;
+    const ws = (window as any)._newSystemWS as WebSocket;
     if (!ws || (ws as any).__makoti_pocAttached) return;
     (ws as any).__makoti_pocAttached = true;
     ws.addEventListener('message', (evt: MessageEvent) => {
         try {
-            const data = JSON.parse(evt.data);
-            if (data.msg_type === 'proposal_open_contract' && data.proposal_open_contract?.is_sold) {
-                (window as any).__makoti_lastTradeWon = Number(data.proposal_open_contract.profit) >= 0;
+            const d = JSON.parse(evt.data);
+            if (d.msg_type === 'proposal_open_contract' && d.proposal_open_contract?.is_sold) {
+                (window as any).__makoti_lastTradeWon = Number(d.proposal_open_contract.profit) >= 0;
             }
         } catch (_) {}
     });
 }
 
 function stopPocListener() {
-    const ws = (window as any)._newSystemWS as WebSocket | undefined;
+    const ws = (window as any)._newSystemWS as WebSocket;
     if (ws) (ws as any).__makoti_pocAttached = false;
 }
 
@@ -140,12 +130,15 @@ export const Scanner: React.FC = () => {
     const [autoSwitcherActive, setAutoSwitcherActive] = useState(false);
     const [pendingSymbol, setPendingSymbol] = useState('');
     const [notification, setNotification] = useState<{ msg: string; type: 'info' | 'success' | 'warn' } | null>(null);
+
+    // Refs for logic (avoid stale closures)
     const wsRef = useRef<MakotiWS | null>(null);
     const pendingRef = useRef<Set<string>>(new Set());
     const collectedRef = useRef<Map<string, any>>(new Map());
     const botRef = useRef<BotId>('pvty_kill');
     const autoSwitchRef = useRef(false);
-    const autoIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const scanningRef = useRef(false);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const currentBestRef = useRef<string>('');
     const pendingSymbolRef = useRef<string>('');
 
@@ -154,16 +147,6 @@ export const Scanner: React.FC = () => {
         setTimeout(() => setNotification(null), 3500);
     }, []);
 
-    const cleanup = useCallback(() => {
-        if (autoIntervalRef.current) {
-            clearTimeout(autoIntervalRef.current);
-            autoIntervalRef.current = null;
-        }
-        try { wsRef.current?.close(); } catch (_) { }
-        wsRef.current = null;
-    }, []);
-
-    /* ── Apply a pending or immediate switch ───────────────────────────── */
     const setPending = useCallback((sym: string) => {
         setPendingSymbol(sym);
         pendingSymbolRef.current = sym;
@@ -177,112 +160,79 @@ export const Scanner: React.FC = () => {
     const applySwitch = useCallback((sym: string) => {
         currentBestRef.current = sym;
         clearPending();
-        console.log(`[Makoti] Auto-switch → ${sym}`);
-        // 1. Runtime override — affects next purchase in running bot
+        // 1. Runtime override
+        try { window.DBot = window.DBot || {}; (window.DBot as any).__force_symbol = sym; } catch (_) {}
+        // 2. QuickStrategy store
+        try { const rs = (window as any).__store_instance; if (rs?.quick_strategy) rs.quick_strategy.setValue('symbol', sym); } catch (_) {}
+        // 3. Blockly workspace
         try {
-            window.DBot = window.DBot || {};
-            (window.DBot as any).__force_symbol = sym;
-            console.log('[Makoti] __force_symbol set');
-        } catch (_) { }
-        // 2. QuickStrategy store — updates the form model
-        try {
-            const rootStore = (window as any).__store_instance;
-            if (rootStore?.quick_strategy) {
-                rootStore.quick_strategy.setValue('symbol', sym);
-                console.log('[Makoti] quick_strategy.symbol updated');
+            const ws = (window as any).Blockly?.derivWorkspace;
+            if (ws) {
+                const b = ws.getAllBlocks().find((bl: any) => bl.type === 'trade_definition_market');
+                if (b) b.setFieldValue('SYMBOL_LIST', sym);
             }
-        } catch (_) { }
-        // 3. Blockly workspace — updates the UI dropdown
-        try {
-            const workspace = (window as any).Blockly?.derivWorkspace;
-            if (workspace) {
-                const blocks = workspace.getAllBlocks();
-                const marketBlock = blocks.find((b: any) => b.type === 'trade_definition_market');
-                if (marketBlock) {
-                    marketBlock.setFieldValue('SYMBOL_LIST', sym);
-                    console.log('[Makoti] Blockly SYMBOL_LIST updated');
-                } else {
-                    console.warn('[Makoti] trade_definition_market block not found');
-                }
-            } else {
-                console.warn('[Makoti] Blockly workspace not available');
-            }
-        } catch (_) { }
-        // 4. Dashboard store — updates chart symbol
-        try {
-            const rootStore = (window as any).__store_instance;
-            if (rootStore?.dashboard?.setBotBuilderSymbol) {
-                rootStore.dashboard.setBotBuilderSymbol(sym);
-                console.log('[Makoti] dashboard.setBotBuilderSymbol called');
-            }
-        } catch (_) { }
+        } catch (_) {}
+        // 4. Dashboard store (chart)
+        try { const rs = (window as any).__store_instance; if (rs?.dashboard?.setBotBuilderSymbol) rs.dashboard.setBotBuilderSymbol(sym); } catch (_) {}
         (window as any).__makoti_lastTradeWon = false;
         showNotify(`Volatility Updated: ${SYMBOL_LABELS[sym]}`, 'success');
     }, [showNotify, clearPending]);
 
-    /* ── Perform a scan ────────────────────────────────────────────────── */
-    const performScan = useCallback((isAuto = false) => {
-        if (scanning && !isAuto) return;
+    const cleanup = useCallback(() => {
+        try { wsRef.current?.close(); } catch (_) {}
+        wsRef.current = null;
+    }, []);
+
+    /* ── Perform a single scan ──────────────────────────────────────────── */
+    const performScan = useCallback((initial = false) => {
+        if (scanningRef.current) return;
         const currentBot = botRef.current;
-        if (currentBot === 'pvty_kill' && isAuto) return;
-        if (!isAuto) setScanning(true);
-        setProgress(isAuto ? 'Auto-scanning…' : 'Connecting to Deriv API…');
-        if (!isAuto) { setResults([]); setBestSymbols([]); }
+        if (currentBot === 'pvty_kill') return;
+
+        scanningRef.current = true;
+        setScanning(true);
+        setProgress('Connecting to Deriv API…');
+        if (initial) { setResults([]); setBestSymbols([]); }
+
         pendingRef.current = new Set(ALL_SYMBOLS);
         collectedRef.current = new Map();
-        if (!isAuto) cleanup();
+        cleanup(); // close previous WS
 
-        const isTicks = currentBot === 'pvty_kill';
+        const handleMessage = (data: any) => {
+            if (data.error) return;
 
-        const finalizePvty = () => {
-            const scanResults: SymbolDigitResult[] = [];
-            const best: string[] = [];
-            collectedRef.current.forEach((digits: number[], sym) => {
-                const pcts = calcDigitPcts(digits);
-                const d7 = pcts[7], d8 = pcts[8], d9 = pcts[9];
-                const qualifies = d7 > 10 && d8 > 10 && d9 > 10;
-                if (qualifies) best.push(sym);
-                scanResults.push({
-                    symbol: sym, label: SYMBOL_LABELS[sym],
-                    pcts, totalTicks: digits.length, qualifies,
-                    detail: `7: ${d7.toFixed(1)}%  |  8: ${d8.toFixed(1)}%  |  9: ${d9.toFixed(1)}%`,
-                });
-            });
-            scanResults.sort((a, b) =>
-                (b.pcts[7] + b.pcts[8] + b.pcts[9]) - (a.pcts[7] + a.pcts[8] + a.pcts[9])
-            );
-            setResults(scanResults);
-            setBestSymbols(best);
-            setScanning(false);
-            setProgress(best.length > 0
-                ? `Found ${best.length} volatility match${best.length > 1 ? 'es' : ''}`
-                : 'No volatility matched all three criteria. Try again.');
-            cleanup();
+            if (data.msg_type === 'candles' && data.candles) {
+                const sym: string = data.echo_req?.ticks_history;
+                if (!sym || !pendingRef.current.has(sym)) return;
+                pendingRef.current.delete(sym);
+                collectedRef.current.set(sym, data.candles);
+                setProgress(`Fetched ${ALL_SYMBOLS.length - pendingRef.current.size} / ${ALL_SYMBOLS.length}…`);
+                if (pendingRef.current.size === 0) finalize();
+            }
         };
 
-        const finalizeRfV4 = () => {
+        const finalize = () => {
             const scanResults: SymbolDirectionResult[] = [];
             collectedRef.current.forEach((candles: any[], sym) => {
                 if (!candles || candles.length < 5) return;
-                const analysis = calcChoppiness(candles);
-                analysis.symbol = sym;
-                analysis.label = SYMBOL_LABELS[sym];
-                scanResults.push(analysis);
+                const a = calcChoppiness(candles);
+                a.symbol = sym; a.label = SYMBOL_LABELS[sym];
+                scanResults.push(a);
             });
-
             scanResults.sort((a, b) => b.choppinessScore - a.choppinessScore);
             const best = scanResults.map(r => r.symbol);
             setResults(scanResults);
-            setBestSymbols(best.slice(0, 3)); // top 3
+            setBestSymbols(best.slice(0, 3));
             setScanning(false);
+            scanningRef.current = false;
 
             const bestSym = best[0] || '';
             const bestLabel = bestSym ? SYMBOL_LABELS[bestSym] : '';
             const bestScore = scanResults[0]?.choppinessScore ?? 0;
 
+            // Auto-switch logic
             if (bestSym && bestSym !== currentBestRef.current && autoSwitchRef.current) {
-                const lastWon = (window as any).__makoti_lastTradeWon;
-                if (lastWon) {
+                if ((window as any).__makoti_lastTradeWon) {
                     applySwitch(bestSym);
                 } else {
                     setPending(bestSym);
@@ -290,163 +240,103 @@ export const Scanner: React.FC = () => {
                 }
             }
 
-            // Apply pending switch when a win arrives
+            // Apply pending when win arrives
             const ps = pendingSymbolRef.current;
             if (ps && (window as any).__makoti_lastTradeWon && autoSwitchRef.current) {
-                if (best.indexOf(ps) >= 0) {
-                    applySwitch(ps);
-                } else {
-                    clearPending();
-                }
+                if (best.indexOf(ps) >= 0) applySwitch(ps);
+                else clearPending();
             }
 
             if (autoSwitchRef.current) {
-                const ps2 = pendingSymbolRef.current;
-                const status = ps2
-                    ? `Pending: ${SYMBOL_LABELS[ps2]} (waiting for win)`
-                    : `Best: ${bestLabel} (${bestScore}%)`;
-                setProgress(`Auto: ${status}`);
-                cleanup(); // close this scan's WS before scheduling next
-                autoIntervalRef.current = setTimeout(() => performScan(true), 3000);
+                const p = pendingSymbolRef.current;
+                setProgress(p ? `Auto: Pending ${SYMBOL_LABELS[p]} (wait win)` : `Auto: Best ${bestLabel} (${bestScore}%)`);
             } else {
-                setProgress(`Top choppy: ${bestLabel} (${bestScore}%)`);
-                cleanup();
+                setProgress(`Top: ${bestLabel} (${bestScore}%)`);
             }
-        };
-
-        const handleMessage = (data: any) => {
-            if (data.error) return;
-
-            if (isTicks && data.msg_type === 'history' && data.history?.prices) {
-                const sym: string = data.echo_req?.ticks_history;
-                if (!sym || !pendingRef.current.has(sym)) return;
-                pendingRef.current.delete(sym);
-                const pip = PIP_SIZES[sym] || 2;
-                const digits = (data.history.prices as (string | number)[])
-                    .map(p => Number(Number(p).toFixed(pip).slice(-1)));
-                collectedRef.current.set(sym, digits);
-                setProgress(`Scanned ${ALL_SYMBOLS.length - pendingRef.current.size} / ${ALL_SYMBOLS.length} volatilities…`);
-                if (pendingRef.current.size === 0) finalizePvty();
-            }
-
-            if (!isTicks && data.msg_type === 'candles' && data.candles) {
-                const sym: string = data.echo_req?.ticks_history;
-                if (!sym || !pendingRef.current.has(sym)) return;
-                pendingRef.current.delete(sym);
-                collectedRef.current.set(sym, data.candles);
-                setProgress(`Scanned ${ALL_SYMBOLS.length - pendingRef.current.size} / ${ALL_SYMBOLS.length} volatilities…`);
-                if (pendingRef.current.size === 0) finalizeRfV4();
-            }
+            cleanup();
         };
 
         const mws = openMakotiWS(
             handleMessage,
             () => {
-                setProgress(isTicks
-                    ? 'Fetching 1 000 ticks from all 10 volatilities…'
-                    : 'Fetching 50 candles from all 10 volatilities…');
-                ALL_SYMBOLS.forEach(sym => {
-                    if (isTicks) {
-                        mws.send({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' });
-                    } else {
-                        mws.send({ ticks_history: sym, count: 50, end: 'latest', style: 'candles', granularity: 60 });
-                    }
-                });
+                setProgress('Fetching 50 candles from all 10 volatilities…');
+                ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 50, end: 'latest', style: 'candles', granularity: 60 }));
             },
             () => {
-                if (pendingRef.current.size > 0 && !isAuto) {
-                    setScanning(false);
-                    setProgress('Connection closed early. Please retry.');
+                if (pendingRef.current.size > 0 && !autoSwitchRef.current) {
+                    setScanning(false); scanningRef.current = false;
+                    setProgress('Connection closed early.');
                 }
             }
         );
         wsRef.current = mws;
-
-        setTimeout(() => {
-            if (pendingRef.current.size > 0) {
-                if (!isAuto) setScanning(false);
-                setProgress(isAuto ? 'Auto-scan timed out.' : 'Scan timed out. Please retry.');
-                if (!isAuto) cleanup();
-            }
-        }, 30000);
-    }, [bot, scanning, cleanup, showNotify, applySwitch, setPending, clearPending]);
+    }, [cleanup, showNotify, applySwitch, setPending, clearPending]);
 
     /* ── Manual analyze button ──────────────────────────────────────────── */
     const analyze = useCallback(() => {
-        if (scanning) return;
+        if (scanningRef.current) return;
         botRef.current = bot;
-        if (autoIntervalRef.current) {
-            clearTimeout(autoIntervalRef.current);
-            autoIntervalRef.current = null;
-        }
+
         if (autoSwitch && bot === 'rf_v4') {
             currentBestRef.current = '';
             clearPending();
-            setAutoSwitcherActive(true);
             autoSwitchRef.current = true;
+            setAutoSwitcherActive(true);
             startPocListener();
-            // Start first scan — finalizeRfV4 will schedule subsequent scans via setTimeout
-            performScan(false);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            intervalRef.current = setInterval(() => performScan(false), 3000);
+            performScan(true); // initial scan with results cleared
         } else {
-            setAutoSwitcherActive(false);
             autoSwitchRef.current = false;
+            setAutoSwitcherActive(false);
             stopPocListener();
-            performScan(false);
+            if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+            performScan(true);
         }
-    }, [bot, scanning, autoSwitch, performScan, clearPending]);
+    }, [bot, autoSwitch, performScan, clearPending]);
 
     /* ── Toggle auto-switcher ───────────────────────────────────────────── */
     const toggleAutoSwitch = useCallback(() => {
         setAutoSwitch(prev => {
-            const next = !prev;
-            if (!next) {
+            if (prev) {
+                autoSwitchRef.current = false;
                 setAutoSwitcherActive(false);
                 clearPending();
-                autoSwitchRef.current = false;
                 currentBestRef.current = '';
                 stopPocListener();
-                if (autoIntervalRef.current) {
-                    clearTimeout(autoIntervalRef.current);
-                    autoIntervalRef.current = null;
-                }
+                if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
             }
-            return next;
+            return !prev;
         });
-    }, []);
+    }, [clearPending]);
 
     useEffect(() => {
         return () => {
             autoSwitchRef.current = false;
             stopPocListener();
-            if (autoIntervalRef.current) clearTimeout(autoIntervalRef.current);
-            try { wsRef.current?.close(); } catch (_) { }
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            try { wsRef.current?.close(); } catch (_) {}
         };
     }, []);
 
     return (
         <div className='mw-scanner'>
             {notification && (
-                <div className={`mw-scanner__notif mw-scanner__notif--${notification.type}`}>
-                    {notification.msg}
-                </div>
+                <div className={`mw-scanner__notif mw-scanner__notif--${notification.type}`}>{notification.msg}</div>
             )}
-
             <div className='mw-scanner__controls'>
                 <div className='mw-field'>
                     <label className='mw-label'>Bot Selection</label>
-                    <select className='mw-select' value={bot}
-                        onChange={e => setBot(e.target.value as BotId)} disabled={scanning}>
+                    <select className='mw-select' value={bot} onChange={e => setBot(e.target.value as BotId)} disabled={scanning}>
                         <option value='pvty_kill'>Poverty Killer</option>
                         <option value='rf_v4'>Rise/Fall V4</option>
                     </select>
                 </div>
-
                 <div className='mw-scanner__desc'>
                     {bot === 'pvty_kill'
-                        ? 'Scans 1 000 ticks per volatility. Finds markets where digits 7, 8 and 9 each exceed 10% — ideal for high-digit strategies.'
-                        : 'Deep candle analysis (50 candles per volatility). Finds markets with choppy/undirectional action — no clear trend, small bodies, alternating direction.'}
+                        ? 'Scans 1 000 ticks per volatility. Finds markets where digits 7, 8 and 9 each exceed 10%.'
+                        : 'Deep candle analysis (50 candles per volatility). Finds choppy/undirectional markets — auto-switches every 3s.'}
                 </div>
-
                 {bot === 'rf_v4' && (
                     <label className='mw-switch-row'>
                         <span className='mw-switch-label'>Auto Switcher</span>
@@ -459,14 +349,11 @@ export const Scanner: React.FC = () => {
                         {pendingSymbol && <span className='mw-switch-pending'>⏳ WIN REQUIRED</span>}
                     </label>
                 )}
-
-                <button className={`mw-btn mw-btn--scan${scanning ? ' mw-btn--busy' : ''}`}
-                    onClick={analyze} disabled={scanning}>
+                <button className={`mw-btn mw-btn--scan${scanning ? ' mw-btn--busy' : ''}`} onClick={analyze} disabled={scanning}>
                     {scanning ? <><span className='mw-spin' /> Analyzing…</> : 'Analyze'}
                 </button>
                 {progress && <div className='mw-scanner__progress'>{progress}</div>}
             </div>
-
             {results.length > 0 && (
                 <div className='mw-scanner__results'>
                     <div className='mw-scanner__results-head'>
@@ -474,54 +361,39 @@ export const Scanner: React.FC = () => {
                             ? 'Digit 7 / 8 / 9 Distribution (1 000 ticks)'
                             : `Choppiness Analysis (50 candles) ${autoSwitcherActive ? '— Auto-switching ON' : ''}`}
                     </div>
-
                     {bestSymbols.length > 0 && (
                         <div className='mw-scanner__best'>
                             <span className='mw-scanner__best-lbl'>Best:</span>
-                            {bestSymbols.map(s => (
-                                <span key={s} className='mw-scanner__badge'>{SYMBOL_LABELS[s]}</span>
-                            ))}
+                            {bestSymbols.map(s => <span key={s} className='mw-scanner__badge'>{SYMBOL_LABELS[s]}</span>)}
                         </div>
                     )}
-
                     <div className='mw-scanner__list'>
                         {results.map((r, idx) => (
-                            <div key={r.symbol}
-                                className={`mw-scanner__row${idx === 0 ? ' mw-scanner__row--match' : ''}`}>
+                            <div key={r.symbol} className={`mw-scanner__row${idx === 0 ? ' mw-scanner__row--match' : ''}`}>
                                 <div className='mw-scanner__row-head'>
                                     <span className='mw-scanner__sym'>{r.label}</span>
                                     <span className='mw-scanner__row-detail'>{r.detail}</span>
                                     {idx === 0 && <span className='mw-scanner__tag'>BEST</span>}
                                 </div>
-
                                 {isDigitResult(r) && (
                                     <div className='mw-scanner__bars'>
                                         {r.pcts.map((p, i) => (
-                                            <div key={i}
-                                                className={`mw-scanner__bar-wrap${[7, 8, 9].includes(i) ? ' mw-scanner__bar-wrap--hi' : ''}`}
-                                                title={`Digit ${i}: ${p.toFixed(2)}%`}>
-                                                <div className='mw-scanner__bar-fill'
-                                                    style={{ height: `${Math.min(100, p * 4)}%` }} />
+                                            <div key={i} className={`mw-scanner__bar-wrap${[7, 8, 9].includes(i) ? ' mw-scanner__bar-wrap--hi' : ''}`} title={`Digit ${i}: ${p.toFixed(2)}%`}>
+                                                <div className='mw-scanner__bar-fill' style={{ height: `${Math.min(100, p * 4)}%` }} />
                                                 <span className='mw-scanner__bar-pct'>{p.toFixed(0)}%</span>
                                                 <span className='mw-scanner__bar-lbl'>{i}</span>
                                             </div>
                                         ))}
                                     </div>
                                 )}
-
                                 {!isDigitResult(r) && (() => {
                                     const dr = r as SymbolDirectionResult;
                                     return (
                                         <div className='mw-scanner__dir-bar'>
-                                            <div className='mw-scanner__dir-fill'
-                                                style={{
-                                                    width: `${dr.choppinessScore}%`,
-                                                    background: dr.choppinessScore >= 70
-                                                        ? 'linear-gradient(90deg, #22c55e, #16a34a)'
-                                                        : dr.choppinessScore >= 55
-                                                            ? 'linear-gradient(90deg, #eab308, #ca8a04)'
-                                                            : 'linear-gradient(90deg, #ef4444, #dc2626)',
-                                                }} />
+                                            <div className='mw-scanner__dir-fill' style={{
+                                                width: `${dr.choppinessScore}%`,
+                                                background: dr.choppinessScore >= 70 ? 'linear-gradient(90deg, #22c55e, #16a34a)' : dr.choppinessScore >= 55 ? 'linear-gradient(90deg, #eab308, #ca8a04)' : 'linear-gradient(90deg, #ef4444, #dc2626)',
+                                            }} />
                                         </div>
                                     );
                                 })()}
