@@ -198,161 +198,113 @@ export interface TradeSignal {
 }
 
 /**
- * Core analysis function. Returns the best trade signal or null if nothing
- * is strong enough. Strategies fire in priority order; the first one that
- * clears its confidence threshold is returned immediately.
- *
- * Minimum history: 30 ticks / 15 prices before any signal fires.
- *
- * v2 improvements:
- *  - Tighter RSI thresholds (25/75 instead of 40/60)
- *  - Higher entry bar: totalVotes >= 5, voteMargin >= 3
- *  - Trend direction filter (EMA50) boosts aligned trades
- *  - EMA21×50 crossover for medium-term momentum
- *  - Simpler digit strategy: only fires with RSI neutral AND strong convergence
- *  - Volatility filter skips very quiet markets
- *  - Reduced streak sensitivity (only >= 5, weight 1 instead of 2)
+ * Micro-timing signal engine optimized for 1-tick Rise/Fall prediction.
+ * Focuses on immediate tick momentum, streak exhaustion, and ultra-short RSI(3).
+ * Requires only 5+ prices (no slow medium-term indicators).
  */
 export function analyzeSignal(ticks: number[], prices: number[]): TradeSignal | null {
-    if (ticks.length < 30 || prices.length < 15) return null;
+    if (prices.length < 5) return null;
 
-    // ── Volatility / range filter — skip if too quiet ─────────────────────
-    const recentPrices = prices.slice(-20);
-    const pxRange = Math.max(...recentPrices) - Math.min(...recentPrices);
-    const avgPx = recentPrices.reduce((a, b) => a + b, 0) / recentPrices.length;
-    if (avgPx > 0 && (pxRange / avgPx) * 100 < 0.008) return null;
+    // ── Micro price action ────────────────────────────────────────────
+    const d1 = prices[prices.length - 1] - prices[prices.length - 2];
+    const d2 = prices[prices.length - 2] - prices[prices.length - 3];
+    const d3 = prices[prices.length - 3] - prices[prices.length - 4];
 
-    // ── Digit distributions ────────────────────────────────────────────────
-    const p20  = digitPcts(ticks, 20);
-    const p50  = digitPcts(ticks, 50);
+    if (d1 === 0) return null; // flat tick → skip
 
-    // ── Price indicators ───────────────────────────────────────────────────
-    const rsi    = calcRSI(prices, 7);
-    const bbPos  = calcBBPosition(prices, 14);
-    const streak = priceStreak(prices.slice(-20));
-    const { hist: macdH, prevHist: macdPrev } = calcMACDHistogram(prices);
-    const macdBull = macdH > 0 && macdPrev <= 0;
-    const macdBear = macdH < 0 && macdPrev >= 0;
-
-    // EMA crossovers
-    let ema9Cross = '', ema50Cross = '';
-    if (prices.length >= 22) {
-        const e9 = calcEMA(prices, 9);
-        const e21 = calcEMA(prices, 21);
-        if (e9.length >= 2 && e21.length >= 2) {
-            const l = e9.length - 1;
-            if (e9[l] > e21[l] && e9[l - 1] <= e21[l - 1]) ema9Cross = 'bull';
-            if (e9[l] < e21[l] && e9[l - 1] >= e21[l - 1]) ema9Cross = 'bear';
-        }
+    // ── Full streak from current tick ─────────────────────────────────
+    const streakDir = d1 > 0 ? 1 : -1;
+    let streakLen = 0;
+    for (let i = prices.length - 1; i > 0; i--) {
+        const d = prices[i] - prices[i - 1];
+        if (d === 0) continue;
+        if ((d > 0 ? 1 : -1) === streakDir) streakLen++;
+        else break;
     }
-    if (prices.length >= 55) {
-        const e21 = calcEMA(prices, 21);
-        const e50 = calcEMA(prices, 50);
-        if (e21.length >= 2 && e50.length >= 2) {
-            const l = e21.length - 1;
-            if (e21[l] > e50[l] && e21[l - 1] <= e50[l - 1]) ema50Cross = 'bull';
-            if (e21[l] < e50[l] && e21[l - 1] >= e50[l - 1]) ema50Cross = 'bear';
-        }
+    const streak = streakLen * streakDir;
+
+    // ── RSI(3) ultra-short ────────────────────────────────────────────
+    const rsi3 = calcRSI(prices, 3);
+
+    // ── Direction-change chop detection ───────────────────────────────
+    const last5Dirs: number[] = [];
+    for (let i = Math.max(0, prices.length - 5); i < prices.length - 1; i++) {
+        const d = prices[i + 1] - prices[i];
+        if (d > 0) last5Dirs.push(1);
+        else if (d < 0) last5Dirs.push(-1);
+    }
+    let dirChanges = 0;
+    for (let i = 1; i < last5Dirs.length; i++) {
+        if (last5Dirs[i] !== last5Dirs[i - 1]) dirChanges++;
     }
 
-    // ── Trend direction (EMA50, at least 55 prices) ────────────────────────
-    let trendDir = 0; // 1 = bullish, -1 = bearish
-    if (prices.length >= 55) {
-        const e50 = calcEMA(prices, 50);
-        const lastPrice = prices[prices.length - 1];
-        const e50v = e50[e50.length - 1];
-        if (e50v != null) trendDir = lastPrice > e50v ? 1 : (lastPrice < e50v ? -1 : 0);
+    // ── Volatility (5-tick normalized range) ───────────────────────────
+    const last5 = prices.slice(-5);
+    const range5 = Math.max(...last5) - Math.min(...last5);
+    const avg5 = last5.reduce((a, b) => a + b, 0) / last5.length;
+    const volPct = avg5 > 0 ? (range5 / avg5) * 100 : 0;
+
+    // ── Micro-timing score ────────────────────────────────────────────
+    let score = 0;
+    const signals: string[] = [];
+
+    // 1. Last tick momentum (+1 for direction)
+    if (d1 > 0) { score += 1; signals.push('↑'); }
+    else if (d1 < 0) { score -= 1; signals.push('↓'); }
+
+    // 2. Continuation bonus (two same-direction ticks)
+    if (d1 > 0 && d2 > 0) { score += (d2 > 0 ? 1 : 0); signals.push('↑↑'); }
+    else if (d1 < 0 && d2 < 0) { score -= 1; signals.push('↓↓'); }
+
+    // 3. Three-peat bonus (strong momentum conviction)
+    if (d1 > 0 && d2 > 0 && d3 > 0) { score += 1; signals.push('↑↑↑'); }
+    else if (d1 < 0 && d2 < 0 && d3 < 0) { score -= 1; signals.push('↓↓↓'); }
+
+    // 4. Streak exhaustion — longer runs increase reversal probability
+    if (streak >= 6) { score -= 2; signals.push(`strk${streak}`); }
+    else if (streak >= 4) { score -= 1; }
+    else if (streak >= 2) { score -= 0; } // mild continuation
+    if (streak <= -6) { score += 2; signals.push(`strk${streak}`); }
+    else if (streak <= -4) { score += 1; }
+    else if (streak <= -2) { score += 0; }
+
+    // 5. RSI(3) micro-reversal — catches immediate oversold/overbought
+    if (rsi3 < 10) { score += 2; signals.push('RSI3↓'); }
+    else if (rsi3 < 20) { score += 1; signals.push('RSI3↓'); }
+    if (rsi3 > 90) { score -= 2; signals.push('RSI3↑'); }
+    else if (rsi3 > 80) { score -= 1; signals.push('RSI3↑'); }
+
+    // 6. Chop filter — reduce conviction in whipsaw markets
+    if (dirChanges >= 3) {
+        if (score > 0) score = Math.max(0, score - 2);
+        else if (score < 0) score = Math.min(0, score + 2);
+        signals.push('chop');
     }
 
-    // ── Composite confluence scoring ───────────────────────────────────────
-    let bullVotes = 0, bearVotes = 0;
-    const bullReasons: string[] = [], bearReasons: string[] = [];
+    // 7. Extreme chop — always skip
+    if (dirChanges >= 4) return null;
 
-    // RSI — tighter thresholds, only strong signals
-    if (rsi < 20)  { bullVotes += 3; bullReasons.push(`RSI ${rsi.toFixed(1)}`); }
-    else if (rsi < 25) { bullVotes += 2; bullReasons.push(`RSI ${rsi.toFixed(1)}`); }
-    if (rsi > 80)  { bearVotes += 3; bearReasons.push(`RSI ${rsi.toFixed(1)}`); }
-    else if (rsi > 75) { bearVotes += 2; bearReasons.push(`RSI ${rsi.toFixed(1)}`); }
+    // ── Entry ─────────────────────────────────────────────────────────
+    if (Math.abs(score) < 3) return null;
 
-    // Bollinger Bands — extreme positions only
-    if (bbPos < 0.08) { bullVotes += 3; bullReasons.push('lower BB'); }
-    else if (bbPos < 0.15) { bullVotes += 2; bullReasons.push('near lower BB'); }
-    if (bbPos > 0.92) { bearVotes += 3; bearReasons.push('upper BB'); }
-    else if (bbPos > 0.85) { bearVotes += 2; bearReasons.push('near upper BB'); }
+    const absScore = Math.abs(score);
+    const volBonus = volPct > 0.05 ? 3 : 0;
+    const conf = Math.min(92, 70 + absScore * 5 + volBonus);
 
-    // MACD
-    if (macdBull) { bullVotes += 2; bullReasons.push('MACD bull cross'); }
-    if (macdBear) { bearVotes += 2; bullReasons.push('MACD bear cross'); }
-    if (macdH > 0 && macdH > macdPrev) { bullVotes += 1; bullReasons.push('MACD rising'); }
-    if (macdH < 0 && macdH < macdPrev) { bearVotes += 1; bullReasons.push('MACD falling'); }
-
-    // EMA crossovers
-    if (ema9Cross === 'bull') { bullVotes += 2; bullReasons.push('EMA9×21 bull'); }
-    if (ema9Cross === 'bear') { bearVotes += 2; bullReasons.push('EMA9×21 bear'); }
-    if (ema50Cross === 'bull') { bullVotes += 2; bullReasons.push('EMA21×50 bull'); }
-    if (ema50Cross === 'bear') { bearVotes += 2; bullReasons.push('EMA21×50 bear'); }
-
-    // Momentum streak — only long streaks, reduced weight
-    if (streak >= 5) { bullVotes += 1; bullReasons.push(`${streak}-up streak`); }
-    if (streak <= -5) { bearVotes += 1; bullReasons.push(`${Math.abs(streak)}-dn streak`); }
-
-    // Trend alignment bonus
-    if (trendDir === 1 && bullVotes > 0) { bullVotes += 1; bullReasons.push('uptrend'); }
-    if (trendDir === -1 && bearVotes > 0) { bearVotes += 1; bearReasons.push('downtrend'); }
-
-    // ── RISE / FALL — higher bar ───────────────────────────────────────────
-    const voteMargin = Math.abs(bullVotes - bearVotes);
-    const totalVotes = bullVotes + bearVotes;
-
-    if (bullVotes > bearVotes && totalVotes >= 5 && voteMargin >= 3) {
-        const conf = Math.min(88, 72 + bullVotes * 2 + voteMargin);
+    if (score > 0) {
         return {
             contract_type: 'CALL', barrier: '',
             confidence: conf,
-            reason: `RISE — ${bullReasons.join(', ')}`,
-            indicators: bullReasons.join(' | '),
+            reason: `RISE ${signals.join(' ')}`,
+            indicators: `s${score} r3:${rsi3.toFixed(0)} stk:${streak}`,
         };
     }
-
-    if (bearVotes > bullVotes && totalVotes >= 5 && voteMargin >= 3) {
-        const conf = Math.min(88, 72 + bearVotes * 2 + voteMargin);
-        return {
-            contract_type: 'PUT', barrier: '',
-            confidence: conf,
-            reason: `FALL — ${bearReasons.join(', ')}`,
-            indicators: bearReasons.join(' | '),
-        };
-    }
-
-    // ── OVER / UNDER — digit-based, only when RSI neutral ─────────────────
-    if (rsi >= 40 && rsi <= 60) {
-        const hi69_20 = p20[6] + p20[7] + p20[8] + p20[9];
-        const hi69_50 = p50[6] + p50[7] + p50[8] + p50[9];
-        const lo03_20 = p20[0] + p20[1] + p20[2] + p20[3];
-        const lo03_50 = p50[0] + p50[1] + p50[2] + p50[3];
-
-        if (hi69_50 > 56 && hi69_20 > 52) {
-            const conf = Math.min(84, 70 + (hi69_50 - 50));
-            return {
-                contract_type: 'DIGITOVER', barrier: '5',
-                confidence: conf,
-                reason: `Digits 6-9: ${hi69_20.toFixed(0)}%/20t · ${hi69_50.toFixed(0)}%/50t — OVER 5`,
-                indicators: 'Digit HIGH + RSI neutral',
-            };
-        }
-
-        if (lo03_50 > 56 && lo03_20 > 52) {
-            const conf = Math.min(84, 70 + (lo03_50 - 50));
-            return {
-                contract_type: 'DIGITUNDER', barrier: '4',
-                confidence: conf,
-                reason: `Digits 0-3: ${lo03_20.toFixed(0)}%/20t · ${lo03_50.toFixed(0)}%/50t — UNDER 4`,
-                indicators: 'Digit LOW + RSI neutral',
-            };
-        }
-    }
-
-    return null;
+    return {
+        contract_type: 'PUT', barrier: '',
+        confidence: conf,
+        reason: `FALL ${signals.join(' ')}`,
+        indicators: `s${score} r3:${rsi3.toFixed(0)} stk:${streak}`,
+    };
 }
 
 // ─── Digit pct helper (used by scanner) ──────────────────────────────────────

@@ -213,6 +213,15 @@ export const MarketKiller: React.FC = () => {
         const signal = analyzeSignal(sd.ticks, sd.prices);
         if (!signal || signal.confidence < CONFIDENCE_THRESHOLD) return;
 
+        // Micro-trend entry gate: skip if last 3 ticks contradict the trade direction
+        const last3 = sd.prices.slice(-3);
+        if (last3.length === 3) {
+            const rising = last3[0] < last3[1] && last3[1] < last3[2];
+            const falling = last3[0] > last3[1] && last3[1] > last3[2];
+            if (signal.contract_type === 'CALL' && falling) return;
+            if (signal.contract_type === 'PUT' && rising) return;
+        }
+
         // Acquire global lock
         globalLock.current = true;
         activeContractsRef.current = 1;
