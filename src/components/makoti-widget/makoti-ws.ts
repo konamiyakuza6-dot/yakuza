@@ -334,15 +334,10 @@ export interface TradeSignal {
 /**
  * Core analysis function — v3 multi-strategy consensus.
  * Runs three independent strategies (momentum, mean reversion, pattern)
- * and requires at least 2/3 to agree with score >= 2 each.
- * ADX filters out weak/no-trend zones (ADX 15-25).
+ * and requires all 3 to agree with score >= 3 each.
  */
 export function analyzeSignal(ticks: number[], prices: number[]): TradeSignal | null {
     if (ticks.length < 30 || prices.length < 15) return null;
-
-    // ADX regime — skip weak/no-trend zone
-    const adx = calcADX(prices, 14);
-    const inWeakZone = adx > 0 && adx < 25;
 
     // Run three strategies
     const momentum = momentumStrategy(prices);
@@ -357,10 +352,10 @@ export function analyzeSignal(ticks: number[], prices: number[]): TradeSignal | 
     const bullReasons: string[] = [], bearReasons: string[] = [];
 
     strategies.forEach((s, i) => {
-        if (s.direction === 'bull' && s.score >= 2) {
+        if (s.direction === 'bull' && s.score >= 3) {
             bullCount++; totalBullScore += s.score; bullReasons.push(stratNames[i]);
         }
-        if (s.direction === 'bear' && s.score >= 2) {
+        if (s.direction === 'bear' && s.score >= 3) {
             bearCount++; totalBearScore += s.score; bearReasons.push(stratNames[i]);
         }
     });
@@ -369,27 +364,25 @@ export function analyzeSignal(ticks: number[], prices: number[]): TradeSignal | 
         `${stratNames[i]}:${s.direction === 'neutral' ? '—' : s.direction}(${s.score})`
     ).join(' ');
 
-    // Bull consensus: >=2 strategies agree, outvote bear
-    if (bullCount >= 2 && bullCount > bearCount) {
-        if (inWeakZone && totalBullScore < 6) return null;
-        const conf = Math.min(92, 70 + totalBullScore * 4 + (bullCount - 1) * 5);
+    // Bull consensus: all 3 strategies agree, outvote bear
+    if (bullCount >= 3) {
+        const conf = Math.min(95, 75 + totalBullScore * 3 + (bullCount - 1) * 5);
         return {
             contract_type: 'CALL', barrier: '',
             confidence: conf,
             reason: `RISE — ${bullReasons.join(', ')} agree`,
-            indicators: `ADX ${adx.toFixed(0)} | ${consensusDisplay}`,
+            indicators: consensusDisplay,
         };
     }
 
-    // Bear consensus
-    if (bearCount >= 2 && bearCount > bullCount) {
-        if (inWeakZone && totalBearScore < 6) return null;
-        const conf = Math.min(92, 70 + totalBearScore * 4 + (bearCount - 1) * 5);
+    // Bear consensus: all 3 strategies agree
+    if (bearCount >= 3) {
+        const conf = Math.min(95, 75 + totalBearScore * 3 + (bearCount - 1) * 5);
         return {
             contract_type: 'PUT', barrier: '',
             confidence: conf,
             reason: `FALL — ${bearReasons.join(', ')} agree`,
-            indicators: `ADX ${adx.toFixed(0)} | ${consensusDisplay}`,
+            indicators: consensusDisplay,
         };
     }
 
