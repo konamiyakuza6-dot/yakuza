@@ -99,7 +99,7 @@ function calcChoppiness(candles: any[]): SymbolDirectionResult {
         directionChanges,
         trendStrength: Math.round(trendStrength * 100),
         recentBodyRatio: Math.round(avgRecentBodyRatio * 100),
-        qualifies: choppinessScore >= 55,
+        qualifies: true, // always qualifies — we always pick the best
         detail: `Choppy: ${Math.round(choppinessScore)}% | Body ${Math.round(avgBodyRatio * 100)}% | Δ ${directionChanges}/${lookback - 1} | Trend ${Math.round(trendStrength * 100)}%`,
     };
 }
@@ -147,6 +147,7 @@ export const Scanner: React.FC = () => {
     const autoSwitchRef = useRef(false);
     const autoIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentBestRef = useRef<string>('');
+    const pendingSymbolRef = useRef<string>('');
 
     const showNotify = useCallback((msg: string, type: 'info' | 'success' | 'warn' = 'info') => {
         setNotification({ msg, type });
@@ -163,9 +164,19 @@ export const Scanner: React.FC = () => {
     }, []);
 
     /* ── Apply a pending or immediate switch ───────────────────────────── */
+    const setPending = useCallback((sym: string) => {
+        setPendingSymbol(sym);
+        pendingSymbolRef.current = sym;
+    }, []);
+
+    const clearPending = useCallback(() => {
+        setPendingSymbol('');
+        pendingSymbolRef.current = '';
+    }, []);
+
     const applySwitch = useCallback((sym: string) => {
         currentBestRef.current = sym;
-        setPendingSymbol('');
+        clearPending();
         try {
             window.DBot = window.DBot || {};
             (window.DBot as any).__force_symbol = sym;
@@ -220,58 +231,55 @@ export const Scanner: React.FC = () => {
 
         const finalizeRfV4 = () => {
             const scanResults: SymbolDirectionResult[] = [];
-            const best: string[] = [];
             collectedRef.current.forEach((candles: any[], sym) => {
                 if (!candles || candles.length < 5) return;
                 const analysis = calcChoppiness(candles);
                 analysis.symbol = sym;
                 analysis.label = SYMBOL_LABELS[sym];
-                if (analysis.qualifies) best.push(sym);
                 scanResults.push(analysis);
             });
 
             scanResults.sort((a, b) => b.choppinessScore - a.choppinessScore);
+            const best = scanResults.map(r => r.symbol);
             setResults(scanResults);
-            setBestSymbols(best);
+            setBestSymbols(best.slice(0, 3)); // top 3
             setScanning(false);
 
-            const bestSym = best.length > 0 ? best[0] : '';
+            const bestSym = best[0] || '';
+            const bestLabel = bestSym ? SYMBOL_LABELS[bestSym] : '';
+            const bestScore = scanResults[0]?.choppinessScore ?? 0;
+
             if (bestSym && bestSym !== currentBestRef.current && autoSwitchRef.current) {
                 const lastWon = (window as any).__makoti_lastTradeWon;
                 if (lastWon) {
                     applySwitch(bestSym);
                 } else {
-                    // Store as pending — wait for a win
-                    setPendingSymbol(bestSym);
-                    showNotify(`Waiting for win before switching to ${SYMBOL_LABELS[bestSym]}…`, 'warn');
+                    setPending(bestSym);
+                    showNotify(`Waiting for win before switching to ${bestLabel}…`, 'warn');
                 }
             }
 
-            // Also check if we can apply a pending switch
-            const pending = pendingSymbol;
-            if (pending && (window as any).__makoti_lastTradeWon && autoSwitchRef.current) {
-                const bestNow = best.length > 0 ? best[0] : '';
-                if (bestNow === pending || (bestNow && best.indexOf(pending) >= 0)) {
-                    applySwitch(pending);
-                } else if (!bestNow) {
-                    setPendingSymbol('');
+            // Apply pending switch when a win arrives
+            const ps = pendingSymbolRef.current;
+            if (ps && (window as any).__makoti_lastTradeWon && autoSwitchRef.current) {
+                if (best.indexOf(ps) >= 0) {
+                    applySwitch(ps);
+                } else {
+                    clearPending();
                 }
             }
 
             if (isAuto) {
-                const status = pendingSymbol
-                    ? `Pending: ${SYMBOL_LABELS[pendingSymbol]} (waiting for win)`
-                    : bestSym
-                        ? `Active: ${SYMBOL_LABELS[bestSym]}`
-                        : 'No match';
+                const ps2 = pendingSymbolRef.current;
+                const status = ps2
+                    ? `Pending: ${SYMBOL_LABELS[ps2]} (waiting for win)`
+                    : `Best: ${bestLabel} (${bestScore}%)`;
                 setProgress(`Auto: ${status}`);
                 if (autoSwitchRef.current) {
                     autoIntervalRef.current = setTimeout(() => performScan(true), 30000);
                 }
             } else {
-                setProgress(best.length > 0
-                    ? `Found ${best.length} choppy match${best.length > 1 ? 'es' : ''}`
-                    : 'No clear sideways volatility found. Try again.');
+                setProgress(`Top choppy: ${bestLabel} (${bestScore}%)`);
             }
             if (!isAuto) cleanup();
         };
@@ -331,7 +339,7 @@ export const Scanner: React.FC = () => {
                 if (!isAuto) cleanup();
             }
         }, 30000);
-    }, [bot, scanning, cleanup, showNotify, applySwitch]);
+    }, [bot, scanning, cleanup, showNotify, applySwitch, setPending, clearPending]);
 
     /* ── Manual analyze button ──────────────────────────────────────────── */
     const analyze = useCallback(() => {
@@ -343,7 +351,7 @@ export const Scanner: React.FC = () => {
         }
         if (autoSwitch && bot === 'rf_v4') {
             currentBestRef.current = '';
-            setPendingSymbol('');
+            clearPending();
             setAutoSwitcherActive(true);
             autoSwitchRef.current = true;
             startPocListener();
@@ -366,7 +374,7 @@ export const Scanner: React.FC = () => {
             const next = !prev;
             if (!next) {
                 setAutoSwitcherActive(false);
-                setPendingSymbol('');
+                clearPending();
                 autoSwitchRef.current = false;
                 currentBestRef.current = '';
                 stopPocListener();
@@ -450,13 +458,13 @@ export const Scanner: React.FC = () => {
                     )}
 
                     <div className='mw-scanner__list'>
-                        {results.map(r => (
+                        {results.map((r, idx) => (
                             <div key={r.symbol}
-                                className={`mw-scanner__row${r.qualifies ? ' mw-scanner__row--match' : ''}`}>
+                                className={`mw-scanner__row${idx === 0 ? ' mw-scanner__row--match' : ''}`}>
                                 <div className='mw-scanner__row-head'>
                                     <span className='mw-scanner__sym'>{r.label}</span>
                                     <span className='mw-scanner__row-detail'>{r.detail}</span>
-                                    {r.qualifies && <span className='mw-scanner__tag'>MATCH</span>}
+                                    {idx === 0 && <span className='mw-scanner__tag'>BEST</span>}
                                 </div>
 
                                 {isDigitResult(r) && (
