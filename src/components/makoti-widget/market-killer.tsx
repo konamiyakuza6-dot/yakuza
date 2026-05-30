@@ -77,6 +77,10 @@ export const MarketKiller: React.FC = () => {
     const globalStakeRef     = useRef(0.35);
     const contractMapRef     = useRef<Map<string, { symbol: string; stake: number }>>(new Map());
 
+    // Loss cooldown: after 3 consecutive losses, skip 8 ticks
+    const consecutiveLossesRef = useRef(0);
+    const cooldownTicksRef     = useRef(0);
+
     /* ── Persist logs to localStorage whenever they change ─────────────── */
     useEffect(() => {
         saveLogs(logs);
@@ -112,16 +116,21 @@ export const MarketKiller: React.FC = () => {
 
                 if (won) {
                     sd.wins++;
-                    // Win → reset GLOBAL stake back to base
+                    consecutiveLossesRef.current = 0;
+                    cooldownTicksRef.current = 0;
                     globalStakeRef.current = stakeParsed.current;
                     addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake reset to $${stakeParsed.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
                 } else {
                     sd.losses++;
-                    // Loss → multiply GLOBAL stake
+                    consecutiveLossesRef.current++;
                     globalStakeRef.current = Math.min(
                         Number((tradeStake * martingaleParsed.current).toFixed(2)),
                         100
                     );
+                    if (consecutiveLossesRef.current >= 3) {
+                        cooldownTicksRef.current = 8;
+                        addLog(`⚠ ${consecutiveLossesRef.current} consecutive losses — cooldown ${cooldownTicksRef.current} ticks`, 'loss');
+                    }
                     addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake $${globalStakeRef.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
                 }
 
@@ -267,6 +276,7 @@ export const MarketKiller: React.FC = () => {
     const onTickReceived = useCallback(() => {
         if (!runningRef.current) return;
         if (globalLock.current)  return;
+        if (cooldownTicksRef.current > 0) { cooldownTicksRef.current--; return; }
 
         let bestSym  = '';
         let bestConf = CONFIDENCE_THRESHOLD - 1;
@@ -299,6 +309,8 @@ export const MarketKiller: React.FC = () => {
         globalLock.current       = false;
         activeContractsRef.current = 0;
         globalStakeRef.current   = stakeVal;   // reset global stake to base
+        consecutiveLossesRef.current = 0;
+        cooldownTicksRef.current     = 0;
 
         setPnl(0);
         setActiveContracts(0);
@@ -403,16 +415,21 @@ export const MarketKiller: React.FC = () => {
 
                     if (won) {
                         sd.wins++;
-                        // Win → reset GLOBAL stake back to base
+                        consecutiveLossesRef.current = 0;
+                        cooldownTicksRef.current = 0;
                         globalStakeRef.current = stakeParsed.current;
                         addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake reset to $${stakeParsed.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
                     } else {
                         sd.losses++;
-                        // Loss → multiply GLOBAL stake (applies to the NEXT trade on ANY symbol)
+                        consecutiveLossesRef.current++;
                         globalStakeRef.current = Math.min(
                             Number((tradeStake * martingaleParsed.current).toFixed(2)),
                             100
                         );
+                        if (consecutiveLossesRef.current >= 3) {
+                            cooldownTicksRef.current = 8;
+                            addLog(`⚠ ${consecutiveLossesRef.current} consecutive losses — cooldown ${cooldownTicksRef.current} ticks`, 'loss');
+                        }
                         addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake $${globalStakeRef.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
                     }
 
