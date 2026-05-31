@@ -1,8 +1,17 @@
 @use 'components/shared/styles/constants' as *;
 @use 'components/shared/styles/mixins' as *;
 
+// Cool glow pulse animation for active tab
+@keyframes tabGlow {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 14px rgba(0, 124, 240, 0.9), 0 0 28px rgba(0, 223, 216, 0.9), 0 0 40px rgba(0, 124, 240, 0.3);
+    }
+}
+
 .run-panel {
-    // fix for the RTL issue on tab active line
     .dc-tabs__active-line {
         right: auto;
     }
@@ -76,14 +85,17 @@
             }
 
             &__active {
-                background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient for active tab
-                box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important; // Matching cool shadow
-                color: #ffffff !important; // White text for active tab
+                background: linear-gradient(145deg, #007cf0, #00dfd8) !important;
+                box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important;
+                color: #ffffff !important;
                 position: relative;
                 border-radius: 4px !important;
                 margin: 0 0.25rem !important;
                 padding: 0.5rem 1rem !important;
                 border: none !important;
+                border-bottom: none !important;
+                overflow: hidden;
+                animation: tabGlow 3s ease-in-out infinite;
 
                 // active text/icon color - white
                 * {
@@ -1008,12 +1020,14 @@
         filter: none !important;
     }
 
-    // Active tab - lighter brown background with white text
     &.dc-tabs__active {
-        background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient
-        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important; // Matching cool shadow
-        color: #ffffff !important; // White text
+        background: linear-gradient(145deg, #007cf0, #00dfd8) !important;
+        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important;
+        color: #ffffff !important;
         font-weight: bold !important;
+        border-bottom: none !important;
+        overflow: hidden;
+        animation: tabGlow 3s ease-in-out infinite;
         font-family:
             Arial,
             Helvetica,
@@ -1153,8 +1167,11 @@
     &.dc-tabs__active {
         color: #ffffff !important;
         font-weight: bold !important;
-        background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient
-        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important; // Matching cool shadow
+        background: linear-gradient(145deg, #007cf0, #00dfd8) !important;
+        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important;
+        border-bottom: none !important;
+        overflow: hidden;
+        animation: tabGlow 3s ease-in-out infinite;
 
         span,
         div,
@@ -1214,8 +1231,11 @@ body.theme--dark .dc-tabs__item {
     &.dc-tabs__active {
         color: #ffffff !important;
         font-weight: bold !important;
-        background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient
-        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important; // Matching cool shadow
+        background: linear-gradient(145deg, #007cf0, #00dfd8) !important;
+        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important;
+        border-bottom: none !important;
+        overflow: hidden;
+        animation: tabGlow 3s ease-in-out infinite;
 
         span,
         div,
