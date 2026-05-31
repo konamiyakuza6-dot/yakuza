@@ -229,41 +229,17 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                         })()}
                     <AccountSwitcher activeAccount={activeAccount} />
                     {isDesktop &&
-                        (has_wallet ? (
-                            <Button
-                                className='manage-funds-button'
-                                has_effect
-                                text={localize('Manage funds')}
-                                onClick={() => {
-                                    let redirect_url = new URL(standalone_routes.wallets_transfer);
-                                    const is_hub_enabled_country = hubEnabledCountryList.includes(
-                                        client?.residence || ''
-                                    );
-                                    if (is_hub_enabled_country) {
-                                        redirect_url = new URL(standalone_routes.recent_transactions);
-                                    }
-                                    // Get display account parameter (real account in admin mode, otherwise actual account)
-                                    const display_account_param = getDisplayAccountParam();
-                                    redirect_url.searchParams.set('account', display_account_param);
-                                    window.location.assign(redirect_url.toString());
-                                }}
-                                primary
-                            />
-                        ) : (
-                            <Button
-                                primary
-                                onClick={() => {
-                                    const redirect_url = new URL(standalone_routes.cashier_deposit);
-                                    if (currency) {
-                                        redirect_url.searchParams.set('account', currency);
-                                    }
-                                    window.location.assign(redirect_url.toString());
-                                }}
-                                className='deposit-button'
-                            >
-                                {localize('Deposit')}
-                            </Button>
-                        ))}
+                        <Button
+                            className='deposit-button'
+                            style={{ fontSize: '11px', whiteSpace: 'nowrap' }}
+                            onClick={() => {
+                                window.location.assign('https://dp2p.deriv.com/?lang=en');
+                            }}
+                            primary
+                        >
+                            {localize('Deposit or withdraw')}
+                        </Button>
+                    }
                 </>
             );
         } else {
