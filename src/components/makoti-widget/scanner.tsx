@@ -38,13 +38,13 @@ function calcDigitPcts(digits: number[]): number[] {
     return counts.map(c => (c / total) * 100);
 }
 
-/* ── Deep choppiness analysis ────────────────────────────────────────────── */
+/* ── Deep choppiness analysis (7-candle window) ──────────────────────────── */
 // Analyzes both the line chart (close prices) and candlestick patterns to
 // detect markets that are struggling to find direction — choppy, indecisive,
 // no sustained momentum. Returns a 0–100 choppiness score (higher = more
 // directionless / random).
 function calcChoppiness(candles: any[]): SymbolDirectionResult {
-    const lookback = Math.min(50, candles.length);
+    const lookback = Math.min(7, candles.length);
     const recent = candles.slice(-lookback);
 
     const closes = recent.map(c => Number(c.close));
@@ -273,8 +273,12 @@ export const Scanner: React.FC = () => {
         setProgress('Connecting to Deriv API…');
         if (initial) { setResults([]); setBestSymbols([]); }
 
+        let finalized = false;
         pendingRef.current = new Set(ALL_SYMBOLS);
         collectedRef.current = new Map();
+        const scanTimeout = setTimeout(() => {
+            if (!finalized) finalize();
+        }, 8000);
         cleanup(); // close previous WS
 
         const handleMessage = (data: any) => {
@@ -286,11 +290,14 @@ export const Scanner: React.FC = () => {
                 pendingRef.current.delete(sym);
                 collectedRef.current.set(sym, data.candles);
                 setProgress(`Fetched ${ALL_SYMBOLS.length - pendingRef.current.size} / ${ALL_SYMBOLS.length}…`);
-                if (pendingRef.current.size === 0) finalize();
+                if (pendingRef.current.size === 0 && !finalized) { clearTimeout(scanTimeout); finalize(); }
             }
         };
 
         const finalize = () => {
+            if (finalized) return;
+            finalized = true;
+            clearTimeout(scanTimeout);
             const scanResults: SymbolDirectionResult[] = [];
             collectedRef.current.forEach((candles: any[], sym) => {
                 if (!candles || candles.length < 5) return;
@@ -338,14 +345,11 @@ export const Scanner: React.FC = () => {
         const mws = openMakotiWS(
             handleMessage,
             () => {
-                setProgress('Fetching 50 candles from all 10 volatilities…');
-                ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 50, end: 'latest', style: 'candles', granularity: 60 }));
+                setProgress('Fetching 7 candles from all 10 volatilities…');
+                ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 7, end: 'latest', style: 'candles', granularity: 60 }));
             },
             () => {
-                if (pendingRef.current.size > 0 && !autoSwitchRef.current) {
-                    setScanning(false); scanningRef.current = false;
-                    setProgress('Connection closed early.');
-                }
+                if (pendingRef.current.size > 0) finalize();
             }
         );
         wsRef.current = mws;
@@ -414,7 +418,7 @@ export const Scanner: React.FC = () => {
                 <div className='mw-scanner__desc'>
                     {bot === 'pvty_kill'
                         ? 'Scans 1 000 ticks per volatility. Finds markets where digits 7, 8 and 9 each exceed 10%.'
-                        : 'Deep candle analysis (50 candles per volatility). Finds choppy/undirectional markets — auto-switches every 3s.'}
+                        : 'Analyses 7 candles per volatility (1 min). Finds choppy/undirectional markets — auto-switches every 3s.'}
                 </div>
                 {bot === 'rf_v4' && (
                     <label className='mw-switch-row'>
@@ -438,7 +442,7 @@ export const Scanner: React.FC = () => {
                     <div className='mw-scanner__results-head'>
                         {bot === 'pvty_kill'
                             ? 'Digit 7 / 8 / 9 Distribution (1 000 ticks)'
-                            : `Choppiness Analysis (50 candles) ${autoSwitcherActive ? '— Auto-switching ON' : ''}`}
+                                                         : `Choppiness Analysis (7 candles) ${autoSwitcherActive ? '— Auto-switching ON' : ''}`}
                     </div>
                     {bestSymbols.length > 0 && (
                         <div className='mw-scanner__best'>
