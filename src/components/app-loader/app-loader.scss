@@ -170,7 +170,7 @@
     bottom: 0;
     width: 0;
     background: linear-gradient(90deg, rgba(249,115,22,0.3), rgba(249,115,22,0.1));
-    animation: trackFill 3.5s ease-in-out forwards;
+    animation: trackFill 5.5s ease-in-out forwards;
 }
 
 @keyframes trackFill {
@@ -219,7 +219,7 @@
     bottom: 20px;
     left: 2%;
     z-index: 7;
-    animation: run 3.5s ease-in-out forwards;
+    animation: run 5.5s ease-in-out forwards;
 }
 
 @keyframes run {

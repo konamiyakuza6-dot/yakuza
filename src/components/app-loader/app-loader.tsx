@@ -28,7 +28,7 @@ const SUBTITLES = [
     '> ALMOST READY...',
 ];
 
-const DURATION = 4000;
+const DURATION = 6000;
 
 const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
     const [show, setShow] = useState(true);
@@ -45,7 +45,7 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
     useEffect(() => {
         const subInterval = setInterval(() => {
             setSubIndex(prev => Math.min(prev + 1, SUBTITLES.length - 1));
-        }, 900);
+        }, 1200);
 
         const timer = setTimeout(() => {
             setShow(false);
