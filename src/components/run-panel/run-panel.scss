@@ -175,66 +175,48 @@
 
         .dc-tabs {
             &__list {
-                background: #2a261f !important; // Match main tabs goldish-brown
+                background: linear-gradient(135deg, #f97316 0%, #ef4444 100%) !important;
+                gap: 0.5rem;
+                padding: 0.3rem 0.5rem;
+                border: none !important;
             }
 
             &__item {
                 overflow: hidden;
                 text-overflow: ellipsis;
-                padding: 0 0.8rem;
+                padding: 0.4rem 0.8rem;
                 background-color: transparent !important;
+                border: none !important;
+                border-radius: 6px !important;
 
-                // Theme-responsive text color
-                color: var(--text-prominent) !important;
-                font-weight: bold !important;
+                color: rgba(255,255,255,0.85) !important;
+                font-weight: 500 !important;
 
                 * {
-                    color: var(--text-prominent) !important;
-                    font-weight: bold !important;
+                    color: rgba(255,255,255,0.85) !important;
+                    font-weight: 500 !important;
                 }
 
-                span,
-                div,
-                p,
-                label {
-                    color: var(--text-prominent) !important;
-                    font-weight: bold !important;
-                }
-
-                // Specifically target non-active tabs
                 &:not(.dc-tabs__active) {
-                    color: var(--text-prominent) !important;
-                    font-weight: bold !important;
+                    color: rgba(255,255,255,0.85) !important;
+                    font-weight: 500 !important;
 
                     * {
-                        color: var(--text-prominent) !important;
-                        font-weight: bold !important;
-                    }
-
-                    span,
-                    div,
-                    p,
-                    label {
-                        color: var(--text-prominent) !important;
-                        font-weight: bold !important;
+                        color: rgba(255,255,255,0.85) !important;
+                        font-weight: 500 !important;
                     }
                 }
             }
 
             &__active {
-                color: var(--text-prominent) !important;
+                background: linear-gradient(145deg, #007cf0, #00dfd8) !important;
+                color: #ffffff !important;
                 font-weight: bold !important;
+                border: none !important;
+                border-radius: 6px !important;
 
                 * {
-                    color: var(--text-prominent) !important;
-                    font-weight: bold !important;
-                }
-
-                span,
-                div,
-                p,
-                label {
-                    color: var(--text-prominent) !important;
+                    color: #ffffff !important;
                     font-weight: bold !important;
                 }
             }

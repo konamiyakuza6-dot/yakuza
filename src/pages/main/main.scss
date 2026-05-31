@@ -120,22 +120,21 @@
 
             &__list {
                 background: linear-gradient(135deg, #f97316 0%, #ef4444 100%) !important;
-                justify-content: flex-start; // Start from left like friend's design
-                border-bottom: none !important; // Remove border
-                padding: 0; // Remove all padding to eliminate space
-                margin: 0; // Remove any margins
-                gap: 0; // Remove gaps between items
+                justify-content: flex-start;
+                border-bottom: none !important;
+                padding: 0.3rem 0.5rem;
+                margin: 0;
+                gap: 0.5rem;
 
-                // Override tab width calculation to be more compact
                 .dc-tabs__item {
-                    width: auto !important; // Let tabs size naturally
-                    padding: 0.5rem 1.2rem !important; // Padding for all tabs
-                    margin: 0.25rem 0.25rem !important; // Small margin for spacing
-                    flex-shrink: 0; // Prevent shrinking
-                    border-radius: 8px !important; // Rounded corners for all tabs
-                    transition: background-color 0.2s ease !important; // Smooth transition
-                    color: #ffffff !important; // White text for all navigation items
-                    border-right: 1px solid #4a4132 !important; // Boundary line between tabs
+                    width: auto !important;
+                    padding: 0.5rem 1.2rem !important;
+                    margin: 0 !important;
+                    flex-shrink: 0;
+                    border-radius: 8px !important;
+                    transition: background-color 0.2s ease !important;
+                    color: #ffffff !important;
+                    border: none !important;
 
                     &:last-child {
                         border-right: none !important; // No boundary on the last tab
