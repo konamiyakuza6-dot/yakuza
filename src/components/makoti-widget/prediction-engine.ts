@@ -2303,6 +2303,53 @@ function flipType(t: ContractType): ContractType {
     }
 }
 
+/** 
+ * Pick the best tick duration (1-5) based on historical directional consistency.
+ * For each duration D, checks: over recent ticks, how often did the predicted
+ * direction hold true over D-tick intervals?  Picks the D with the highest 
+ * reliability so the contract duration matches the market's natural timeframe.
+ */
+export function findBestDuration(
+    prices: number[],
+    direction: 'CALL' | 'PUT',
+    maxDuration = 5,
+): number {
+    if (prices.length < 10) return 1;
+
+    // Use up to 40 ticks of recent data, adjust lookback based on duration
+    let bestD = 1;
+    let bestScore = -Infinity;
+
+    for (let d = 1; d <= maxDuration; d++) {
+        const step = Math.max(1, d);
+        const maxSamples = Math.min(30, Math.floor((prices.length - 1) / step));
+        if (maxSamples < 3) continue;
+
+        let correct = 0, total = 0;
+        // Walk backwards through prices checking D-tick intervals
+        for (let i = prices.length - 1; i >= step && total < maxSamples; i -= step) {
+            const actualUp = prices[i] > prices[i - step];
+            if ((direction === 'CALL' && actualUp) || (direction === 'PUT' && !actualUp)) {
+                correct++;
+            }
+            total++;
+        }
+
+        if (total === 0) continue;
+        const accuracy = correct / total;
+
+        // Score = accuracy% + small bonus for shorter durations (less exposure)
+        const score = accuracy * 100 + (maxDuration - d) * 0.5;
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestD = d;
+        }
+    }
+
+    return bestD;
+}
+
 export function analyzeSignals(
     ticks: number[],
     prices: number[],

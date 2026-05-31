@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
-import { analyzeSignals, recordOutcome, ContractType, TradeSignal } from './prediction-engine';
+import { analyzeSignals, findBestDuration, recordOutcome, ContractType, TradeSignal } from './prediction-engine';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
@@ -78,8 +78,6 @@ export const MarketKiller: React.FC = () => {
     const consecutiveLossesRef = useRef(0);
     const cooldownTicksRef     = useRef(0);
     const signalHistoryRef     = useRef<{ sym: string; type: string; conf: number }[]>([]);
-    const durationStatsRef   = useRef<Record<number, { wins: number; losses: number }>>({ 1: {w:0,l:0}, 2: {w:0,l:0}, 3: {w:0,l:0}, 4: {w:0,l:0}, 5: {w:0,l:0} });
-    const nextTestDurationRef = useRef(1);
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
@@ -111,12 +109,6 @@ export const MarketKiller: React.FC = () => {
 
                 // Record outcome for each strategy that contributed
                 strategyNames.forEach(n => recordOutcome(n, won));
-
-                // Track duration performance
-                if (duration >= 1 && duration <= 5) {
-                    const ds = durationStatsRef.current[duration];
-                    if (won) ds.w++; else ds.l++;
-                }
 
                 pnlRef.current += profit;
                 setPnl(pnlRef.current);
@@ -200,26 +192,9 @@ export const MarketKiller: React.FC = () => {
         addLog('Market Killer stopped.', 'info');
     }, [addLog]);
 
-    /* ── Auto-detect best tick duration (1-5) based on recent win rates ──── */
-    const MIN_TRADES_PER_DURATION = 3;
-    const pickBestDuration = useCallback((): number => {
-        const stats = durationStatsRef.current;
-        let allTested = true;
-        let bestD = 1, bestRate = 0;
-        for (let d = 1; d <= 5; d++) {
-            const total = stats[d].w + stats[d].l;
-            if (total < MIN_TRADES_PER_DURATION) allTested = false;
-            if (total >= MIN_TRADES_PER_DURATION) {
-                const rate = stats[d].w / total;
-                if (rate > bestRate) { bestRate = rate; bestD = d; }
-            }
-        }
-        if (!allTested) {
-            const d = nextTestDurationRef.current;
-            nextTestDurationRef.current = (d % 5) + 1;
-            return d;
-        }
-        return bestD;
+    /* ── Auto-detect best tick duration (1-5) by analyzing price history ──── */
+    const getBestDuration = useCallback((prices: number[], direction: 'CALL' | 'PUT'): number => {
+        return findBestDuration(prices, direction);
     }, []);
 
     /* ── Execute ONE trade using the global stake ────────────────────────── */
@@ -247,7 +222,7 @@ export const MarketKiller: React.FC = () => {
 
         const { contract_type, barrier, reason, confidence, details } = signal;
         const tradeStake = Number(globalStakeRef.current.toFixed(2));
-        const duration   = pickBestDuration();
+        const duration   = getBestDuration(sd.prices, contract_type);
         addLog(`Trade stake: $${tradeStake.toFixed(2)} (base: $${stakeParsed.current.toFixed(2)}, mg: ${martingaleParsed.current}x)`, 'trade');
 
         // Extract strategy names from details for outcome tracking
@@ -478,12 +453,6 @@ export const MarketKiller: React.FC = () => {
                     const won    = profit >= 0;
 
                     strategyNames.forEach(n => recordOutcome(n, won));
-
-                    // Track duration performance
-                    if (duration >= 1 && duration <= 5) {
-                        const ds = durationStatsRef.current[duration];
-                        if (won) ds.w++; else ds.l++;
-                    }
 
                     pnlRef.current += profit;
                     setPnl(pnlRef.current);
