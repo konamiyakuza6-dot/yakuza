@@ -176,16 +176,21 @@
         }
     }
 
-    @include mobile-screen {
-        padding: 0 0.8rem; // Reduce padding to prevent squeezing
-        margin-right: -0.8rem;
-        flex-shrink: 0; // Prevent account switcher from shrinking
-        min-width: fit-content; // Ensure it doesn't get squeezed
+    @include mobile-or-tablet-screen {
+        padding: 0 0.4rem;
+        margin-right: 0;
+        flex-shrink: 1;
+        min-width: 0;
+        overflow: hidden;
 
         &__balance {
-            font-size: 1.4rem;
-            white-space: nowrap; // Prevent balance text from wrapping
-            flex-shrink: 0; // Prevent balance from shrinking
+            font-size: 1.2rem;
+            white-space: nowrap;
+            flex-shrink: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80px;
 
             &--no-currency {
                 white-space: nowrap;
@@ -193,8 +198,8 @@
         }
 
         &__wrapper {
-            min-width: fit-content; // Ensure wrapper doesn't get squeezed
-            flex-shrink: 0; // Prevent wrapper from shrinking
+            min-width: 0;
+            flex-shrink: 1;
         }
     }
 

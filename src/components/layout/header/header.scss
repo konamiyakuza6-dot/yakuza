@@ -635,14 +635,26 @@ body.theme--dark .app-header .powered-by-deriv-header {
 .deposit-button,
 .manage-funds-button {
     margin-inline-end: 1.6rem;
+    flex-shrink: 0;
 
     @include mobile-or-tablet-screen {
-        margin-inline-end: 0.5rem;
-        font-size: 10px !important;
-        padding: 2px 6px !important;
-        min-height: 24px !important;
+        margin-inline-end: 0.3rem;
+        font-size: 9px !important;
+        padding: 1px 4px !important;
+        min-height: 20px !important;
         height: auto !important;
         white-space: nowrap;
+        flex-shrink: 1;
+        min-width: 0;
+    }
+}
+
+// Force the right-side header wrapper to shrink on mobile
+.app-header > *:last-child {
+    @include mobile-or-tablet-screen {
+        flex-shrink: 1;
+        min-width: 0;
+        overflow: hidden;
     }
 }
 
