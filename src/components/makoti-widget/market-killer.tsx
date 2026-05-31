@@ -122,9 +122,7 @@ export const MarketKiller: React.FC = () => {
                 } else {
                     sd.losses++;
                     consecutiveLossesRef.current++;
-                    globalStakeRef.current = Math.min(
-                        Number((tradeStake * martingaleParsed.current).toFixed(2)), 100
-                    );
+                    globalStakeRef.current = Number((tradeStake * martingaleParsed.current).toFixed(2));
                     if (consecutiveLossesRef.current >= 3) {
                         cooldownTicksRef.current = 8;
                         addLog(`⚠ ${consecutiveLossesRef.current} consecutive losses — cooldown ${cooldownTicksRef.current} ticks`, 'loss');
@@ -441,9 +439,7 @@ export const MarketKiller: React.FC = () => {
                     } else {
                         sd.losses++;
                         consecutiveLossesRef.current++;
-                        globalStakeRef.current = Math.min(
-                            Number((tradeStake * martingaleParsed.current).toFixed(2)), 100
-                        );
+                        globalStakeRef.current = Number((tradeStake * martingaleParsed.current).toFixed(2));
                         if (consecutiveLossesRef.current >= 3) {
                             cooldownTicksRef.current = 8;
                             addLog(`⚠ ${consecutiveLossesRef.current} consecutive losses — cooldown ${cooldownTicksRef.current} ticks`, 'loss');
