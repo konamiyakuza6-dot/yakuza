@@ -1865,7 +1865,7 @@ function findBestValueBarrier(
         }
     }
 
-    if (!bestType || bestScore < 68) return null;
+    if (!bestType || bestScore < 80) return null;
     return { type: bestType, barrier: bestBarrier, confidence: bestConf, score: 2 };
 }
 
@@ -2356,8 +2356,8 @@ export function analyzeSignals(
     let regimeBonus = 0;
     if (regime === 'STRONG_BULL' && (key === 'CALL' || key === 'DIGITOVER')) regimeBonus = 5;
     if (regime === 'STRONG_BEAR' && (key === 'PUT' || key === 'DIGITUNDER')) regimeBonus = 5;
-    if (regime === 'CHOPPY' && (key === 'CALL' || key === 'PUT')) regimeBonus = -8;
-    if (regime === 'CHOPPY' && (key === 'DIGITEVEN' || key === 'DIGITODD')) regimeBonus = -5;
+    if (regime === 'CHOPPY' && (key === 'CALL' || key === 'PUT')) regimeBonus = -3;
+    if (regime === 'CHOPPY' && (key === 'DIGITEVEN' || key === 'DIGITODD')) regimeBonus = 0;
 
     const finalConfidence = Math.max(CONFIDENCE_FLOOR, Math.min(CONFIDENCE_CEILING, Math.round(avgConf + regimeBonus)));
 
