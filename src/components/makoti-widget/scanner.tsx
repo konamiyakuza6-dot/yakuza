@@ -97,7 +97,9 @@ function calcChoppiness(candles: any[]): SymbolDirectionResult {
 }
 
 // ─── Global POC listener (survives WS reconnect via onNewSystemMessage) ──
-(window as any).__makoti_lastTradeWon = true;
+// Flags when any contract settles (win or loss), so auto-switcher can update
+// volatility on the next scan cycle.
+(window as any).__makoti_lastContractSettled = true;
 
 let _pocUnsub: (() => void) | null = null;
 
@@ -107,7 +109,7 @@ function startPocListener() {
         try {
             const d = JSON.parse(event.data);
             if (d.msg_type === 'proposal_open_contract' && d.proposal_open_contract?.is_sold) {
-                (window as any).__makoti_lastTradeWon = Number(d.proposal_open_contract.profit) >= 0;
+                (window as any).__makoti_lastContractSettled = true;
             }
         } catch (_) {}
     });
@@ -177,7 +179,7 @@ export const Scanner: React.FC = () => {
         } catch (_) {}
         // 4. Dashboard store (chart)
         try { const rs = (window as any).__store_instance; if (rs?.dashboard?.setBotBuilderSymbol) rs.dashboard.setBotBuilderSymbol(sym); } catch (_) {}
-        (window as any).__makoti_lastTradeWon = false;
+        (window as any).__makoti_lastContractSettled = false;
         showNotify(`Volatility Updated: ${SYMBOL_LABELS[sym]}`, 'success');
     }, [showNotify, clearPending]);
 
@@ -235,24 +237,24 @@ export const Scanner: React.FC = () => {
 
             // Auto-switch logic
             if (bestSym && bestSym !== currentBestRef.current && autoSwitchRef.current) {
-                if ((window as any).__makoti_lastTradeWon) {
+                if ((window as any).__makoti_lastContractSettled) {
                     applySwitch(bestSym);
                 } else {
                     setPending(bestSym);
-                    showNotify(`Waiting for win before switching to ${bestLabel}…`, 'warn');
+                    showNotify(`Waiting for contract settlement to switch to ${bestLabel}…`, 'warn');
                 }
             }
 
-            // Apply pending when win arrives
+            // Apply pending when contract settles
             const ps = pendingSymbolRef.current;
-            if (ps && (window as any).__makoti_lastTradeWon && autoSwitchRef.current) {
+            if (ps && (window as any).__makoti_lastContractSettled && autoSwitchRef.current) {
                 if (best.indexOf(ps) >= 0) applySwitch(ps);
                 else clearPending();
             }
 
             if (autoSwitchRef.current) {
                 const p = pendingSymbolRef.current;
-                setProgress(p ? `Auto: Pending ${SYMBOL_LABELS[p]} (wait win)` : `Auto: Best ${bestLabel} (${bestScore}%)`);
+                setProgress(p ? `Auto: Pending ${SYMBOL_LABELS[p]} (wait settle)` : `Auto: Best ${bestLabel} (${bestScore}%)`);
             } else {
                 setProgress(`Top: ${bestLabel} (${bestScore}%)`);
             }
