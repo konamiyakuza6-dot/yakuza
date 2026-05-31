@@ -119,7 +119,7 @@
             }
 
             &__list {
-                background: #2a261f !important; // Goldish-brown background
+                background: linear-gradient(135deg, #f97316 0%, #ef4444 100%) !important;
                 justify-content: flex-start; // Start from left like friend's design
                 border-bottom: none !important; // Remove border
                 padding: 0; // Remove all padding to eliminate space
