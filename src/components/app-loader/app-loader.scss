@@ -1,171 +1,195 @@
-.app-loader {
+@font-face {
+    font-family: 'Black Ops One';
+    src: url('/assets/fonts/BlackOpsOne.ttf') format('truetype');
+    font-display: swap;
+}
+
+.cod-loader {
     position: fixed;
     inset: 0;
-    background: #0e0e0e;
+    background: #080808;
     overflow: hidden;
     z-index: 9999;
-    font-family: 'Ubuntu', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Black Ops One', 'Impact', sans-serif;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
-.loader-bg {
+/* ── Sweeping light lines ── */
+.sweep-lines {
     position: absolute;
     inset: 0;
-    overflow: hidden;
+    background:
+        linear-gradient(90deg, transparent 0%, rgba(133, 172, 176, 0.03) 50%, transparent 100%);
+    background-size: 300% 100%;
+    animation: sweep 4s ease-in-out infinite;
 }
 
-.orb {
+@keyframes sweep {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ── Scanline overlay ── */
+.scanlines {
     position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.15;
-
-    &--1 {
-        width: 500px;
-        height: 500px;
-        background: #85acb0;
-        top: -15%;
-        right: -10%;
-        animation: orbFloat1 20s ease-in-out infinite;
-    }
-
-    &--2 {
-        width: 400px;
-        height: 400px;
-        background: #ffa500;
-        bottom: -20%;
-        left: -10%;
-        animation: orbFloat2 25s ease-in-out infinite;
-    }
-
-    &--3 {
-        width: 300px;
-        height: 300px;
-        background: #85acb0;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        animation: orbFloat3 15s ease-in-out infinite;
-    }
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent 0,
+        transparent 2px,
+        rgba(0, 0, 0, 0.15) 2px,
+        rgba(0, 0, 0, 0.15) 4px
+    );
+    pointer-events: none;
+    z-index: 20;
+    animation: scanlineMove 0.1s linear infinite;
 }
 
-@keyframes orbFloat1 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(-60px, 40px) scale(1.1); }
-    66% { transform: translate(40px, -30px) scale(0.9); }
+@keyframes scanlineMove {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(4px); }
 }
 
-@keyframes orbFloat2 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(50px, -40px) scale(1.15); }
-    66% { transform: translate(-40px, 30px) scale(0.85); }
+/* ── Vignette ── */
+.vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.7) 100%);
+    pointer-events: none;
+    z-index: 15;
 }
 
-@keyframes orbFloat3 {
-    0%, 100% { transform: translate(-50%, -50%) scale(1); }
-    50% { transform: translate(-50%, -50%) scale(1.3); }
-}
-
-.loader-content {
+/* ── Center content ── */
+.loader-center {
     position: relative;
     z-index: 10;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
 }
 
-.logo-mark {
+/* ── 3D Emblem ── */
+.loader-emblem {
+    margin-bottom: 10px;
+    svg { display: block; }
+}
+
+/* ── Bouncing title letters ── */
+.title-wrap {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 2px;
     margin-bottom: 8px;
-
-    svg {
-        display: block;
-    }
 }
 
-.loader-title {
-    color: #ffffff;
-    font-size: 1.75rem;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    margin: 0;
-    text-align: center;
+.title-letter {
+    color: #e8e8e8;
+    font-size: 2.2rem;
+    letter-spacing: 0.08em;
+    text-shadow:
+        0 0 20px rgba(133, 172, 176, 0.4),
+        0 0 60px rgba(133, 172, 176, 0.15);
+    display: inline-block;
+    backface-visibility: hidden;
 }
 
+/* ── Subtitle ── */
 .loader-subtitle {
     color: rgba(255, 255, 255, 0.35);
     font-size: 0.7rem;
-    font-weight: 500;
     letter-spacing: 0.35em;
-    margin: 0;
+    margin: 0 0 12px;
     text-align: center;
-    text-transform: uppercase;
+    font-family: 'Courier New', monospace;
+    font-weight: 400;
 }
 
-.loader-bar-container {
-    width: 220px;
-    margin-top: 16px;
+/* ── Progress bar ── */
+.progress-container {
+    width: 280px;
 }
 
-.loader-bar {
+.progress-bar {
     width: 100%;
-    height: 2px;
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 2px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
+}
+
+.progress-track {
+    height: 100%;
     overflow: hidden;
 }
 
-.loader-bar-fill {
+.progress-fill {
     height: 100%;
-    width: 0;
-    border-radius: 2px;
-    background: linear-gradient(90deg, #85acb0, #ffa500);
-    animation: barFill ease-in-out forwards;
+    background: linear-gradient(90deg, #85acb0, #ffa500, #85acb0);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
 }
 
-@keyframes barFill {
-    0% { width: 0; }
-    30% { width: 25%; }
-    60% { width: 55%; }
-    85% { width: 78%; }
-    100% { width: 95%; }
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
 
-.loader-status-container {
+.progress-info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 0.55rem;
+    letter-spacing: 0.15em;
+}
+
+.progress-label {
+    color: rgba(255, 255, 255, 0.3);
+    font-family: 'Courier New', monospace;
+}
+
+.progress-pct {
+    color: rgba(255, 255, 255, 0.4);
+    font-family: 'Courier New', monospace;
+}
+
+/* ── Status text ── */
+.status-container {
     height: 20px;
     overflow: hidden;
-    margin-top: 8px;
+    margin-top: 6px;
 }
 
-.loader-status {
+.status-text {
     color: rgba(255, 255, 255, 0.4);
-    font-size: 0.7rem;
-    font-weight: 400;
+    font-size: 0.65rem;
     letter-spacing: 0.15em;
     margin: 0;
     text-align: center;
     font-family: 'Courier New', monospace;
 }
 
-@media (max-width: 600px) {
-    .loader-title {
-        font-size: 1.25rem;
-        letter-spacing: 0.1em;
-    }
+/* ── Bottom tag ── */
+.bottom-tag {
+    margin-top: 16px;
+    font-size: 0.5rem;
+    letter-spacing: 0.2em;
+    font-family: 'Courier New', monospace;
+    color: #fff;
+}
 
+/* ── Responsive ── */
+@media (max-width: 600px) {
+    .title-letter {
+        font-size: 1.4rem;
+    }
     .loader-subtitle {
         font-size: 0.6rem;
     }
-
-    .loader-bar-container {
-        width: 180px;
-    }
-
-    .orb {
-        &--1 { width: 300px; height: 300px; }
-        &--2 { width: 250px; height: 250px; }
-        &--3 { width: 200px; height: 200px; }
+    .progress-container {
+        width: 220px;
     }
 }

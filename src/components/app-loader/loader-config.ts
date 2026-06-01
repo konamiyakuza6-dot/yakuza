@@ -1,5 +1,5 @@
 export const LOADER_CONFIG = {
-    DURATION: 5000,
+    DURATION: 9000,
 
     ENABLED: true,
 
@@ -10,8 +10,8 @@ export const LOADER_CONFIG = {
 
     ENVIRONMENT: {
         PRODUCTION_ONLY: false,
-        DEVELOPMENT_DURATION: 3000,
-        PRODUCTION_DURATION: 5000,
+        DEVELOPMENT_DURATION: 5000,
+        PRODUCTION_DURATION: 9000,
     },
 
     ANIMATION: {
