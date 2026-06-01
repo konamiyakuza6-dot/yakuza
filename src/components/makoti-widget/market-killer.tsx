@@ -192,7 +192,12 @@ export const MarketKiller: React.FC = () => {
         setRunning(false);
         try { wsRef.current?.close(); } catch (_) {}
         wsRef.current = null;
+        activeContractsRef.current = 0;
+        setActiveContracts(0);
+        run_panel.setHasOpenContract(false);
+        run_panel.setIsRunning(false);
         addLog('Market Killer stopped.', 'info');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [addLog]);
 
     /* ── Auto-detect best tick duration (1-5) by analyzing price history ──── */
