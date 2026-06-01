@@ -86,11 +86,17 @@ export const MarketKiller: React.FC = () => {
     useEffect(() => { saveLogs(logs); }, [logs]);
 
     /* ── POC listener on the OTP new system WS ────────────────────────────── */
+    // Re-subscribe POC on every contract buy by keying on activeContractsRef
+    const pocUnsubRef = useRef<(() => void) | null>(null);
+    const subscribePOC = useCallback(() => {
+        if (!window._newSystemWS) return;
+        window._newSystemWS.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
+    }, []);
+
     useEffect(() => {
         if (!running) return;
-        if (!window._newSystemWS) return;
-
-        window._newSystemWS.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
+        subscribePOC();
+        if (pocUnsubRef.current) pocUnsubRef.current();
 
         const unsub = onNewSystemMessage((event: MessageEvent) => {
             try {
@@ -110,7 +116,6 @@ export const MarketKiller: React.FC = () => {
                 const profit = Number(c.profit);
                 const won = profit >= 0;
 
-                // Record outcome for each strategy that contributed
                 strategyNames.forEach(n => recordOutcome(n, won));
 
                 pnlRef.current += profit;
@@ -141,7 +146,8 @@ export const MarketKiller: React.FC = () => {
             } catch (_) {}
         });
 
-        return unsub;
+        pocUnsubRef.current = unsub;
+        return () => { unsub(); pocUnsubRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [running]);
 
