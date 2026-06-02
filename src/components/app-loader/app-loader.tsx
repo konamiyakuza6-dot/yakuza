@@ -77,6 +77,17 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete, duration = 900
                     </svg>
                 </div>
 
+                {/* ── Rotating padlock ── */}
+                <div className='lock-wrap'>
+                    <svg width='36' height='40' viewBox='0 0 36 40' fill='none' className='lock-svg'>
+                        <rect x='5' y='16' width='26' height='20' rx='3' fill='none' stroke='url(#eg)' strokeWidth='2' />
+                        <rect x='5' y='16' width='26' height='20' rx='3' fill='rgba(133,172,176,0.08)' />
+                        <circle cx='18' cy='28' r='4' fill='none' stroke='#85acb0' strokeWidth='1.5' opacity='0.3' />
+                        <circle className='lock-inner' cx='18' cy='28' r='2' fill='none' stroke='#ffa500' strokeWidth='1.5' strokeDasharray='3 4' />
+                        <path className='lock-shackle' d='M18 16V12C18 8.5 15 6 12 6C9 6 6 8.5 6 12V14' stroke='url(#eg)' strokeWidth='2.5' strokeLinecap='round' fill='none' />
+                    </svg>
+                </div>
+
                 <div className='title-wrap'>
                     {TITLE.split('').map((letter, i) => (
                         <span key={i} className='title-letter' style={{ animationDelay: `${1.2 + i * 0.07}s` }}>

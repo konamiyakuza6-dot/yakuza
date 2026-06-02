@@ -60,12 +60,57 @@
 
 /* ── Emblem (pure CSS animation) ── */
 .emblem {
-    margin-bottom: 10px;
+    margin-bottom: 4px;
     transform: translateZ(0);
     will-change: transform, opacity;
     animation: emblemIn 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     opacity: 0;
     svg { display: block; }
+}
+
+/* ── Rotating padlock ── */
+.lock-wrap {
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: center;
+    opacity: 0;
+    animation: fadeInLock 2s ease-out 1s forwards;
+    will-change: opacity;
+}
+
+.lock-svg {
+    display: block;
+    filter: drop-shadow(0 0 6px rgba(133, 172, 176, 0.3));
+    transform: translateZ(0);
+}
+
+.lock-shackle {
+    transform-origin: 18px 6px;
+    animation: shackleRotate 2s ease-in-out infinite;
+    will-change: transform;
+}
+
+.lock-inner {
+    transform-origin: 18px 28px;
+    animation: innerSpin 1.5s linear infinite;
+    will-change: transform;
+}
+
+@keyframes shackleRotate {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-25deg); }
+    50% { transform: rotate(5deg); }
+    75% { transform: rotate(-15deg); }
+}
+
+@keyframes innerSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes fadeInLock {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 @keyframes emblemIn {
