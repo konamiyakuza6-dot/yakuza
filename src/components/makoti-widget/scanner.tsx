@@ -220,6 +220,7 @@ export const Scanner: React.FC = () => {
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const currentBestRef = useRef<string>('');
     const pendingSymbolRef = useRef<string>('');
+    const msgHandlerRef = useRef<(data: any) => void>(() => {});
 
     const showNotify = useCallback((msg: string, type: 'info' | 'success' | 'warn' = 'info') => {
         setNotification({ msg, type });
@@ -262,6 +263,24 @@ export const Scanner: React.FC = () => {
         wsRef.current = null;
     }, []);
 
+    /* ── Create persistent WS (reused across auto-scan cycles) ──────────── */
+    const ensureWs = useCallback(() => {
+        if (wsRef.current && wsRef.current.isOpen()) return wsRef.current;
+        cleanup();
+        const mws = openMakotiWS(
+            (data) => msgHandlerRef.current(data),
+            () => {
+                if (scanningRef.current) {
+                    setProgress('Fetching 7 candles from all 10 volatilities…');
+                    ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 7, end: 'latest', style: 'candles', granularity: 60 }));
+                }
+            },
+            () => {}
+        );
+        wsRef.current = mws;
+        return mws;
+    }, [cleanup]);
+
     /* ── Perform a single scan ──────────────────────────────────────────── */
     const performScan = useCallback((initial = false) => {
         if (scanningRef.current) return;
@@ -279,9 +298,8 @@ export const Scanner: React.FC = () => {
         const scanTimeout = setTimeout(() => {
             if (!finalized) finalize();
         }, 8000);
-        cleanup(); // close previous WS
 
-        const handleMessage = (data: any) => {
+        msgHandlerRef.current = (data: any) => {
             if (data.error) return;
 
             if (data.msg_type === 'candles' && data.candles) {
@@ -336,24 +354,22 @@ export const Scanner: React.FC = () => {
             if (autoSwitchRef.current) {
                 const p = pendingSymbolRef.current;
                 setProgress(p ? `Auto: Pending ${SYMBOL_LABELS[p]} (wait settle)` : `Auto: Best ${bestLabel} (${bestScore}%)`);
+                // Keep WS alive for next cycle
             } else {
                 setProgress(`Top: ${bestLabel} (${bestScore}%)`);
+                cleanup(); // one-shot scan, close WS
             }
-            cleanup();
         };
 
-        const mws = openMakotiWS(
-            handleMessage,
-            () => {
-                setProgress('Fetching 7 candles from all 10 volatilities…');
-                ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 7, end: 'latest', style: 'candles', granularity: 60 }));
-            },
-            () => {
-                if (pendingRef.current.size > 0) finalize();
-            }
-        );
-        wsRef.current = mws;
-    }, [cleanup, showNotify, applySwitch, setPending, clearPending]);
+        const mws = ensureWs();
+        if (mws.isOpen()) {
+            // WS already connected — fire requests directly
+            msgHandlerRef.current = msgHandlerRef.current; // ensure latest
+            setProgress('Fetching 7 candles from all 10 volatilities…');
+            ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 7, end: 'latest', style: 'candles', granularity: 60 }));
+        }
+        // If not open yet, ensureWs will trigger onReady → which fires the requests
+    }, [cleanup, ensureWs, showNotify, applySwitch, setPending, clearPending]);
 
     /* ── Manual analyze button ──────────────────────────────────────────── */
     const analyze = useCallback(() => {
