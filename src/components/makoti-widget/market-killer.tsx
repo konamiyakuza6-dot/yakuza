@@ -50,7 +50,7 @@ function saveLogs(logs: LogEntry[]) {
    MarketKiller
 ═══════════════════════════════════════════════════════════════════════════ */
 export const MarketKiller: React.FC = () => {
-    const { transactions, run_panel } = useStore();
+    const { transactions } = useStore();
 
     const [stake,       setStake]       = useState('0.35');
     const [martingale,  setMartingale]  = useState('2');
@@ -224,8 +224,6 @@ export const MarketKiller: React.FC = () => {
         wsRef.current = null;
         activeContractsRef.current = 0;
         setActiveContracts(0);
-        run_panel.setHasOpenContract(false);
-        run_panel.setIsRunning(false);
         addLog('Market Killer stopped.', 'info');
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [addLog]);
@@ -278,7 +276,6 @@ export const MarketKiller: React.FC = () => {
                     status: 'open',
                     is_virtual: true,
                 } as any);
-                run_panel.setHasOpenContract(true);
             } catch (_) {}
             signalHistoryRef.current = [];
             return;
@@ -341,7 +338,6 @@ export const MarketKiller: React.FC = () => {
                             date_start: Math.floor(Date.now() / 1000),
                             status: 'open',
                         } as any);
-                        run_panel.setHasOpenContract(true);
                     } catch (_) {}
                 } else {
                     addLog(`Buy ok but no contract_id: ${JSON.stringify(response).slice(0, 100)}`, 'info');
@@ -374,7 +370,6 @@ export const MarketKiller: React.FC = () => {
                     entry_tick_time: Math.floor(Date.now() / 1000),
                     status: 'open',
                 } as any);
-                run_panel.setHasOpenContract(true);
             } catch (_) {}
         } else {
             globalLock.current = false;
@@ -427,7 +422,6 @@ export const MarketKiller: React.FC = () => {
                             status: 'sold',
                             is_virtual: true,
                         } as any);
-                        run_panel.setHasOpenContract(false);
                     } catch (_) {}
                     if (won) {
                         vhStateRef.current.loss_count = 0;
@@ -647,7 +641,6 @@ export const MarketKiller: React.FC = () => {
                     try {
                         const pocWithDisplay = !(c as any).display_name ? { ...c, display_name: SYMBOL_LABELS[sym] } : c;
                         transactions.onBotContractEvent(pocWithDisplay);
-                        run_panel.setHasOpenContract(false);
                     } catch (_) {}
 
                     if (won) {
