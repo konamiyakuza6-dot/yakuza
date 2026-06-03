@@ -540,6 +540,61 @@ function stdChannel(prices: number[], period = 20, mult = 2): { upper: number; l
     return { upper: mean + mult * std, lower: mean - mult * std, mean };
 }
 
+function trix(prices: number[], period = 4): { trix: number; signal: number; prevTrix: number } {
+    const n = prices.length;
+    if (n < period * 3 + 2) return { trix: 0, signal: 0, prevTrix: 0 };
+    const ema1 = ema(prices, period);
+    const ema2 = ema(ema1.slice(-(period * 3 + 2)), period);
+    const ema3 = ema(ema2.slice(-(period * 2 + 2)), period);
+    const vals = ema3.slice(-3);
+    const t = vals.length >= 3 ? ((vals[2] - vals[1]) / vals[1]) * 100 : 0;
+    const p = vals.length >= 3 ? ((vals[1] - vals[0]) / vals[0]) * 100 : 0;
+    const signalEma = ema([p, t], period);
+    return { trix: t, signal: signalEma.length > 0 ? signalEma[signalEma.length - 1] : 0, prevTrix: p };
+}
+
+function massIndex(prices: number[], period = 9): number {
+    if (prices.length < period + 2) return 0;
+    const ranges: number[] = [];
+    for (let i = 1; i < prices.length; i++) {
+        ranges.push(prices[i] - prices[i - 1]);
+    }
+    const absRanges = ranges.map(Math.abs);
+    const emaRange = ema(absRanges, 9);
+    const ratio: number[] = [];
+    for (let i = 0; i < ranges.length; i++) {
+        const denom = emaRange[i] || 0.001;
+        ratio.push(Math.abs(ranges[i]) / denom);
+    }
+    if (ratio.length < period + 9) return 0;
+    const sum = ratio.slice(-period).reduce((a, b) => a + b, 0);
+    return sum;
+}
+
+function chaikinOsc(prices: number[], fast = 3, slow = 10): number {
+    if (prices.length < slow + 2) return 0;
+    let adl = 0;
+    const adls: number[] = [];
+    for (let i = 1; i < prices.length; i++) {
+        const hl = Math.max(prices[i], prices[i - 1]) - Math.min(prices[i], prices[i - 1]) || 0.001;
+        const clv = ((prices[i] - Math.min(prices[i], prices[i - 1])) - (Math.max(prices[i], prices[i - 1]) - prices[i])) / hl;
+        adl += clv;
+        adls.push(adl);
+    }
+    const fastEma = ema(adls, fast);
+    const slowEma = ema(adls, slow);
+    const v = fastEma.length > 0 && slowEma.length > 0 ? fastEma[fastEma.length - 1] - slowEma[slowEma.length - 1] : 0;
+    const p = fastEma.length > 1 && slowEma.length > 1 ? fastEma[fastEma.length - 2] - slowEma[slowEma.length - 2] : 0;
+    return v >= 0 && p < 0 ? 1 : v < 0 && p >= 0 ? -1 : (v > p ? 0.5 : v < p ? -0.5 : 0);
+}
+
+function envelope(prices: number[], period = 5, percent = 0.1): { upper: number; lower: number; mid: number } {
+    if (prices.length < period) return { upper: 0, lower: 0, mid: 0 };
+    const slice = prices.slice(-period);
+    const mean = slice.reduce((a, b) => a + b, 0) / period;
+    return { upper: mean * (1 + percent / 100), lower: mean * (1 - percent / 100), mid: mean };
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    MARKET STATE DETECTION
 ═══════════════════════════════════════════════════════════════════════════════ */
@@ -2868,6 +2923,549 @@ const volumePOC: StrategyModule = { name: 'volumePOC', run(prices) {
     return null;
 }};
 
+// ── 61. 3-TICK MICRO-VELOCITY BOUNCE ─────────────────────────────────────
+const microVelocityBounce: StrategyModule = { name: 'microVeloBounce', run(prices) {
+    if (prices.length < 4) return null;
+    const p = prices, n = p.length;
+    const allRed = p[n-4] >= p[n-3] && p[n-3] >= p[n-2];
+    const allGreen = p[n-4] <= p[n-3] && p[n-3] <= p[n-2];
+    if (allRed && p[n-1] - p[n-2] >= 0.05) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (allGreen && p[n-2] - p[n-1] >= 0.05) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 62. 4-TICK TREND AVALANCHE ───────────────────────────────────────────
+const trendAvalanche: StrategyModule = { name: 'trendAvalanche', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    if (p[n-1] > p[n-2] && p[n-2] > p[n-3] && p[n-3] > p[n-4] && p[n-4] > p[n-5]) return { type: 'CALL', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
+    if (p[n-1] < p[n-2] && p[n-2] < p[n-3] && p[n-3] < p[n-4] && p[n-4] < p[n-5]) return { type: 'PUT', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 63. ALTERNATING TICK FATIGUE ─────────────────────────────────────────
+const alternatingFatigue: StrategyModule = { name: 'altFatigue', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    const g = (i: number) => p[i] > p[i-1];
+    if (g(n-1) && !g(n-2) && g(n-3) && !g(n-4)) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (!g(n-1) && g(n-2) && !g(n-3) && g(n-4)) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 64. TICK-TO-TICK VELOCITY ACCELERATION ───────────────────────────────
+const velocityAcceleration: StrategyModule = { name: 'veloAccel', run(prices) {
+    if (prices.length < 4) return null;
+    const p = prices, n = p.length;
+    const d1 = p[n-1] - p[n-2], d2 = p[n-2] - p[n-3];
+    if (d1 > 0 && d2 > 0 && d1 > 2 * d2) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (d1 < 0 && d2 < 0 && -d1 > 2 * -d2) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 65. 2-PERIOD MICRO-SMA CROSS ─────────────────────────────────────────
+const microSMACross: StrategyModule = { name: 'microSMACross', run(prices) {
+    if (prices.length < 6) return null;
+    const p = prices, n = p.length;
+    const sma2Cur = (p[n-1] + p[n-2]) / 2, sma2Prev = (p[n-2] + p[n-3]) / 2;
+    const sma4Cur = (p[n-1] + p[n-2] + p[n-3] + p[n-4]) / 4, sma4Prev = (p[n-2] + p[n-3] + p[n-4] + p[n-5]) / 4;
+    if (sma2Prev <= sma4Prev && sma2Cur > sma4Cur) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (sma2Prev >= sma4Prev && sma2Cur < sma4Cur) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 66. MICRO-RANGE COMPRESSION ESCAPE ───────────────────────────────────
+const rangeCompressionEscape: StrategyModule = { name: 'rangeCompress', run(prices) {
+    if (prices.length < 6) return null;
+    const p = prices, n = p.length;
+    const slice = p.slice(-6);
+    const mean = slice.reduce((a, b) => a + b, 0) / 6;
+    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / 6;
+    const hi = Math.max(...slice), lo = Math.min(...slice);
+    if (variance < 0.03 && p[n-1] > hi) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (variance < 0.03 && p[n-1] < lo) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 67. 5-TICK ABSORPTION SETUP ──────────────────────────────────────────
+const absorptionSetup: StrategyModule = { name: 'absorptionSetup', run(prices) {
+    if (prices.length < 6) return null;
+    const p = prices, n = p.length;
+    const drop4 = p[n-5] > p[n-4] && p[n-4] > p[n-3] && p[n-3] > p[n-2] && p[n-2] > p[n-1];
+    const rise4 = p[n-5] < p[n-4] && p[n-4] < p[n-3] && p[n-3] < p[n-2] && p[n-2] < p[n-1];
+    if (drop4 && p[n-1] === p[n-2]) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (rise4 && p[n-1] === p[n-2]) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 68. ZERO-MAGNET EDGE REJECTION ───────────────────────────────────────
+const zeroMagnetEdge: StrategyModule = { name: 'zeroMagnetEdge', run(prices) {
+    if (prices.length < 3) return null;
+    const p = prices, n = p.length;
+    const endsWith00 = (v: number) => Math.round(Math.abs(v * 100)) % 100 === 0;
+    if (endsWith00(p[n-2]) && p[n-1] > p[n-2]) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (endsWith00(p[n-2]) && p[n-1] < p[n-2]) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 69. LAST-DIGIT CUMULATIVE IMBALANCE ──────────────────────────────────
+const lastDigitCumulativeImbalance: StrategyModule = { name: 'lastDigitImbal', run(prices) {
+    if (prices.length < 6) return null;
+    const digits = prices.slice(-6).map(v => Math.round(Math.abs(v * 100000)) % 10);
+    const low = digits.every(d => d <= 2);
+    const high = digits.every(d => d >= 7);
+    if (low) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (high) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 70. DIGIT PATTERN TWIN REVERSAL ──────────────────────────────────────
+const digitPatternTwinReversal: StrategyModule = { name: 'digitTwinRev', run(prices) {
+    if (prices.length < 3) return null;
+    const p = prices, n = p.length;
+    const lastDigit = (v: number) => Math.round(Math.abs(v * 100000)) % 10;
+    const d1 = lastDigit(p[n-2]), d0 = lastDigit(p[n-1]);
+    if (d1 === d0 && p[n-1] < p[n-2]) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (d1 === d0 && p[n-1] > p[n-2]) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 71. 3-PERIOD HYPER-RSI ───────────────────────────────────────────────
+const hyperRSI: StrategyModule = { name: 'hyperRSI', run(prices) {
+    if (prices.length < 5) return null;
+    const rsi3 = rsi(prices, 3);
+    if (rsi3 < 10) return { type: 'CALL', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
+    if (rsi3 > 90) return { type: 'PUT', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 72. 5-TICK STOCHASTIC MICRO-FRACTIONAL CROSS ─────────────────────────
+const microStochasticCross: StrategyModule = { name: 'microStochCross', run(prices) {
+    if (prices.length < 10) return null;
+    const s = stoch(prices, 5, 3);
+    if (s.k < 5 && s.d < 5 && s.k > s.d) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (s.k > 95 && s.d > 95 && s.k < s.d) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 73. TICK PRICE-TO-EMA EXTREME DIVERGENCE ─────────────────────────────
+const priceToEMAExtreme: StrategyModule = { name: 'priceEMAExtreme', run(prices) {
+    if (prices.length < 7) return null;
+    const ema5 = ema(prices, 5);
+    if (ema5.length === 0) return null;
+    const cur = prices[prices.length - 1], emaVal = ema5[ema5.length - 1];
+    const avg = prices.slice(-10).reduce((a, b) => a + b, 0) / 10;
+    const pct = avg !== 0 ? Math.abs(cur - emaVal) / avg * 100 : 0;
+    if (cur < emaVal && pct > 0.5) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (cur > emaVal && pct > 0.5) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 74. 3-TICK ROC ZERO INVERSION ────────────────────────────────────────
+const microROCZeroInversion: StrategyModule = { name: 'microROCZero', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    const roc3 = (p[n-1] - p[n-4]) / (p[n-4] || 1);
+    const roc3Prev = (p[n-2] - p[n-5]) / (p[n-5] || 1);
+    if (roc3Prev < 0 && roc3 > 0) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (roc3Prev > 0 && roc3 < 0) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 75. MICRO BOLLINGER BAND WICK-OUT (10,2) ─────────────────────────────
+const microBBWickOut: StrategyModule = { name: 'microBBWick', run(prices) {
+    if (prices.length < 12) return null;
+    const p = prices, n = p.length;
+    const slice = p.slice(-10);
+    const mean = slice.reduce((a, b) => a + b, 0) / 10;
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b - mean) ** 2, 0) / 10);
+    const upper = mean + 2 * std, lower = mean - 2 * std;
+    if (p[n-1] < lower) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (p[n-1] > upper) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 76. DOUBLE-TICK BOTTOM REVERSAL ──────────────────────────────────────
+const doubleTickBottomReversal: StrategyModule = { name: 'doubleTickBottom', run(prices) {
+    if (prices.length < 4) return null;
+    const p = prices, n = p.length;
+    if (p[n-3] === p[n-2] && p[n-1] > p[n-2]) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (p[n-3] === p[n-2] && p[n-1] < p[n-2]) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 77. MICRO DONCHIAN 4-TICK BREAKOUT ───────────────────────────────────
+const microDonchianBreakout: StrategyModule = { name: 'microDonchian', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    const hi = Math.max(p[n-5], p[n-4], p[n-3], p[n-2]);
+    const lo = Math.min(p[n-5], p[n-4], p[n-3], p[n-2]);
+    if (p[n-1] > hi) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (p[n-1] < lo) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 78. 3-TICK CHANDE MOMENTUM SHOCK ─────────────────────────────────────
+const microCMOShock: StrategyModule = { name: 'microCMOShock', run(prices) {
+    if (prices.length < 5) return null;
+    const cmo3 = cmo(prices, 3);
+    if (cmo3 <= -99) return { type: 'CALL', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
+    if (cmo3 >= 99) return { type: 'PUT', score: 2, confidence: 68, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 79. MICRO HULL DERIVATIVE SWAP (3/6) ─────────────────────────────────
+const microHullSwap: StrategyModule = { name: 'microHullSwap', run(prices) {
+    if (prices.length < 10) return null;
+    const h3 = hmaArr(prices, 3);
+    const h6 = hmaArr(prices, 6);
+    if (h3.length < 3 || h6.length < 3) return null;
+    const n = h3.length, m = h6.length;
+    if (h3[n-2] <= h6[m-2] && h3[n-1] > h6[m-1]) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (h3[n-2] >= h6[m-2] && h3[n-1] < h6[m-1]) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 80. JUMP INDEX GAP REBALANCING ───────────────────────────────────────
+const jumpIndexGap: StrategyModule = { name: 'jumpIndexGap', run(prices) {
+    if (prices.length < 3) return null;
+    const p = prices, n = p.length;
+    const gap = p[n-1] - p[n-2];
+    if (gap < -0.1) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (gap > 0.1) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 81. TICK DECELERATION EXHAUSTION ─────────────────────────────────────
+const tickDecelerationExhaustion: StrategyModule = { name: 'tickDecelExh', run(prices) {
+    if (prices.length < 4) return null;
+    const p = prices, n = p.length;
+    const d1 = p[n-3] - p[n-2], d2 = p[n-2] - p[n-1];
+    if (d1 > 0 && d2 < 0 && Math.abs(d2) < Math.abs(d1) * 0.2) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (d1 < 0 && d2 > 0 && Math.abs(d2) < Math.abs(d1) * 0.2) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 82. 5-PERIOD WILLIAMS %R CORE THRESHOLD ──────────────────────────────
+const microWilliamsR: StrategyModule = { name: 'microWilliamsR', run(prices) {
+    if (prices.length < 7) return null;
+    const wr = williamsR(prices, 5);
+    if (wr < -95) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (wr > -5) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 83. 4-TICK SCALPER PIVOT ─────────────────────────────────────────────
+const fourTickScalperPivot: StrategyModule = { name: 'scalperPivot', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    const allRed = p[n-4] >= p[n-3] && p[n-3] >= p[n-2];
+    const allGreen = p[n-4] <= p[n-3] && p[n-3] <= p[n-2];
+    if (allRed && Math.abs(p[n-1] - p[n-4]) < 0.001) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (allGreen && Math.abs(p[n-1] - p[n-4]) < 0.001) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 84. MICRO COMMODITY CHANNEL PULSE (4) ────────────────────────────────
+const microCCIPulse: StrategyModule = { name: 'microCCIPulse', run(prices) {
+    if (prices.length < 6) return null;
+    const cci4 = cci(prices, 4);
+    if (cci4 < -150) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (cci4 > 150) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 85. EVEN/ODD CONSECUTIVE IMBALANCE ──────────────────────────────────
+const evenOddConsecImbalance: StrategyModule = { name: 'evenOddConsec', run(prices) {
+    if (prices.length < 6) return null;
+    const digits = prices.slice(-6).map(v => Math.round(Math.abs(v * 100000)) % 10);
+    const odd5 = digits.slice(0, 5).every(d => d % 2 === 1);
+    const even5 = digits.slice(0, 5).every(d => d % 2 === 0);
+    if (odd5) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (even5) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 86. LINEAR REGRESSION 3-TICK SLOPE CROSS ─────────────────────────────
+const linregSlopeCross: StrategyModule = { name: 'linregSlopeCross', run(prices) {
+    if (prices.length < 5) return null;
+    const slope = linregSlope(prices, 3);
+    if (slope > 0) return { type: 'CALL', score: 1, confidence: 64, weight: getStrategyWeight(this.name), name: this.name };
+    if (slope < 0) return { type: 'PUT', score: 1, confidence: 64, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 87. FAST WMA (3) VS PRICE STEP ───────────────────────────────────────
+const fastWMAvPrice: StrategyModule = { name: 'fastWMAvPrice', run(prices) {
+    if (prices.length < 5) return null;
+    const wma3 = wmaArr(prices, 3);
+    if (wma3.length === 0) return null;
+    const cur = prices[prices.length - 1], wmaVal = wma3[wma3.length - 1];
+    if (cur - wmaVal >= 0.2) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (wmaVal - cur >= 0.2) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 88. MICRO-KELTNER OVER-EXTENSION (5,1,ATR5) ──────────────────────────
+const microKeltnerOverExt: StrategyModule = { name: 'microKeltnerExt', run(prices) {
+    if (prices.length < 8) return null;
+    const p = prices, n = p.length;
+    const tr5 = Math.max(p[n-1], p[n-2]) - Math.min(p[n-1], p[n-2]);
+    const atr5Vals = prices.slice(-6).map((_, i, a) => i < 1 ? 0 : Math.max(a[i], a[i-1]) - Math.min(a[i], a[i-1]));
+    const atr5 = atr5Vals.slice(-5).reduce((a, b) => a + b, 0) / 5 || 0.001;
+    const avg = prices.slice(-5).reduce((a, b) => a + b, 0) / 5;
+    const upper = avg + atr5, lower = avg - atr5;
+    if (p[n-1] < lower) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (p[n-1] > upper) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 89. TICK VOLUME DELTA DIVERGENCE ─────────────────────────────────────
+const tickVolumeDeltaDivergence: StrategyModule = { name: 'tickVolDelta', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    const greenTicks = p.slice(-5).filter((_, i, a) => i > 0 && a[i] > a[i-1]).length;
+    if (p[n-1] < p[n-2] && greenTicks >= 3) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (p[n-1] > p[n-2] && greenTicks <= 1) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 90. 4-TICK STEP INDEX SYMMETRY ──────────────────────────────────────
+const stepIndexSymmetry: StrategyModule = { name: 'stepIndexSym', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    const drop3 = p[n-4] - p[n-3] === 1 && p[n-3] - p[n-2] === 1 && p[n-2] - p[n-1] === 1;
+    const rise3 = p[n-4] - p[n-3] === -1 && p[n-3] - p[n-2] === -1 && p[n-2] - p[n-1] === -1;
+    if (drop3) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (rise3) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 91. AWESOME OSCILLATOR MICRO-BAR FLIP ────────────────────────────────
+const awesomeOscMicroBarFlip: StrategyModule = { name: 'awesomeMicroBar', run(prices) {
+    if (prices.length < 5) return null;
+    const ao = awesomeOsc(prices);
+    if (ao.ao < 0 && ao.ao > ao.prevAo) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (ao.ao > 0 && ao.ao < ao.prevAo) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 92. 2-TICK SEQUENTIAL SHOCK TRAP ─────────────────────────────────────
+const sequentialShockTrap: StrategyModule = { name: 'seqShockTrap', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    const slice = p.slice(-6);
+    const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b - mean) ** 2, 0) / slice.length) || 0.001;
+    const z1 = (p[n-2] - mean) / std, z2 = (p[n-1] - mean) / std;
+    if (z1 <= -2 && z2 <= -2) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (z1 >= 2 && z2 >= 2) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 93. TRUE STRENGTH INDEX (TSI) HYPER-CROSS (3,3) ──────────────────────
+const tsiHyperCross: StrategyModule = { name: 'tsiHyperCross', run(prices) {
+    if (prices.length < 12) return null;
+    const t = tsi(prices, 3, 3, 3);
+    if (t.tsi > t.signal) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (t.tsi < t.signal) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 94. MICRO-FISHER TRANSFORM SIGNAL (4) ────────────────────────────────
+const microFisherSignal: StrategyModule = { name: 'microFisherSig', run(prices) {
+    if (prices.length < 8) return null;
+    const f = fisherTransform(prices, 4);
+    if (f.fisher < -2 && f.fisher > f.signal) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (f.fisher > 2 && f.fisher < f.signal) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 95. TICK CHANNEL MIDLINE REJECTION ──────────────────────────────────
+const tickChannelMidlineRejection: StrategyModule = { name: 'channelMidline', run(prices) {
+    if (prices.length < 12) return null;
+    const p = prices, n = p.length;
+    const slice = p.slice(-10);
+    const mid = (Math.max(...slice) + Math.min(...slice)) / 2;
+    const trendUp = p[n-4] < p[n-3] && p[n-3] < p[n-2];
+    const trendDn = p[n-4] > p[n-3] && p[n-3] > p[n-2];
+    if (trendUp && Math.abs(p[n-2] - mid) < 0.01 && p[n-1] > p[n-2]) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (trendDn && Math.abs(p[n-2] - mid) < 0.01 && p[n-1] < p[n-2]) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 96. DETRENDED PRICE OSCILLATOR (DPO) 4-PERIOD BURST ──────────────────
+const dpoBurst: StrategyModule = { name: 'dpoBurst', run(prices) {
+    if (prices.length < 10) return null;
+    const d = dpo(prices, 4);
+    if (d > 0) return { type: 'CALL', score: 1, confidence: 64, weight: getStrategyWeight(this.name), name: this.name };
+    if (d < 0) return { type: 'PUT', score: 1, confidence: 64, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 97. 3-TICK CONNOR'S RSI EXTREME FADE ─────────────────────────────────
+const connorsRSIExtremeFade: StrategyModule = { name: 'connorsExtreme', run(prices) {
+    if (prices.length < 8) return null;
+    const crsi = connorsRSI(prices, 3);
+    if (crsi < 2) return { type: 'CALL', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    if (crsi > 98) return { type: 'PUT', score: 2, confidence: 67, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 98. LAST-DIGIT SEQUENTIAL MIRRORING ──────────────────────────────────
+const lastDigitSequentialMirror: StrategyModule = { name: 'lastDigitMirror', run(prices) {
+    if (prices.length < 4) return null;
+    const ld = (v: number) => Math.round(Math.abs(v * 100000)) % 10;
+    const p = prices, n = p.length;
+    const d3 = ld(p[n-3]), d2 = ld(p[n-2]), d1 = ld(p[n-1]);
+    if (d3 === 1 && d2 === 2 && d1 === 1 && p[n-1] < p[n-2]) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (d3 === 9 && d2 === 8 && d1 === 9 && p[n-1] > p[n-2]) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 99. 5-TICK PIVOT POINT SCALPER ──────────────────────────────────────
+const pivotPointScalper: StrategyModule = { name: 'pivotScalper', run(prices) {
+    if (prices.length < 7) return null;
+    const p = prices, n = p.length;
+    const hi = Math.max(p[n-6], p[n-5], p[n-4], p[n-3], p[n-2]);
+    const lo = Math.min(p[n-6], p[n-5], p[n-4], p[n-3], p[n-2]);
+    if (p[n-1] < lo && p[n-1] > p[n-2]) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (p[n-1] > hi && p[n-1] < p[n-2]) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 100. MICRO-EXPONENTIAL TRIX CROSS (4) ─────────────────────────────────
+const microTrixCross: StrategyModule = { name: 'microTrixCross', run(prices) {
+    if (prices.length < 16) return null;
+    const t = trix(prices, 4);
+    if (t.trix > t.signal && t.prevTrix <= t.signal) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (t.trix < t.signal && t.prevTrix >= t.signal) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 101. PERCENTAGE PRICE OSCILLATOR (PPO) TICK FLASH (2,5) ──────────────
+const ppoTickFlash: StrategyModule = { name: 'ppoTickFlash', run(prices) {
+    if (prices.length < 10) return null;
+    const pp = ppo(prices, 2, 5, 3);
+    if (pp.signal > 0 && pp.ppo > 0) return { type: 'CALL', score: 1, confidence: 64, weight: getStrategyWeight(this.name), name: this.name };
+    if (pp.signal < 0 && pp.ppo < 0) return { type: 'PUT', score: 1, confidence: 64, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 102. 4-TICK MEAN-REVERSION BAND STRETCH ──────────────────────────────
+const meanReversionBandStretch: StrategyModule = { name: 'mrBandStretch', run(prices) {
+    if (prices.length < 55) return null;
+    const p = prices, n = p.length;
+    const sma4 = sma(prices, 4);
+    if (sma4.length === 0) return null;
+    const curSma = sma4[sma4.length - 1], curP = p[n-1];
+    let maxDist = 0;
+    for (let i = Math.max(0, n - 50); i < n; i++) {
+        const idx = i - (n - sma4.length);
+        if (idx >= 0 && idx < sma4.length) maxDist = Math.max(maxDist, Math.abs(p[i] - sma4[idx]));
+    }
+    const dist = Math.abs(curP - curSma);
+    if (dist > maxDist * 0.95 && curP < curSma) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (dist > maxDist * 0.95 && curP > curSma) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 103. 3-TICK PARABOLIC FLIT (0.1, 0.5) ────────────────────────────────
+const parabolicFlit: StrategyModule = { name: 'parabolicFlit', run(prices) {
+    if (prices.length < 6) return null;
+    const ps = parabolicSar(prices, 0.1, 0.5);
+    if (ps.flipped && !ps.above) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (ps.flipped && ps.above) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 104. INSIDE-TICK CHANNEL BREAKOUT ────────────────────────────────────
+const insideTickChannelBreakout: StrategyModule = { name: 'insideTickBreak', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    const hi = Math.max(p[n-3], p[n-2]), lo = Math.min(p[n-3], p[n-2]);
+    const prevHi = p[n-4], prevLo = p[n-4];
+    if (p[n-1] > prevHi && p[n-3] <= prevHi && p[n-2] <= prevHi) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (p[n-1] < prevLo && p[n-3] >= prevLo && p[n-2] >= prevLo) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 105. 5-PERIOD CHAIKIN OSCILLATOR CROSS ───────────────────────────────
+const chaikinOscCross: StrategyModule = { name: 'chaikinOscCross', run(prices) {
+    if (prices.length < 14) return null;
+    const co = chaikinOsc(prices, 3, 10);
+    if (co === 1) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (co === -1) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 106. MICRO-ENVELOPE BAND INVERSION (5, 0.1%) ─────────────────────────
+const microEnvelopeBandInv: StrategyModule = { name: 'microEnvelope', run(prices) {
+    if (prices.length < 7) return null;
+    const env = envelope(prices, 5, 0.1);
+    const cur = prices[prices.length - 1];
+    if (cur <= env.lower) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (cur >= env.upper) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 107. 3-TICK VOLUME-WEIGHTED MOMENTUM CROSS (2/5) ─────────────────────
+const microVWAPCrossover: StrategyModule = { name: 'microVWAPCross', run(prices) {
+    if (prices.length < 7) return null;
+    const p = prices, n = p.length;
+    const vwap2 = (p[n-1] + p[n-2]) / 2;
+    const vwap5 = (p[n-1] + p[n-2] + p[n-3] + p[n-4] + p[n-5]) / 5;
+    const vwap2p = (p[n-2] + p[n-3]) / 2;
+    const vwap5p = (p[n-2] + p[n-3] + p[n-4] + p[n-5] + p[n-6]) / 5;
+    if (vwap2p <= vwap5p && vwap2 > vwap5) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (vwap2p >= vwap5p && vwap2 < vwap5) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 108. ULTIMATE OSCILLATOR 3-PERIOD EXHAUSTION ─────────────────────────
+const ultimateOscExhaustion: StrategyModule = { name: 'ultimateOscExh', run(prices) {
+    if (prices.length < 8) return null;
+    const uo = ultimateOsc(prices);
+    if (uo < 15) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (uo > 85) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 109. HIGH-FREQUENCY MASS INDEX EXPANSION (9) ─────────────────────────
+const massIndexExpansion: StrategyModule = { name: 'massIndexExp', run(prices) {
+    if (prices.length < 14) return null;
+    const mi = massIndex(prices, 9);
+    const p = prices, n = p.length;
+    if (mi > 27 && p[n-1] > p[n-2]) return { type: 'CALL', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    if (mi > 27 && p[n-1] < p[n-2]) return { type: 'PUT', score: 2, confidence: 65, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 110. MICRO HEIKIN-ASHI 2-TICK CONTINUATION ──────────────────────────
+const microHeikinAshiContinuation: StrategyModule = { name: 'microHACont', run(prices) {
+    if (prices.length < 5) return null;
+    const p = prices, n = p.length;
+    const ha = heikinAshi(prices.slice(-4));
+    if (ha.color === 'GREEN' && ha.prevColor === 'GREEN' && ha.haLow === ha.haOpen) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (ha.color === 'RED' && ha.prevColor === 'RED' && ha.haHigh === ha.haOpen) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
+// ── 111. 3-TICK MICRO CLOUD ESCAPE (5-period Kumo) ───────────────────────
+const microCloudEscape: StrategyModule = { name: 'microCloudEscape', run(prices) {
+    if (prices.length < 10) return null;
+    const p = prices, n = p.length;
+    const slice = p.slice(-7);
+    const tenkan = (Math.max(...slice.slice(-3)) + Math.min(...slice.slice(-3))) / 2;
+    const kijun = (Math.max(...slice) + Math.min(...slice)) / 2;
+    const spanA = (tenkan + kijun) / 2;
+    const spanB = (Math.max(...p.slice(-10)) + Math.min(...p.slice(-10))) / 2;
+    const kumoHi = Math.max(spanA, spanB), kumoLo = Math.min(spanA, spanB);
+    if (p[n-1] > kumoHi && p[n-2] <= kumoHi) return { type: 'CALL', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    if (p[n-1] < kumoLo && p[n-2] >= kumoLo) return { type: 'PUT', score: 2, confidence: 66, weight: getStrategyWeight(this.name), name: this.name };
+    return null;
+}};
+
 const riseFallStrategies: StrategyModule[] = [
     microTiming, rsiDivergence, macdStrategy, bbStrategy,
     stochasticStrategy, atrBreakout, priceAction, maCross,
@@ -2893,6 +3491,20 @@ const riseFallStrategies: StrategyModule[] = [
     microChannelInversion, virtualLossSequencing, dynamicPivot,
     coppockCurveStrat, vortexIndicator, centerOfGravity, schaffTrendCycle,
     ttmSqueeze, connorsRSIStrat, klingerOscStrat, volumePOC,
+    microVelocityBounce, trendAvalanche, alternatingFatigue, velocityAcceleration,
+    microSMACross, rangeCompressionEscape, absorptionSetup, zeroMagnetEdge,
+    lastDigitCumulativeImbalance, digitPatternTwinReversal, hyperRSI,
+    microStochasticCross, priceToEMAExtreme, microROCZeroInversion, microBBWickOut,
+    doubleTickBottomReversal, microDonchianBreakout, microCMOShock, microHullSwap,
+    jumpIndexGap, tickDecelerationExhaustion, microWilliamsR, fourTickScalperPivot,
+    microCCIPulse, evenOddConsecImbalance, linregSlopeCross, fastWMAvPrice,
+    microKeltnerOverExt, tickVolumeDeltaDivergence, stepIndexSymmetry,
+    awesomeOscMicroBarFlip, sequentialShockTrap, tsiHyperCross, microFisherSignal,
+    tickChannelMidlineRejection, dpoBurst, connorsRSIExtremeFade, lastDigitSequentialMirror,
+    pivotPointScalper, microTrixCross, ppoTickFlash, meanReversionBandStretch,
+    parabolicFlit, insideTickChannelBreakout, chaikinOscCross, microEnvelopeBandInv,
+    microVWAPCrossover, ultimateOscExhaustion, massIndexExpansion, microHeikinAshiContinuation,
+    microCloudEscape,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════════
