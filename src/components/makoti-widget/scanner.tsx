@@ -215,10 +215,10 @@ export const Scanner: React.FC = () => {
                     const bot = botRef.current;
                     if (bot === 'pvty_kill') {
                         setProgress('Fetching 1000 ticks from all 10 volatilities…');
-                        ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 1000, end: 'latest' }));
+                        ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
                     } else {
                         setProgress('Fetching 60 ticks from all 10 volatilities…');
-                        ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 60, end: 'latest' }));
+                        ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 60, end: 'latest', style: 'ticks' }));
                     }
                 }
             },
@@ -338,10 +338,10 @@ export const Scanner: React.FC = () => {
         if (mws.isOpen()) {
             if (currentBot === 'pvty_kill') {
                 setProgress('Fetching 1000 ticks from all 10 volatilities…');
-                ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 1000, end: 'latest' }));
+                ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
             } else {
                 setProgress('Fetching 60 ticks from all 10 volatilities…');
-                ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 60, end: 'latest' }));
+                ALL_SYMBOLS.forEach(sym => mws.send({ ticks_history: sym, count: 60, end: 'latest', style: 'ticks' }));
             }
         }
         // If not open yet, ensureWs will trigger onReady → which fires the requests
