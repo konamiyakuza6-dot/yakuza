@@ -256,13 +256,28 @@ const FreeBots = observer(() => {
                                     </Text>
                                 </div>
 
+                                <div className='free-bot-card__badges'>
+                                    <span className={`free-bot-card__badge free-bot-card__badge--${bot.difficulty.toLowerCase()}`}>
+                                        {bot.difficulty}
+                                    </span>
+                                    <span className='free-bot-card__badge free-bot-card__badge--strategy'>
+                                        {bot.strategy}
+                                    </span>
+                                </div>
+
+                                <div className='free-bot-card__features'>
+                                    {bot.features.map((f, i) => (
+                                        <span key={i} className='free-bot-card__feature-tag'>{f}</span>
+                                    ))}
+                                </div>
+
                                 <Button
                                     className='free-bot-card__load-btn'
                                     onClick={() => loadBotIntoBuilder(bot)}
                                     primary
                                     has_effect
                                     type='button'
-                                    disabled={!bot.xml} // Disable if XML not loaded yet
+                                    disabled={!bot.xml}
                                 >
                                     {bot.xml ? 'LOAD PREMIUM BOT' : 'LOADING...'}
                                 </Button>
