@@ -466,34 +466,13 @@ export const MarketKiller: React.FC = () => {
         });
 
         if (bestSym && bestSig) {
-            // Signal confirmation: require same direction on 3 consecutive ticks
+            // Signal confirmation: require same direction on 4 consecutive ticks
             signalHistoryRef.current.push({ sym: bestSym, type: bestSig.contract_type, conf: bestSig.confidence });
-            if (signalHistoryRef.current.length > 3) signalHistoryRef.current.shift();
-            const last3 = signalHistoryRef.current;
-            const confirmed = last3.length === 3 && last3.every(s => s.sym === bestSym && s.type === bestSig.contract_type);
+            if (signalHistoryRef.current.length > 4) signalHistoryRef.current.shift();
+            const last4 = signalHistoryRef.current;
+            const confirmed = last4.length === 4 && last4.every(s => s.sym === bestSym && s.type === bestSig.contract_type);
             if (confirmed) {
-                signalHistoryRef.current = []; // clear after confirmed trade
-                // Streak guard: if all 3 confirmation ticks moved in the predicted direction, skip (too extended)
-                const prices = symbolDataRef.current[bestSym]?.prices;
-                if (prices && prices.length >= 4) {
-                    const last4 = prices.slice(-4);
-                    const allUp   = last4[0] < last4[1] && last4[1] < last4[2] && last4[2] < last4[3];
-                    const allDown = last4[0] > last4[1] && last4[1] > last4[2] && last4[2] > last4[3];
-                    if ((bestSig.contract_type === 'CALL' && allUp) || (bestSig.contract_type === 'PUT' && allDown)) {
-                        return; // market too extended in predicted direction, skip
-                    }
-                }
-                // Signal alignment: at least 2 of the 3 confirmation ticks must have moved in predicted direction
-                if (prices && prices.length >= 4) {
-                    const pDir = prices.slice(-4);
-                    let aligned = 0;
-                    if (bestSig.contract_type === 'CALL') {
-                        for (let i = 0; i < 3; i++) { if (pDir[i] < pDir[i+1]) aligned++; }
-                    } else {
-                        for (let i = 0; i < 3; i++) { if (pDir[i] > pDir[i+1]) aligned++; }
-                    }
-                    if (aligned < 2) return; // not enough ticks confirmed the direction
-                }
+                signalHistoryRef.current = [];
                 executeTrade(bestSym, bestSig).catch(() => {});
             }
         }
