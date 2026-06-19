@@ -615,17 +615,15 @@ $cyan:    #06b6d4;
     backdrop-filter: blur(4px);
     border-top: 1px solid $b0;
 
-    // On mobile — float fixed at the bottom of the viewport.
+    // On mobile — leave in normal flow so it scrolls above the run panel.
+    // The .ou-root already has padding-bottom: 90px to clear the fixed controls.
     @media (max-width: 760px) {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
+        position: relative;
+        margin-top: auto;
         padding: 12px 16px;
         background: linear-gradient(to top, $bg0 60%, rgba(4,8,15,0.85));
         backdrop-filter: blur(8px);
         border-top: 1px solid $b1;
-        z-index: 200;
         padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
     }
 }
