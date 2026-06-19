@@ -223,7 +223,8 @@ export const Scanner: React.FC = () => {
                     }
                 }
             },
-            () => { cancelScanRef.current?.(); }
+            () => { cancelScanRef.current?.(); },
+            { skipAuth: true }
         );
         wsRef.current = mws;
         return mws;

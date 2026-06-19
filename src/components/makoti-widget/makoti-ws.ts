@@ -58,12 +58,14 @@ export function openMakotiWS(
     onMessage: (data: any) => void,
     onReady: () => void,
     onClose: () => void,
+    options?: { skipAuth?: boolean },
 ): MakotiWS {
     const appId     = getAppId();
     const serverUrl = getSocketURL();
     const ws        = new WebSocket(`wss://${serverUrl}/websockets/v3?app_id=${appId}`);
 
     ws.onopen = () => {
+        if (options?.skipAuth) { onReady(); return; }
         const token = getToken();
         if (token) ws.send(JSON.stringify({ authorize: token }));
         else       onReady();
