@@ -615,11 +615,13 @@ $cyan:    #06b6d4;
     backdrop-filter: blur(4px);
     border-top: 1px solid $b0;
 
-    // On mobile — leave in normal flow so it scrolls above the run panel.
-    // The .ou-root already has padding-bottom: 90px to clear the fixed controls.
+    // On mobile — fixed above the controls section so it's never covered.
     @media (max-width: 760px) {
-        position: relative;
-        margin-top: auto;
+        position: fixed;
+        bottom: 6rem;
+        left: 0;
+        right: 0;
+        z-index: 9;
         padding: 12px 16px;
         background: linear-gradient(to top, $bg0 60%, rgba(4,8,15,0.85));
         backdrop-filter: blur(8px);
