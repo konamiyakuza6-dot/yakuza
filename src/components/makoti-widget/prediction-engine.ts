@@ -3834,15 +3834,81 @@ const streakWithDist: StrategyModule = {
     },
 };
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   OU STRATEGIES (DIGITOVER / DIGITUNDER)
+   For predicting whether the next digit will be higher (OVER) or lower (UNDER)
+   than the prediction barrier. Confidence: up to 82.
+══════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── OU6. Digit Momentum ────────────────────────────────────────────────── */
+const digitMomentum: StrategyModule = {
+    name: 'DigitMomentum',
+    run(_prices, ticks) {
+        if (ticks.length < 15) return null;
+        const recent = ticks.slice(-12);
+        let ups = 0, downs = 0;
+        for (let i = 1; i < recent.length; i++) {
+            if (recent[i] > recent[i - 1]) ups++;
+            else if (recent[i] < recent[i - 1]) downs++;
+        }
+        const total = ups + downs;
+        if (total < 6) return null;
+        const r = ups / total;
+        if (r > 0.72) return { type: 'DIGITOVER', score: 2, confidence: Math.min(82, 68 + Math.round((r - 0.72) * 80)), weight: getStrategyWeight(this.name), name: this.name };
+        if (1 - r > 0.72) return { type: 'DIGITUNDER', score: 2, confidence: Math.min(82, 68 + Math.round(((1 - r) - 0.72) * 80)), weight: getStrategyWeight(this.name), name: this.name };
+        return null;
+    },
+};
+
+/* ── OU7. Frequency Anomaly ─────────────────────────────────────────────── */
+const frequencyAnomaly: StrategyModule = {
+    name: 'FreqAnomaly',
+    run(_prices, ticks) {
+        if (ticks.length < 80) return null;
+        const pcts = digitPcts(ticks, 80);
+        let hiD = 0, hiP = 0;
+        pcts.forEach((p, i) => { if (p > hiP) { hiP = p; hiD = i; } });
+        if (hiP < 18) return null;
+        const c = Math.min(80, 62 + Math.round((hiP - 10) * 1.5));
+        if (hiD >= 6) return { type: 'DIGITUNDER', score: 2, confidence: c, weight: getStrategyWeight(this.name), name: this.name };
+        if (hiD <= 3) return { type: 'DIGITOVER', score: 2, confidence: c, weight: getStrategyWeight(this.name), name: this.name };
+        const cur = ticks[ticks.length - 1];
+        if (hiD > cur) return { type: 'DIGITUNDER', score: 1, confidence: Math.round(c * 0.85), weight: getStrategyWeight(this.name), name: this.name };
+        return { type: 'DIGITOVER', score: 1, confidence: Math.round(c * 0.85), weight: getStrategyWeight(this.name), name: this.name };
+    },
+};
+
+/* ── OU8. Barrier Proximity ─────────────────────────────────────────────── */
+const barrierProximity: StrategyModule = {
+    name: 'BarrierProx',
+    run(_prices, ticks) {
+        if (ticks.length < 30) return null;
+        const cur = ticks[ticks.length - 1];
+        const t: Record<number, { h: number; l: number }> = {};
+        for (let i = 1; i < ticks.length; i++) {
+            const f = ticks[i - 1];
+            if (!t[f]) t[f] = { h: 0, l: 0 };
+            if (ticks[i] > f) t[f].h++; else if (ticks[i] < f) t[f].l++;
+        }
+        const m = t[cur];
+        if (!m || m.h + m.l < 8) return null;
+        const r = m.h / (m.h + m.l);
+        if (r > 0.68) return { type: 'DIGITOVER', score: 2, confidence: Math.min(80, 65 + Math.round((r - 0.68) * 70)), weight: getStrategyWeight(this.name), name: this.name };
+        if (1 - r > 0.68) return { type: 'DIGITUNDER', score: 2, confidence: Math.min(80, 65 + Math.round(((1 - r) - 0.68) * 70)), weight: getStrategyWeight(this.name), name: this.name };
+        return null;
+    },
+};
+
 const overUnderStrategies: StrategyModule[] = [
     longTermDistribution, windowAlignment, timedEntry, digitGapAnalysis, streakWithDist,
+    digitMomentum, frequencyAnomaly, barrierProximity,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    EVEN/ODD STRATEGIES (DIGITEVEN / DIGITODD)
    All strategies have confidence capped at 72 (parity prediction is ~50/50).
    Only fire on extreme, statistically significant deviations.
-═══════════════════════════════════════════════════════════════════════════════ */
+══════════════════════════════════════════════════════════════════════════════════ */
 
 // ── EO1. Extreme parity streak exhaustion — streaks 6+ ─────────────────────
 const extremeParityStreak: StrategyModule = {

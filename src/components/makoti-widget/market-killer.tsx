@@ -106,6 +106,16 @@ export const MarketKiller: React.FC = () => {
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
 
+    /* ── Recovery auto-start ─────────────────────────────────────────────── */
+    useEffect(() => {
+        if (window.DBot?.__recovery_auto_start) {
+            window.DBot.__recovery_auto_start = false;
+            const t = setTimeout(() => startKiller(), 150);
+            return () => clearTimeout(t);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     /* ── POC listener on the OTP new system WS ────────────────────────────── */
     // Re-subscribe POC on every contract buy by keying on activeContractsRef
     const pocUnsubRef = useRef<(() => void) | null>(null);

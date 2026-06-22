@@ -198,6 +198,7 @@ export const OverUnderKiller: React.FC = () => {
             stake: stakeParsed.current,
             martingale: martingaleParsed.current,
         };
+        window.DBot.__recovery_auto_start = true;
         if (typeof window.DBot.__switchToTab === 'function') {
             window.DBot.__switchToTab('market_killer');
         }
