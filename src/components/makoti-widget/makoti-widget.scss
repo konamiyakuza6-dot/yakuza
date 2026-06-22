@@ -881,3 +881,79 @@ $mw-radius:   10px;
 .mw-log-msg {
     word-break: break-word;
 }
+
+// ─── OVER/UNDER KILLER — Digit Analysis ──────────────────────────────────────
+
+.mw-killer__digits {
+    background: $mw-bg2;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mw-killer__digits-head {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: $mw-muted;
+}
+
+.mw-killer__digits-info {
+    display: flex;
+    gap: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    color: $mw-muted;
+    flex-wrap: wrap;
+}
+
+.mw-killer__digits-rev {
+    color: $mw-accent;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    animation: mw-blink 0.6s ease-in-out infinite alternate;
+}
+
+// ─── OVER/UNDER KILLER — Signal Display ───────────────────────────────────────
+
+.mw-killer__signal {
+    background: $mw-bg2;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mw-killer__signal-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mw-killer__signal-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: $mw-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mw-killer__signal-val {
+    font-size: 13px;
+    font-weight: 800;
+    font-family: monospace;
+    letter-spacing: 0.3px;
+}
+
+.mw-killer__signal-detail {
+    font-size: 9px;
+    color: $mw-muted;
+    line-height: 1.4;
+    word-break: break-all;
+}

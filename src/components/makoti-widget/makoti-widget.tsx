@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Scanner } from './scanner';
 import { MarketKiller } from './market-killer';
+import { OverUnderKiller } from './over-under-killer';
 import './makoti-widget.scss';
 
-type Tab = 'scanner' | 'market_killer';
+type Tab = 'scanner' | 'market_killer' | 'over_under';
 const PAD = 8;
 
 export const MakotiWidget: React.FC = () => {
@@ -14,6 +15,18 @@ export const MakotiWidget: React.FC = () => {
     /* ── FAB position (refs for zero-rerender drag) ─────────── */
     const btnPosRef = useRef({ x: Math.max(PAD, window.innerWidth - 88), y: Math.max(PAD, window.innerHeight - 108) });
     const winPosRef = useRef({ x: Math.max(PAD, window.innerWidth - 420), y: Math.max(PAD, window.innerHeight - 640) });
+
+    /* ── Expose programmatic tab switching for Recovery Mode ── */
+    const switchToTab = useCallback((t: Tab) => {
+        setTab(t);
+        localStorage.setItem('mw_tab', t);
+    }, []);
+
+    useEffect(() => {
+        window.DBot = window.DBot || {};
+        window.DBot.__switchToTab = switchToTab;
+        return () => { if (window.DBot) delete window.DBot.__switchToTab; };
+    }, [switchToTab]);
 
     /* ── Persist open / tab state to localStorage ─────────── */
     useEffect(() => { localStorage.setItem('mw_open', String(open)); }, [open]);
@@ -204,7 +217,7 @@ export const MakotiWidget: React.FC = () => {
                 style={{ position: 'fixed', left: btnPosRef.current.x, top: btnPosRef.current.y, zIndex: 100001 }}
                 onPointerDown={onBtnPointerDown}
                 onClick={onBtnClick}
-                title='MAKOTI — Scanner & Market Killer'
+                title='MAKOTI — Scanner / Market Killer / O/U'
             >
                 <span className='mw-fab__pulse' />
                 <span className='mw-fab__icon'>⚔</span>
@@ -256,10 +269,18 @@ export const MakotiWidget: React.FC = () => {
                             >
                                 Market Killer
                             </button>
+                            <button
+                                className={`mw-tab${tab === 'over_under' ? ' mw-tab--active' : ''}`}
+                                onClick={() => setTab('over_under')}
+                            >
+                                O/U Killer
+                            </button>
                         </div>
 
                         <div className='mw-win-body'>
-                            {tab === 'scanner' ? <Scanner /> : <MarketKiller />}
+                            {tab === 'scanner' && <Scanner />}
+                            {tab === 'market_killer' && <MarketKiller />}
+                            {tab === 'over_under' && <OverUnderKiller />}
                         </div>
                     </div>
 

@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS } from './makoti-ws';
-import { analyzeSignals, findBestDuration, recordOutcome, ContractType, TradeSignal } from './prediction-engine';
+import { analyzeSignals, recordOutcome, TradeSignal } from './prediction-engine';
 import { sendViaNewSystemWithPromise, onNewSystemMessage } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
+type ContractSide = 'DIGITOVER' | 'DIGITUNDER';
+
 interface SymbolState {
     ticks: number[];
     prices: number[];
@@ -24,90 +26,185 @@ interface LogEntry {
 const MAX_TICKS              = 1000;
 const MIN_TICKS_BEFORE_TRADE = 30;
 const CONFIDENCE_THRESHOLD   = 70;
-const CONTRACT_FAMILIES: { label: string; types: ContractType[] }[] = [
-    { label: 'Rise/Fall', types: ['CALL', 'PUT'] },
+
+const CONTRACT_SIDES: { label: string; value: ContractSide }[] = [
+    { label: 'Over',  value: 'DIGITOVER' },
+    { label: 'Under', value: 'DIGITUNDER' },
 ];
 
-const LS_LOGS_KEY            = 'mw_mk_logs';
-const MAX_SAVED_LOGS         = 80;
+const LS_LOGS_KEY    = 'mw_ouk_logs';
+const MAX_SAVED_LOGS = 80;
 
 function loadSavedLogs(): LogEntry[] {
-    try {
-        const raw = localStorage.getItem(LS_LOGS_KEY);
-        return raw ? (JSON.parse(raw) as LogEntry[]) : [];
-    } catch {
-        return [];
-    }
+    try { const raw = localStorage.getItem(LS_LOGS_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
+}
+function saveLogs(logs: LogEntry[]) {
+    try { localStorage.setItem(LS_LOGS_KEY, JSON.stringify(logs.slice(0, MAX_SAVED_LOGS))); } catch {}
 }
 
-function saveLogs(logs: LogEntry[]) {
-    try {
-        localStorage.setItem(LS_LOGS_KEY, JSON.stringify(logs.slice(0, MAX_SAVED_LOGS)));
-    } catch {}
+/* ── Digit frequency analysis helpers ─────────────────────────────────────── */
+function calcDigitPcts(ticks: number[]): number[] {
+    const counts = new Array(10).fill(0);
+    ticks.forEach(d => { if (d >= 0 && d <= 9) counts[d]++; });
+    const total = counts.reduce((a, v) => a + v, 0);
+    return total > 0 ? counts.map(c => (c / total) * 100) : counts;
+}
+
+function analyzeDigitPsychology(ticks: number[]): {
+    freq: number[];
+    recentFreq: number[];
+    dominantDigit: number;
+    rareDigit: number;
+    streakLen: number;
+    streakDigit: number;
+    reversalSignal: boolean;
+} {
+    const full = ticks.slice(-200);
+    const recent = ticks.slice(-30);
+    const freq = calcDigitPcts(full);
+    const recentFreq = calcDigitPcts(recent);
+
+    let dominantDigit = 0, maxPct = 0;
+    let rareDigit = 0, minPct = 100;
+    freq.forEach((p, i) => {
+        if (p > maxPct) { maxPct = p; dominantDigit = i; }
+        if (p < minPct) { minPct = p; rareDigit = i; }
+    });
+
+    const lastDigit = ticks[ticks.length - 1];
+    let streakLen = 0;
+    for (let i = ticks.length - 1; i >= 0; i--) {
+        if (ticks[i] === lastDigit) streakLen++;
+        else break;
+    }
+
+    const reversalSignal = maxPct > 30 && (dominantDigit === lastDigit) && streakLen >= 3;
+
+    return { freq, recentFreq, dominantDigit, rareDigit, streakLen, streakDigit: lastDigit, reversalSignal };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   MarketKiller
-═══════════════════════════════════════════════════════════════════════════ */
-export const MarketKiller: React.FC = () => {
+   OverUnderKiller
+════════════════════════════════════════════════════════════════════════════ */
+export const OverUnderKiller: React.FC = () => {
     const { transactions } = useStore();
 
     const [stake,       setStake]       = useState('0.35');
     const [martingale,  setMartingale]  = useState('2');
     const [takeProfit,  setTakeProfit]  = useState('10');
     const [stopLoss,    setStopLoss]    = useState('5');
-    const [vhEnabled,    setVhEnabled]   = useState(false);
-    const [vhThreshold,  setVhThreshold] = useState('1');
-    const [accurateMode, setAccurateMode] = useState(false);
+    const [predictionDigit, setPredictionDigit] = useState('5');
+    const [contractSide, setContractSide] = useState<ContractSide>('DIGITOVER');
+    const [recoveryMode, setRecoveryMode] = useState(false);
     const [running,     setRunning]     = useState(false);
     const [pnl,         setPnl]         = useState(0);
     const [logs,        setLogs]        = useState<LogEntry[]>(loadSavedLogs);
     const [activeContracts, setActiveContracts] = useState(0);
-    const [symbolDisplay, setSymbolDisplay] = useState<
-        Record<string, { lastSignal: string; wins: number; losses: number; stake: number }>
-    >({});
+    const [digitAnalysis, setDigitAnalysis] = useState<ReturnType<typeof analyzeDigitPsychology> | null>(null);
+    const [signalDisplay, setSignalDisplay] = useState<{
+        confidence: number; side: string; barrier: string; strategies: string;
+    } | null>(null);
+    const [symbolDisplay, setSymbolDisplay] = useState<Record<string, { lastSignal: string; wins: number; losses: number; stake: number }>>({});
 
     /* ── Refs ─────────────────────────────────────────────────────────────── */
-    const wsRef            = useRef<MakotiWS | null>(null);
-    const symbolDataRef    = useRef<Record<string, SymbolState>>({});
-    const pnlRef           = useRef(0);
-    const runningRef       = useRef(false);
-    const stakeParsed      = useRef(0.35);
-    const martingaleParsed = useRef(2);
-    const tpRef            = useRef(10);
-    const slRef            = useRef(5);
+    const wsRef                 = useRef<MakotiWS | null>(null);
+    const symbolDataRef         = useRef<Record<string, SymbolState>>({});
+    const pnlRef                = useRef(0);
+    const runningRef            = useRef(false);
+    const stakeParsed           = useRef(0.35);
+    const martingaleParsed      = useRef(2);
+    const tpRef                 = useRef(10);
+    const slRef                 = useRef(5);
+    const predictionDigitRef    = useRef(5);
+    const contractSideRef       = useRef<ContractSide>('DIGITOVER');
+    const recoveryRef           = useRef(false);
 
-    const globalLock         = useRef(false);
-    const activeContractsRef = useRef(0);
-    const globalStakeRef     = useRef(0.35);
-    const contractMapRef     = useRef<Map<string, { symbol: string; stake: number; strategyNames: string[]; duration: number }>>(new Map());
-    const consecutiveLossesRef = useRef(0);
-    const cooldownTicksRef     = useRef(0);
-    const signalHistoryRef     = useRef<{ sym: string; type: string; conf: number }[]>([]);
-
-    const vhStateRef = useRef({ enabled: false, threshold: 1, is_virtual: false, loss_count: 0 });
-    const vhEnabledRef = useRef(false);
-    const vhThresholdRef = useRef(1);
-    const accurateRef = useRef(false);
-    const recoveryRef = useRef<{ active: boolean; pending: number; stake: number; martingale: number } | null>(null);
-    const recoveryPnlRef = useRef(0);
-    const lastTickSymRef = useRef('');
-    const virtualTradeRef = useRef<{
-        symbol: string;
-        entryPrice: number;
-        direction: 'CALL' | 'PUT';
-        duration: number;
-        ticksElapsed: number;
-        stake: number;
-        startTime: number;
-        buyId: string;
-    } | null>(null);
+    const globalLock            = useRef(false);
+    const activeContractsRef    = useRef(0);
+    const globalStakeRef        = useRef(0.35);
+    const contractMapRef        = useRef<Map<string, { symbol: string; stake: number; strategyNames: string[]; duration: number }>>(new Map());
+    const consecutiveLossesRef  = useRef(0);
+    const cooldownTicksRef      = useRef(0);
+    const signalHistoryRef      = useRef<{ sym: string; type: string; conf: number }[]>([]);
+    const lastTickSymRef        = useRef('');
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
 
-    /* ── POC listener on the OTP new system WS ────────────────────────────── */
-    // Re-subscribe POC on every contract buy by keying on activeContractsRef
+    /* ── Log helper (defined FIRST — no deps) ────────────────────────────── */
+    const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
+        const time = new Date().toLocaleTimeString();
+        setLogs(prev => [{ time, msg, type }, ...prev].slice(0, 120));
+    }, []);
+
+    const clearLogs = useCallback(() => {
+        setLogs([]);
+        localStorage.removeItem(LS_LOGS_KEY);
+    }, []);
+
+    /* ── stopKiller (dep: addLog) ───────────────────────────────────────── */
+    const stopKiller = useCallback(() => {
+        runningRef.current = false;
+        globalLock.current = false;
+        lastTickSymRef.current = '';
+        setRunning(false);
+        try { wsRef.current?.close(); } catch (_) {}
+        wsRef.current = null;
+        activeContractsRef.current = 0;
+        setActiveContracts(0);
+        addLog('Over/Under Killer stopped.', 'info');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [addLog]);
+
+    /* ── flushDisplay (no deps) ─────────────────────────────────────────── */
+    const flushDisplay = useCallback((sym: string) => {
+        const sd = symbolDataRef.current[sym];
+        if (!sd) return;
+        setSymbolDisplay(prev => ({
+            ...prev,
+            [sym]: {
+                lastSignal: sd.lastSignal,
+                wins: sd.wins,
+                losses: sd.losses,
+                stake: globalStakeRef.current,
+            },
+        }));
+    }, []);
+
+    /* ── checkLimits (dep: addLog, stopKiller from closure) ─────────────── */
+    const checkLimits = useCallback(() => {
+        if (pnlRef.current >= tpRef.current) {
+            addLog(`✅ Take Profit +$${tpRef.current} reached! P&L: $${pnlRef.current.toFixed(2)}`, 'win');
+            stopKiller();
+            return true;
+        }
+        if (pnlRef.current <= -slRef.current) {
+            addLog(`🛑 Stop Loss -$${slRef.current} hit! P&L: $${pnlRef.current.toFixed(2)}`, 'loss');
+            stopKiller();
+            return true;
+        }
+        return false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [addLog]);
+
+    /* ── handleRecovery (dep: addLog, stopKiller from closure) ──────────── */
+    const handleRecovery = useCallback((sym: string, lossAmount: number) => {
+        addLog(`🔄 RECOVERY MODE ACTIVATED — switching to Rise/Fall via Market Killer to recover $${lossAmount.toFixed(2)}`, 'info');
+        stopKiller();
+        window.DBot = window.DBot || {};
+        window.DBot.__recovery = {
+            active: true,
+            pending: lossAmount,
+            stake: stakeParsed.current,
+            martingale: martingaleParsed.current,
+        };
+        if (typeof window.DBot.__switchToTab === 'function') {
+            window.DBot.__switchToTab('market_killer');
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [addLog]);
+
+    /* ── POC listener (uses addLog, stopKiller, flushDisplay, checkLimits, handleRecovery) ── */
     const pocUnsubRef = useRef<(() => void) | null>(null);
     const subscribePOC = useCallback(() => {
         if (!window._newSystemWS) return;
@@ -148,11 +245,6 @@ export const MarketKiller: React.FC = () => {
                     cooldownTicksRef.current = 0;
                     globalStakeRef.current = stakeParsed.current;
                     addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake reset to $${stakeParsed.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
-                    if (vhStateRef.current.enabled && !vhStateRef.current.is_virtual) {
-                        vhStateRef.current.is_virtual = true;
-                        vhStateRef.current.loss_count = 0;
-                        addLog(`🤖 [VIRTUAL HOOK] 🔄 Real WIN — switching back to VIRTUAL mode`, 'info');
-                    }
                 } else {
                     sd.losses++;
                     consecutiveLossesRef.current++;
@@ -162,21 +254,11 @@ export const MarketKiller: React.FC = () => {
                         addLog(`⚠ ${consecutiveLossesRef.current} consecutive losses — cooldown ${cooldownTicksRef.current} ticks`, 'loss');
                     }
                     addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake $${globalStakeRef.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
-                }
 
-                // Recovery mode P&L tracking
-                if (recoveryRef.current) {
-                    recoveryPnlRef.current += profit;
-                    if (recoveryPnlRef.current >= 0) {
-                        addLog(`🔄 RECOVERY COMPLETE — returning to Over/Under`, 'win');
-                        window.DBot.__recovery = null;
-                        stopKiller();
-                        if (typeof window.DBot.__switchToTab === 'function') {
-                            window.DBot.__switchToTab('over_under');
-                        }
+                    if (recoveryRef.current) {
+                        handleRecovery(sym, Math.abs(profit));
                         return;
                     }
-                    addLog(`🔄 Recovery progress: $${recoveryPnlRef.current.toFixed(2)} / $0.00`, 'info');
                 }
 
                 flushDisplay(sym);
@@ -192,129 +274,21 @@ export const MarketKiller: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [running]);
 
-    /* ── Log helper ──────────────────────────────────────────────────────── */
-    const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
-        const time = new Date().toLocaleTimeString();
-        setLogs(prev => [{ time, msg, type }, ...prev].slice(0, 120));
-    }, []);
-
-    const clearLogs = useCallback(() => {
-        setLogs([]);
-        localStorage.removeItem(LS_LOGS_KEY);
-    }, []);
-
-    const flushDisplay = useCallback((sym: string) => {
-        const sd = symbolDataRef.current[sym];
-        if (!sd) return;
-        setSymbolDisplay(prev => ({
-            ...prev,
-            [sym]: {
-                lastSignal: sd.lastSignal,
-                wins: sd.wins,
-                losses: sd.losses,
-                stake: globalStakeRef.current,
-            },
-        }));
-    }, []);
-
-    const checkLimits = useCallback(() => {
-        if (pnlRef.current >= tpRef.current) {
-            addLog(`✅ Take Profit +$${tpRef.current} reached! P&L: $${pnlRef.current.toFixed(2)}`, 'win');
-            stopKiller();
-            return true;
-        }
-        if (pnlRef.current <= -slRef.current) {
-            addLog(`🛑 Stop Loss -$${slRef.current} hit! P&L: $${pnlRef.current.toFixed(2)}`, 'loss');
-            stopKiller();
-            return true;
-        }
-        return false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [addLog]);
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const stopKiller = useCallback(() => {
-        runningRef.current = false;
-        globalLock.current = false;
-        virtualTradeRef.current = null;
-        lastTickSymRef.current = '';
-        setRunning(false);
-        try { wsRef.current?.close(); } catch (_) {}
-        wsRef.current = null;
-        activeContractsRef.current = 0;
-        setActiveContracts(0);
-        addLog('Market Killer stopped.', 'info');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [addLog]);
-
-    /* ── Auto-detect best tick duration (1-5) by analyzing price history ──── */
-    const getBestDuration = useCallback((prices: number[], direction: 'CALL' | 'PUT'): number => {
-        return findBestDuration(prices, direction);
-    }, []);
-
-    /* ── Dynamic confidence threshold for ACCURATE mode ─────────────────── */
-    const getConfidenceThreshold = useCallback(() => {
-        if (!accurateRef.current) return CONFIDENCE_THRESHOLD;
-        const losses = consecutiveLossesRef.current;
-        return Math.min(CONFIDENCE_THRESHOLD + losses * 5, 85);
-    }, []);
-
-    /* ── Execute ONE trade using the global stake ────────────────────────── */
+    /* ── executeTrade (dep: addLog, flushDisplay) ────────────────────────── */
     const executeTrade = useCallback(async (sym: string, signal: TradeSignal) => {
         if (!runningRef.current) return;
-        if (!signal || signal.confidence < getConfidenceThreshold()) return;
+        if (!signal || signal.confidence < CONFIDENCE_THRESHOLD) return;
 
         const sd = symbolDataRef.current[sym];
         if (!sd) return;
 
-        // ── Virtual Hook: track the EXACT same trade over its duration ──
-        if (vhStateRef.current.enabled && vhStateRef.current.is_virtual) {
-            globalLock.current = true;
-            activeContractsRef.current = 1;
-            setActiveContracts(1);
-            const duration = getBestDuration(sd.prices, signal.contract_type);
-            const entryPrice = sd.prices[sd.prices.length - 1];
-            const vhStake = globalStakeRef.current;
-            const vhBuyId = `vh_${sym}_${Date.now()}`;
-            virtualTradeRef.current = {
-                symbol: sym,
-                entryPrice,
-                direction: signal.contract_type,
-                duration,
-                ticksElapsed: 0,
-                stake: vhStake,
-                startTime: Math.floor(Date.now() / 1000),
-                buyId: vhBuyId,
-            };
-            const label = signal.contract_type === 'CALL' ? 'RISE' : 'FALL';
-            addLog(`🤖 [VIRTUAL HOOK] 🔍 Virtual ${label} D${duration} on ${SYMBOL_LABELS[sym]} @ $${entryPrice.toFixed(4)} — tracking ${duration} ticks`, 'info');
-            try {
-                transactions.onBotContractEvent({
-                    transaction_ids: { buy: vhBuyId },
-                    contract_id: vhBuyId,
-                    buy_price: vhStake,
-                    currency: 'USD',
-                    contract_type: signal.contract_type,
-                    underlying: sym,
-                    display_name: SYMBOL_LABELS[sym],
-                    date_start: Math.floor(Date.now() / 1000),
-                    entry_tick_time: Math.floor(Date.now() / 1000),
-                    status: 'open',
-                    is_virtual: true,
-                } as any);
-            } catch (_) {}
-            signalHistoryRef.current = [];
-            return;
-        }
-
-        // Micro-trend entry gate: don't trade against the trend
-        if (signal.contract_type === 'CALL' || signal.contract_type === 'PUT') {
-            const last3 = sd.prices.slice(-3);
+        if (signal.contract_type === 'DIGITOVER' || signal.contract_type === 'DIGITUNDER') {
+            const last3 = sd.ticks.slice(-3);
             if (last3.length === 3) {
                 const rising = last3[0] < last3[1] && last3[1] < last3[2];
                 const falling = last3[0] > last3[1] && last3[1] > last3[2];
-                if (signal.contract_type === 'CALL' && falling) return;
-                if (signal.contract_type === 'PUT' && rising) return;
+                if (signal.contract_type === 'DIGITOVER' && falling) return;
+                if (signal.contract_type === 'DIGITUNDER' && rising) return;
             }
         }
 
@@ -324,23 +298,35 @@ export const MarketKiller: React.FC = () => {
 
         const { contract_type, barrier, reason, confidence, details } = signal;
         const tradeStake = Number(globalStakeRef.current.toFixed(2));
-        const duration   = getBestDuration(sd.prices, contract_type);
+        const duration = 1;
+        const userSide = contractSideRef.current;
+
+        if (contract_type !== userSide) {
+            addLog(`⏳ Signal is ${contract_type === 'DIGITOVER' ? 'OVER' : 'UNDER'} but user selected ${userSide === 'DIGITOVER' ? 'OVER' : 'UNDER'} — waiting for alignment`, 'info');
+            globalLock.current = false;
+            activeContractsRef.current = 0;
+            setActiveContracts(0);
+            return;
+        }
+
         addLog(`Trade stake: $${tradeStake.toFixed(2)} (base: $${stakeParsed.current.toFixed(2)}, mg: ${martingaleParsed.current}x)`, 'trade');
 
-        // Extract strategy names from details for outcome tracking
         const strategyMatch = details.match(/Strategies: (.+)/);
         const strategyNames = strategyMatch
             ? strategyMatch[1].split(',').map(s => s.trim().split('(')[0])
             : ['ensemble'];
 
+        const actualBarrier = predictionDigitRef.current;
+        const contractTypeStr = contract_type === 'DIGITOVER' ? 'DIGITOVER' : 'DIGITUNDER';
+
         const params: any = {
             amount: tradeStake, basis: 'stake', currency: 'USD',
             duration, duration_unit: 't',
-            symbol: sym, contract_type,
+            symbol: sym, contract_type: contractTypeStr,
+            barrier: String(actualBarrier),
         };
-        if (barrier) params.barrier = barrier;
 
-        const label = contract_type === 'CALL' ? 'RISE' : 'FALL';
+        const label = contract_type === 'DIGITOVER' ? `OVER ${actualBarrier}` : `UNDER ${actualBarrier}`;
 
         if (window._newSystemWS?.readyState === WebSocket.OPEN) {
             try {
@@ -358,7 +344,7 @@ export const MarketKiller: React.FC = () => {
                             transaction_ids: { buy: response?.buy?.transaction_id },
                             buy_price: tradeStake,
                             currency: 'USD',
-                            contract_type,
+                            contract_type: contractTypeStr,
                             underlying: sym,
                             display_name: SYMBOL_LABELS[sym],
                             date_start: Math.floor(Date.now() / 1000),
@@ -389,7 +375,7 @@ export const MarketKiller: React.FC = () => {
                     contract_id: sym + Date.now(),
                     buy_price: tradeStake,
                     currency: 'USD',
-                    contract_type,
+                    contract_type: contractTypeStr,
                     underlying: sym,
                     display_name: SYMBOL_LABELS[sym],
                     date_start: Math.floor(Date.now() / 1000),
@@ -402,98 +388,45 @@ export const MarketKiller: React.FC = () => {
             activeContractsRef.current = 0;
             setActiveContracts(0);
         }
-    }, [addLog, flushDisplay, getConfidenceThreshold]);
+    }, [addLog, flushDisplay]);
 
-    /* ── Handle every incoming tick ──────────────────────────────────────── */
+    /* ── onTickReceived (dep: executeTrade) ─────────────────────────────── */
     const onTickReceived = useCallback(() => {
         if (!runningRef.current) return;
-
-        // ── Virtual trade resolution (process before globalLock check) ──
-        if (virtualTradeRef.current) {
-            const vt = virtualTradeRef.current;
-            if (lastTickSymRef.current !== vt.symbol) return; // only advance on matching symbol
-            const sd = symbolDataRef.current[vt.symbol];
-            if (sd) {
-                vt.ticksElapsed++;
-                if (vt.ticksElapsed >= vt.duration) {
-                    const currentPrice = sd.prices[sd.prices.length - 1];
-                    const won = vt.direction === 'CALL'
-                        ? currentPrice > vt.entryPrice
-                        : currentPrice < vt.entryPrice;
-                    const label = vt.direction === 'CALL' ? 'RISE' : 'FALL';
-                    const vhProfit = won ? vt.stake * 0.95 : -vt.stake;
-                    const sellPrice = won ? vt.stake * 1.95 : 0;
-                    try {
-                        const entrySpotStr = vt.entryPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
-                        const exitSpotStr = currentPrice.toFixed(PIP_SIZES[vt.symbol] || 2);
-                        const vhDisplayName = won ? 'Virtual Win' : 'Virtual Loss';
-                        transactions.onBotContractEvent({
-                            transaction_ids: { buy: vt.buyId },
-                            contract_id: vt.buyId,
-                            buy_price: vt.stake,
-                            sell_price: sellPrice,
-                            currency: 'USD',
-                            contract_type: vt.direction,
-                            underlying: vt.symbol,
-                            display_name: vhDisplayName,
-                            date_start: vt.startTime,
-                            date_expiry: Math.floor(Date.now() / 1000),
-                            entry_tick: entrySpotStr,
-                            entry_tick_time: vt.startTime,
-                            exit_tick: exitSpotStr,
-                            exit_tick_time: Math.floor(Date.now() / 1000),
-                            profit: vhProfit,
-                            is_sold: true,
-                            is_completed: true,
-                            status: 'sold',
-                            is_virtual: true,
-                        } as any);
-                    } catch (_) {}
-                    if (won) {
-                        vhStateRef.current.loss_count = 0;
-                        addLog(`🤖 [VIRTUAL HOOK] ✅ Virtual WIN ${label} D${vt.duration} on ${SYMBOL_LABELS[vt.symbol]} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${currentPrice.toFixed(4)}`, 'win');
-                    } else {
-                        vhStateRef.current.loss_count++;
-                        addLog(`🤖 [VIRTUAL HOOK] ❌ Virtual LOSS ${label} D${vt.duration} on ${SYMBOL_LABELS[vt.symbol]} #${vhStateRef.current.loss_count}/${vhStateRef.current.threshold} — Entry $${vt.entryPrice.toFixed(4)} → Exit $${currentPrice.toFixed(4)}`, 'loss');
-                        if (vhStateRef.current.loss_count >= vhStateRef.current.threshold) {
-                            vhStateRef.current.is_virtual = false;
-                            addLog(`🤖 [VIRTUAL HOOK] 🔄 THRESHOLD REACHED — Switching to REAL trades`, 'info');
-                        }
-                    }
-                    virtualTradeRef.current = null;
-                    globalLock.current = false;
-                    activeContractsRef.current = 0;
-                    setActiveContracts(0);
-                    checkLimits();
-                }
-            }
-            return; // wait for duration to elapse
-        }
-
-        if (globalLock.current)  return;
+        if (globalLock.current) return;
         if (cooldownTicksRef.current > 0) { cooldownTicksRef.current--; return; }
 
-        const dynThreshold = getConfidenceThreshold();
         let bestSym  = '';
         let bestSig: TradeSignal | null = null;
-        let bestConf = dynThreshold - 1;
+        let bestConf = CONFIDENCE_THRESHOLD - 1;
 
         ALL_SYMBOLS.forEach(s => {
             const sd = symbolDataRef.current[s];
             if (!sd || sd.ticks.length < MIN_TICKS_BEFORE_TRADE) return;
-            // Run each contract family separately so they compete fairly
-            for (const family of CONTRACT_FAMILIES) {
-                const sig = analyzeSignals(sd.ticks, sd.prices, family.types);
-                if (sig && sig.confidence > bestConf) {
-                    bestConf = sig.confidence;
-                    bestSym  = s;
-                    bestSig  = sig;
-                }
+            const sig = analyzeSignals(sd.ticks, sd.prices, ['DIGITOVER', 'DIGITUNDER']);
+            if (sig && sig.confidence > bestConf) {
+                bestConf = sig.confidence;
+                bestSym  = s;
+                bestSig  = sig;
             }
         });
 
+        if (bestSym && symbolDataRef.current[bestSym]) {
+            const sd = symbolDataRef.current[bestSym];
+            const analysis = analyzeDigitPsychology(sd.ticks);
+            setDigitAnalysis(analysis);
+        }
+
+        if (bestSig) {
+            setSignalDisplay({
+                confidence: bestSig.confidence,
+                side: bestSig.contract_type,
+                barrier: bestSig.barrier || String(predictionDigitRef.current),
+                strategies: bestSig.details,
+            });
+        }
+
         if (bestSym && bestSig) {
-            // Signal confirmation: require same direction on 4 consecutive ticks
             signalHistoryRef.current.push({ sym: bestSym, type: bestSig.contract_type, conf: bestSig.confidence });
             if (signalHistoryRef.current.length > 4) signalHistoryRef.current.shift();
             const last4 = signalHistoryRef.current;
@@ -503,9 +436,8 @@ export const MarketKiller: React.FC = () => {
                 executeTrade(bestSym, bestSig).catch(() => {});
             }
         }
-    }, [executeTrade, getConfidenceThreshold]);
+    }, [executeTrade]);
 
-    // Ref for onTickReceived to avoid stale closure in WS handler
     const onTickRef = useRef(onTickReceived);
     onTickRef.current = onTickReceived;
 
@@ -515,55 +447,28 @@ export const MarketKiller: React.FC = () => {
         const mgVal    = Math.max(1,    parseFloat(martingale) || 2);
         const tpVal    = Math.max(0.5,  parseFloat(takeProfit) || 10);
         const slVal    = Math.max(0.5,  parseFloat(stopLoss)   || 5);
+        const predVal  = Math.min(9, Math.max(0, parseInt(predictionDigit) || 5));
 
         stakeParsed.current      = stakeVal;
         martingaleParsed.current = mgVal;
         tpRef.current            = tpVal;
         slRef.current            = slVal;
+        predictionDigitRef.current = predVal;
+        contractSideRef.current  = contractSide;
+        recoveryRef.current      = recoveryMode;
         pnlRef.current           = 0;
         globalLock.current       = false;
-        virtualTradeRef.current  = null;
         lastTickSymRef.current   = '';
         activeContractsRef.current = 0;
         globalStakeRef.current   = stakeVal;
         consecutiveLossesRef.current = 0;
-        cooldownTicksRef.current     = 0;
-
-        vhEnabledRef.current = vhEnabled;
-        vhThresholdRef.current = Math.max(1, parseInt(vhThreshold) || 1);
-        accurateRef.current = accurateMode;
-        vhStateRef.current = {
-            enabled: vhEnabled,
-            threshold: vhThresholdRef.current,
-            is_virtual: vhEnabled,
-            loss_count: 0,
-        };
-        if (vhEnabled) {
-            addLog(`🤖 [VIRTUAL HOOK] Enabled — ${vhThresholdRef.current} virtual losses before real trades`, 'info');
-        }
-        if (accurateMode) {
-            addLog(`🎯 ACCURATE mode ON — confidence rises after each real loss (70➔75➔80➔85)`, 'info');
-        }
-
-        // ── Recovery mode override ──
-        const recovery = window.DBot?.__recovery;
-        recoveryRef.current = null;
-        recoveryPnlRef.current = 0;
-        if (recovery?.active) {
-            stakeParsed.current = recovery.stake;
-            martingaleParsed.current = recovery.martingale;
-            globalStakeRef.current = recovery.stake;
-            recoveryPnlRef.current = -recovery.pending;
-            recoveryRef.current = recovery;
-            vhEnabledRef.current = true;
-            vhThresholdRef.current = 1;
-            vhStateRef.current = { enabled: true, threshold: 1, is_virtual: true, loss_count: 0 };
-            addLog(`🔄 RECOVERY MODE — recover $${recovery.pending.toFixed(2)} loss | stake $${recovery.stake} ×${recovery.martingale} | VH on (threshold 1)`, 'info');
-        }
+        cooldownTicksRef.current = 0;
 
         setPnl(0);
         setActiveContracts(0);
         setSymbolDisplay({});
+        setSignalDisplay(null);
+        setDigitAnalysis(null);
         contractMapRef.current = new Map();
 
         symbolDataRef.current = {};
@@ -577,7 +482,10 @@ export const MarketKiller: React.FC = () => {
         runningRef.current = true;
         setRunning(true);
 
-        addLog(`⚔ Kill Market — Auto (Rise/Fall + Digits) | stake $${stakeVal}  MG ×${mgVal}  TP $${tpVal}  SL $${slVal}`, 'info');
+        addLog(`⚔ Over/Under Killer — ${contractSide === 'DIGITOVER' ? 'OVER' : 'UNDER'} ${predVal} | stake $${stakeVal}  MG ×${mgVal}  TP $${tpVal}  SL $${slVal}`, 'info');
+        if (recoveryMode) {
+            addLog(`🔄 RECOVERY MODE ON — real losses switch to Rise/Fall via Market Killer`, 'info');
+        }
         addLog('Connecting to Deriv API…', 'info');
 
         if (wsRef.current) { try { wsRef.current.close(); } catch (_) {} wsRef.current = null; }
@@ -596,7 +504,6 @@ export const MarketKiller: React.FC = () => {
             }
 
             switch (data.msg_type) {
-
                 case 'history': {
                     const sym: string = data.echo_req?.ticks_history;
                     if (!sym || !symbolDataRef.current[sym]) return;
@@ -610,25 +517,21 @@ export const MarketKiller: React.FC = () => {
                     addLog(`Loaded ${digits.length} ticks — ${SYMBOL_LABELS[sym]}`, 'info');
                     break;
                 }
-
                 case 'tick': {
-                    const tick     = data.tick;
+                    const tick = data.tick;
                     const sym: string = tick.symbol;
                     if (!sym || !symbolDataRef.current[sym]) return;
                     const sd  = symbolDataRef.current[sym];
                     const pip = PIP_SIZES[sym] || tick.pip_size || 2;
                     const price = Number(tick.quote);
                     const digit = Number(price.toFixed(pip).slice(-1));
-
                     sd.ticks  = [...sd.ticks.slice(-(MAX_TICKS - 1)), digit];
                     sd.prices = [...sd.prices.slice(-(MAX_TICKS - 1)), price];
                     sd.ready  = sd.ticks.length >= MIN_TICKS_BEFORE_TRADE;
-
                     lastTickSymRef.current = sym;
                     onTickRef.current();
                     break;
                 }
-
                 case 'buy': {
                     const sym: string = data.echo_req?.parameters?.symbol;
                     if (!sym) return;
@@ -639,15 +542,14 @@ export const MarketKiller: React.FC = () => {
                         return;
                     }
                     const cid = String(data.buy.contract_id);
-                    contractMapRef.current.set(cid, { symbol: sym, stake: globalStakeRef.current, strategyNames: ['ensemble'] });
+                    contractMapRef.current.set(cid, { symbol: sym, stake: globalStakeRef.current, strategyNames: ['ensemble'], duration: 1 });
                     addLog(`Contract ${cid} open on ${SYMBOL_LABELS[sym]}`, 'info');
                     break;
                 }
-
                 case 'proposal_open_contract': {
                     const c = data.proposal_open_contract;
                     if (!c?.is_sold) return;
-                    const cid   = String(c.contract_id);
+                    const cid = String(c.contract_id);
                     const entry = contractMapRef.current.get(cid);
                     if (!entry) return;
                     contractMapRef.current.delete(cid);
@@ -657,8 +559,7 @@ export const MarketKiller: React.FC = () => {
                     if (!sd) return;
 
                     const profit = Number(c.profit);
-                    const won    = profit >= 0;
-
+                    const won = profit >= 0;
                     strategyNames.forEach(n => recordOutcome(n, won));
 
                     pnlRef.current += profit;
@@ -675,11 +576,6 @@ export const MarketKiller: React.FC = () => {
                         cooldownTicksRef.current = 0;
                         globalStakeRef.current = stakeParsed.current;
                         addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake reset to $${stakeParsed.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
-                        if (vhStateRef.current.enabled && !vhStateRef.current.is_virtual) {
-                            vhStateRef.current.is_virtual = true;
-                            vhStateRef.current.loss_count = 0;
-                            addLog(`🤖 [VIRTUAL HOOK] 🔄 Real WIN — switching back to VIRTUAL mode`, 'info');
-                        }
                     } else {
                         sd.losses++;
                         consecutiveLossesRef.current++;
@@ -689,21 +585,11 @@ export const MarketKiller: React.FC = () => {
                             addLog(`⚠ ${consecutiveLossesRef.current} consecutive losses — cooldown ${cooldownTicksRef.current} ticks`, 'loss');
                         }
                         addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake $${globalStakeRef.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
-                    }
 
-                    // Recovery mode P&L tracking
-                    if (recoveryRef.current) {
-                        recoveryPnlRef.current += profit;
-                        if (recoveryPnlRef.current >= 0) {
-                            addLog(`🔄 RECOVERY COMPLETE — returning to Over/Under`, 'win');
-                            window.DBot.__recovery = null;
-                            stopKiller();
-                            if (typeof window.DBot.__switchToTab === 'function') {
-                                window.DBot.__switchToTab('over_under');
-                            }
+                        if (recoveryRef.current) {
+                            handleRecovery(sym, Math.abs(profit));
                             return;
                         }
-                        addLog(`🔄 Recovery progress: $${recoveryPnlRef.current.toFixed(2)} / $0.00`, 'info');
                     }
 
                     flushDisplay(sym);
@@ -719,7 +605,7 @@ export const MarketKiller: React.FC = () => {
         const mws = openMakotiWS(
             handleMsg,
             () => {
-                addLog('Connected ✓  Subscribing to all 10 volatilities…', 'info');
+                addLog('Connected ✓ Subscribing to all 10 volatilities…', 'info');
                 if (!window._newSystemWS) {
                     mws.send({ proposal_open_contract: 1, subscribe: 1 });
                 }
@@ -735,7 +621,7 @@ export const MarketKiller: React.FC = () => {
             }
         );
         wsRef.current = mws;
-    }, [stake, martingale, takeProfit, stopLoss, vhEnabled, vhThreshold, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
+    }, [stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
 
     /* ── Derived display values ──────────────────────────────────────────── */
     const totalWins   = Object.values(symbolDisplay).reduce((a, b) => a + b.wins,  0);
@@ -743,9 +629,9 @@ export const MarketKiller: React.FC = () => {
     const totalTrades = totalWins + totalLosses;
     const winRate     = totalTrades > 0 ? (totalWins / totalTrades * 100).toFixed(1) : '—';
 
+    /* ── Render ──────────────────────────────────────────────────────────── */
     return (
         <div className='mw-killer'>
-            {/* ── Input fields ── */}
             <div className='mw-killer__fields'>
                 <div className='mw-field'>
                     <label className='mw-label'>Stake ($)</label>
@@ -769,32 +655,31 @@ export const MarketKiller: React.FC = () => {
                 </div>
             </div>
 
-            {/* ── Virtual Hook toggle ── */}
-            <div className='mw-killer__vh'>
-                <label className='mw-killer__vh-toggle'>
-                    <input type='checkbox' checked={vhEnabled}
-                        onChange={e => setVhEnabled(e.target.checked)} disabled={running} />
-                    <span>Virtual Hook</span>
-                </label>
-                {vhEnabled && (
-                    <div className='mw-field mw-killer__vh-threshold'>
-                        <label className='mw-label'>Loss Threshold:</label>
-                        <input className='mw-input' type='number' min='1' step='1'
-                            value={vhThreshold} onChange={e => setVhThreshold(e.target.value)} disabled={running} />
-                    </div>
-                )}
+            <div className='mw-killer__fields'>
+                <div className='mw-field'>
+                    <label className='mw-label'>Prediction Digit</label>
+                    <input className='mw-input' type='number' min='0' max='9' step='1'
+                        value={predictionDigit} onChange={e => setPredictionDigit(e.target.value)} disabled={running} />
+                </div>
+                <div className='mw-field'>
+                    <label className='mw-label'>Contract Type</label>
+                    <select className='mw-select' value={contractSide}
+                        onChange={e => setContractSide(e.target.value as ContractSide)} disabled={running}>
+                        {CONTRACT_SIDES.map(s => (
+                            <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
-            {/* ── ACCURATE mode toggle ── */}
             <div className='mw-killer__vh'>
                 <label className='mw-killer__vh-toggle'>
-                    <input type='checkbox' checked={accurateMode}
-                        onChange={e => setAccurateMode(e.target.checked)} disabled={running} />
-                    <span>ACCURATE <small style={{opacity:0.6,fontWeight:400}}>(raises confidence after each loss)</small></span>
+                    <input type='checkbox' checked={recoveryMode}
+                        onChange={e => setRecoveryMode(e.target.checked)} disabled={running} />
+                    <span>Recovery Mode <small style={{opacity:0.6,fontWeight:400}}>(on loss → RF via Market Killer)</small></span>
                 </label>
             </div>
 
-            {/* ── Kill Market button ── */}
             <button
                 className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
                 onClick={running ? stopKiller : startKiller}
@@ -804,15 +689,57 @@ export const MarketKiller: React.FC = () => {
                     : '⚔ KILL MARKET'}
             </button>
 
-            {/* ── Running notice ── */}
             {running && (
                 <div className='mw-killer__mode-note'>
-                    Auto (RF + OU + EO) — 47-strategy ensemble engine
+                    Auto (Over/Under) — Digit {predictionDigitRef.current} {contractSide === 'DIGITOVER' ? 'OVER' : 'UNDER'}
                     {activeContracts > 0 && <span className='mw-killer__active-dot'> ● TRADE LIVE</span>}
                 </div>
             )}
 
-            {/* ── Stats ── */}
+            {running && digitAnalysis && (
+                <div className='mw-killer__digits'>
+                    <div className='mw-killer__digits-head'>Digit Distribution (200 ticks)</div>
+                    <div className='mw-scanner__bars' style={{height:32}}>
+                        {digitAnalysis.freq.map((p, i) => (
+                            <div key={i} className='mw-scanner__bar-wrap'
+                                style={{opacity: i === digitAnalysis.streakDigit ? 1 : 0.6}}
+                                title={`Digit ${i}: ${p.toFixed(1)}%`}>
+                                <div className='mw-scanner__bar-fill'
+                                    style={{
+                                        height: `${Math.min(100, p * 2.5)}%`,
+                                        background: i === digitAnalysis.streakDigit
+                                            ? 'linear-gradient(to top, #f97316, #fb923c)'
+                                            : 'linear-gradient(to top, #3b82f6, #60a5fa)',
+                                    }} />
+                                <span className='mw-scanner__bar-pct'>{p.toFixed(0)}%</span>
+                                <span className='mw-scanner__bar-lbl' style={{fontSize:7}}>{i}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className='mw-killer__digits-info'>
+                        <span>Streak: {digitAnalysis.streakDigit}×{digitAnalysis.streakLen}</span>
+                        <span>Dom: {digitAnalysis.dominantDigit}</span>
+                        {digitAnalysis.reversalSignal && <span className='mw-killer__digits-rev'>REVERSAL</span>}
+                    </div>
+                </div>
+            )}
+
+            {running && signalDisplay && (
+                <div className='mw-killer__signal'>
+                    <div className='mw-killer__signal-row'>
+                        <span className='mw-killer__signal-label'>Signal</span>
+                        <span className='mw-killer__signal-val'>{signalDisplay.side === 'DIGITOVER' ? 'OVER' : 'UNDER'} @ {signalDisplay.barrier}</span>
+                    </div>
+                    <div className='mw-killer__signal-row'>
+                        <span className='mw-killer__signal-label'>Confidence</span>
+                        <span className='mw-killer__signal-val' style={{
+                            color: signalDisplay.confidence >= 70 ? '#22c55e' : signalDisplay.confidence >= 55 ? '#eab308' : '#ef4444'
+                        }}>{signalDisplay.confidence}%</span>
+                    </div>
+                    <div className='mw-killer__signal-detail'>{signalDisplay.strategies.slice(0, 80)}…</div>
+                </div>
+            )}
+
             {(running || totalTrades > 0) && (
                 <div className='mw-killer__stats'>
                     <div className={`mw-killer__pnl${pnl >= 0 ? ' mw-killer__pnl--pos' : ' mw-killer__pnl--neg'}`}>
@@ -827,7 +754,6 @@ export const MarketKiller: React.FC = () => {
                 </div>
             )}
 
-            {/* ── Per-symbol rows ── */}
             {Object.keys(symbolDisplay).length > 0 && (
                 <div className='mw-killer__symbols'>
                     {ALL_SYMBOLS.filter(s => symbolDisplay[s]).map(sym => {
@@ -853,7 +779,6 @@ export const MarketKiller: React.FC = () => {
                 </div>
             )}
 
-            {/* ── Log ── */}
             {logs.length > 0 && (
                 <div className='mw-killer__log-wrap'>
                     <div className='mw-killer__log-header'>
@@ -873,3 +798,5 @@ export const MarketKiller: React.FC = () => {
         </div>
     );
 };
+
+export default OverUnderKiller;
