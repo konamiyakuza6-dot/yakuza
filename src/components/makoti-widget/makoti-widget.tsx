@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Scanner } from './scanner';
 import { MarketKiller } from './market-killer';
 import { OverUnderKiller } from './over-under-killer';
