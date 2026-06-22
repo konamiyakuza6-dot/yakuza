@@ -256,13 +256,18 @@ export const MarketKiller: React.FC = () => {
     const getConfidenceThreshold = useCallback(() => {
         if (!accurateRef.current) return CONFIDENCE_THRESHOLD;
         const losses = consecutiveLossesRef.current;
-        return Math.min(CONFIDENCE_THRESHOLD + losses * 5, 85);
+        return Math.min(CONFIDENCE_THRESHOLD + losses * 3, 80);
     }, []);
 
     /* ── Execute ONE trade using the global stake ────────────────────────── */
     const executeTrade = useCallback(async (sym: string, signal: TradeSignal) => {
         if (!runningRef.current) return;
-        if (!signal || signal.confidence < getConfidenceThreshold()) return;
+        if (!signal || signal.confidence < getConfidenceThreshold()) {
+            if (accurateRef.current && signal) {
+                addLog(`⏳ ACCURATE: ${signal.confidence.toFixed(0)}% < ${getConfidenceThreshold()}% threshold — waiting for higher confidence`, 'info');
+            }
+            return;
+        }
 
         const sd = symbolDataRef.current[sym];
         if (!sd) return;
@@ -473,10 +478,9 @@ export const MarketKiller: React.FC = () => {
         if (globalLock.current)  return;
         if (cooldownTicksRef.current > 0) { cooldownTicksRef.current--; return; }
 
-        const dynThreshold = getConfidenceThreshold();
         let bestSym  = '';
         let bestSig: TradeSignal | null = null;
-        let bestConf = dynThreshold - 1;
+        let bestConf = CONFIDENCE_THRESHOLD - 1;
 
         ALL_SYMBOLS.forEach(s => {
             const sd = symbolDataRef.current[s];
@@ -503,7 +507,7 @@ export const MarketKiller: React.FC = () => {
                 executeTrade(bestSym, bestSig).catch(() => {});
             }
         }
-    }, [executeTrade, getConfidenceThreshold]);
+    }, [executeTrade]);
 
     // Ref for onTickReceived to avoid stale closure in WS handler
     const onTickRef = useRef(onTickReceived);
@@ -542,7 +546,7 @@ export const MarketKiller: React.FC = () => {
             addLog(`🤖 [VIRTUAL HOOK] Enabled — ${vhThresholdRef.current} virtual losses before real trades`, 'info');
         }
         if (accurateMode) {
-            addLog(`🎯 ACCURATE mode ON — confidence rises after each real loss (70➔75➔80➔85)`, 'info');
+            addLog(`🎯 ACCURATE mode ON — confidence rises after each real loss (70➔73➔76➔80)`, 'info');
         }
 
         // ── Recovery mode override ──
