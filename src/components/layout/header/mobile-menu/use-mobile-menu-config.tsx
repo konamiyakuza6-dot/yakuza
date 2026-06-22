@@ -127,7 +127,13 @@ const useMobileMenuConfig = (client?: RootStore['client']) => {
                         const fallback = 'https://play.google.com/store/search?q=Binary+Mpesa+Services&c=apps';
                         const isAndroid = /android/i.test(navigator.userAgent);
                         if (isAndroid) {
-                            window.location.href = `intent://#Intent;package=${pkg};S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
+                            let done = false;
+                            const go = () => { if (!done) { done = true; window.location.href = fallback; } };
+                            window.location.href = `intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${pkg};end`;
+                            const t = setTimeout(go, 800);
+                            window.addEventListener('visibilitychange', () => {
+                                if (document.hidden) { clearTimeout(t); }
+                            }, { once: true });
                         } else {
                             window.open(fallback, '_blank');
                         }
