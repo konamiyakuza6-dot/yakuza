@@ -267,7 +267,7 @@ export const MarketKiller: React.FC = () => {
     const getConfidenceThreshold = useCallback(() => {
         if (!accurateRef.current) return CONFIDENCE_THRESHOLD;
         const losses = consecutiveLossesRef.current;
-        return Math.min(CONFIDENCE_THRESHOLD + losses * 3, 80);
+        return Math.min(CONFIDENCE_THRESHOLD + losses * 2, 80);
     }, []);
 
     /* ── Execute ONE trade using the global stake ────────────────────────── */

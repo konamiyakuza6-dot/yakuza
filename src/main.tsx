@@ -5,4 +5,9 @@ import './styles/index.scss';
 
 AnalyticsInitializer();
 
+// Lock to portrait for PWA standalone mode
+if (window.matchMedia('(display-mode: standalone)').matches && screen.orientation?.lock) {
+    screen.orientation.lock('portrait').catch(() => {});
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(<AuthWrapper />);
