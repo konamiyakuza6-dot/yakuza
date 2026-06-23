@@ -438,9 +438,9 @@ export const OverUnderKiller: React.FC = () => {
 
         if (bestSym && bestSig) {
             signalHistoryRef.current.push({ sym: bestSym, type: bestSig.contract_type, conf: bestSig.confidence });
-            if (signalHistoryRef.current.length > 4) signalHistoryRef.current.shift();
-            const last4 = signalHistoryRef.current;
-            const confirmed = last4.length === 4 && last4.every(s => s.sym === bestSym && s.type === bestSig.contract_type);
+            if (signalHistoryRef.current.length > 2) signalHistoryRef.current.shift();
+            const last2 = signalHistoryRef.current;
+            const confirmed = last2.length === 2 && last2.every(s => s.sym === bestSym && s.type === bestSig.contract_type);
             if (confirmed) {
                 signalHistoryRef.current = [];
                 executeTrade(bestSym, bestSig).catch(() => {});
