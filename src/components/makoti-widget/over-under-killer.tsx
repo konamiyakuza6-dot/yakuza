@@ -198,6 +198,15 @@ export const OverUnderKiller: React.FC = () => {
             stake: stakeParsed.current,
             martingale: martingaleParsed.current,
         };
+        window.DBot.__ou_config = {
+            stake: stakeParsed.current,
+            martingale: martingaleParsed.current,
+            takeProfit: tpRef.current,
+            stopLoss: slRef.current,
+            predictionDigit: predictionDigitRef.current,
+            contractSide: contractSideRef.current,
+            recoveryMode: recoveryRef.current,
+        };
         window.DBot.__recovery_auto_start = true;
         if (typeof window.DBot.__switchToTab === 'function') {
             window.DBot.__switchToTab('market_killer');
@@ -623,6 +632,29 @@ export const OverUnderKiller: React.FC = () => {
         );
         wsRef.current = mws;
     }, [stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
+
+    const startKillerRef = useRef(startKiller);
+    startKillerRef.current = startKiller;
+
+    /* ── Auto-start on recovery return ──────────────────────────────────── */
+    useEffect(() => {
+        if (window.DBot?.__ou_auto_start) {
+            window.DBot.__ou_auto_start = false;
+            const cfg = window.DBot.__ou_config;
+            if (cfg) {
+                setStake(String(cfg.stake));
+                setMartingale(String(cfg.martingale));
+                setTakeProfit(String(cfg.takeProfit));
+                setStopLoss(String(cfg.stopLoss));
+                setPredictionDigit(String(cfg.predictionDigit));
+                setContractSide(cfg.contractSide);
+                setRecoveryMode(cfg.recoveryMode);
+                window.DBot.__ou_config = null;
+            }
+            const t = setTimeout(() => startKillerRef.current(), 200);
+            return () => clearTimeout(t);
+        }
+    }, []);
 
     /* ── Derived display values ──────────────────────────────────────────── */
     const totalWins   = Object.values(symbolDisplay).reduce((a, b) => a + b.wins,  0);
