@@ -96,6 +96,9 @@ export const OverUnderKiller: React.FC = () => {
     const [predictionDigit, setPredictionDigit] = useState('5');
     const [contractSide, setContractSide] = useState<ContractSide>('DIGITOVER');
     const [recoveryMode, setRecoveryMode] = useState(false);
+    const [manualRecovery, setManualRecovery] = useState(false);
+    const [recoverySide, setRecoverySide] = useState<ContractSide>('DIGITOVER');
+    const [recoveryDigit, setRecoveryDigit] = useState('5');
     const [running,     setRunning]     = useState(false);
     const [pnl,         setPnl]         = useState(0);
     const [logs,        setLogs]        = useState<LogEntry[]>(loadSavedLogs);
@@ -118,6 +121,10 @@ export const OverUnderKiller: React.FC = () => {
     const predictionDigitRef    = useRef(5);
     const contractSideRef       = useRef<ContractSide>('DIGITOVER');
     const recoveryRef           = useRef(false);
+    const manualRecoveryRef     = useRef(false);
+    const recoverySideRef       = useRef<ContractSide>('DIGITOVER');
+    const recoveryDigitRef      = useRef(5);
+    const inManualRecoveryRef   = useRef(false);
 
     const globalLock            = useRef(false);
     const activeContractsRef    = useRef(0);
@@ -147,6 +154,7 @@ export const OverUnderKiller: React.FC = () => {
         runningRef.current = false;
         globalLock.current = false;
         lastTickSymRef.current = '';
+        inManualRecoveryRef.current = false;
         setRunning(false);
         try { wsRef.current?.close(); } catch (_) {}
         wsRef.current = null;
@@ -206,6 +214,9 @@ export const OverUnderKiller: React.FC = () => {
             predictionDigit: predictionDigitRef.current,
             contractSide: contractSideRef.current,
             recoveryMode: recoveryRef.current,
+            manualRecovery: manualRecoveryRef.current,
+            recoverySide: recoverySideRef.current,
+            recoveryDigit: recoveryDigitRef.current,
         };
         window.DBot.__recovery_auto_start = true;
         if (typeof window.DBot.__switchToTab === 'function') {
@@ -251,6 +262,11 @@ export const OverUnderKiller: React.FC = () => {
 
                 if (won) {
                     sd.wins++;
+                    const wasInRecovery = inManualRecoveryRef.current;
+                    if (wasInRecovery) {
+                        inManualRecoveryRef.current = false;
+                        addLog(`✅ MANUAL RECOVERY WON — back to normal`, 'win');
+                    }
                     consecutiveLossesRef.current = 0;
                     cooldownTicksRef.current = 0;
                     globalStakeRef.current = stakeParsed.current;
@@ -268,6 +284,10 @@ export const OverUnderKiller: React.FC = () => {
                     if (recoveryRef.current) {
                         handleRecovery(sym, Math.abs(profit));
                         return;
+                    }
+                    if (manualRecoveryRef.current && consecutiveLossesRef.current >= 2 && !inManualRecoveryRef.current) {
+                        inManualRecoveryRef.current = true;
+                        addLog(`🔄 MANUAL RECOVERY ACTIVATED — switching to ${recoverySideRef.current === 'DIGITOVER' ? 'OVER' : 'UNDER'} ${recoveryDigitRef.current} until win`, 'info');
                     }
                 }
 
@@ -287,7 +307,8 @@ export const OverUnderKiller: React.FC = () => {
     /* ── executeTrade (dep: addLog, flushDisplay) ────────────────────────── */
     const executeTrade = useCallback(async (sym: string, signal: TradeSignal) => {
         if (!runningRef.current) return;
-        if (!signal || signal.confidence < CONFIDENCE_THRESHOLD) return;
+        const threshold = inManualRecoveryRef.current ? CONFIDENCE_THRESHOLD + 5 : CONFIDENCE_THRESHOLD;
+        if (!signal || signal.confidence < threshold) return;
 
         const sd = symbolDataRef.current[sym];
         if (!sd) return;
@@ -306,13 +327,13 @@ export const OverUnderKiller: React.FC = () => {
         activeContractsRef.current = 1;
         setActiveContracts(1);
 
-        const { contract_type, barrier, reason, confidence, details } = signal;
+        const { contract_type, reason, confidence, details } = signal;
         const tradeStake = Number(globalStakeRef.current.toFixed(2));
         const duration = 1;
-        const userSide = contractSideRef.current;
+        const userSide = inManualRecoveryRef.current ? recoverySideRef.current : contractSideRef.current;
 
         if (contract_type !== userSide) {
-            addLog(`⏳ Signal is ${contract_type === 'DIGITOVER' ? 'OVER' : 'UNDER'} but user selected ${userSide === 'DIGITOVER' ? 'OVER' : 'UNDER'} — waiting for alignment`, 'info');
+            addLog(`⏳ Signal is ${contract_type === 'DIGITOVER' ? 'OVER' : 'UNDER'} but need ${userSide === 'DIGITOVER' ? 'OVER' : 'UNDER'} — waiting for alignment`, 'info');
             globalLock.current = false;
             activeContractsRef.current = 0;
             setActiveContracts(0);
@@ -326,7 +347,7 @@ export const OverUnderKiller: React.FC = () => {
             ? strategyMatch[1].split(',').map(s => s.trim().split('(')[0])
             : ['ensemble'];
 
-        const actualBarrier = predictionDigitRef.current;
+        const actualBarrier = inManualRecoveryRef.current ? recoveryDigitRef.current : predictionDigitRef.current;
         const contractTypeStr = contract_type === 'DIGITOVER' ? 'DIGITOVER' : 'DIGITUNDER';
 
         const params: any = {
@@ -466,6 +487,10 @@ export const OverUnderKiller: React.FC = () => {
         predictionDigitRef.current = predVal;
         contractSideRef.current  = contractSide;
         recoveryRef.current      = recoveryMode;
+        manualRecoveryRef.current = manualRecovery;
+        recoverySideRef.current   = recoverySide;
+        recoveryDigitRef.current  = Math.min(9, Math.max(0, parseInt(recoveryDigit) || 5));
+        inManualRecoveryRef.current = false;
         pnlRef.current           = 0;
         globalLock.current       = false;
         lastTickSymRef.current   = '';
@@ -495,6 +520,9 @@ export const OverUnderKiller: React.FC = () => {
         addLog(`⚔ Over/Under Killer — ${contractSide === 'DIGITOVER' ? 'OVER' : 'UNDER'} ${predVal} | stake $${stakeVal}  MG ×${mgVal}  TP $${tpVal}  SL $${slVal}`, 'info');
         if (recoveryMode) {
             addLog(`🔄 RECOVERY MODE ON — real losses switch to Rise/Fall via Market Killer`, 'info');
+        }
+        if (manualRecovery) {
+            addLog(`🔄 MANUAL RECOVERY ON — 2 losses → switch to ${recoverySide === 'DIGITOVER' ? 'OVER' : 'UNDER'} ${recoveryDigitRef.current}`, 'info');
         }
         addLog('Connecting to Deriv API…', 'info');
 
@@ -582,6 +610,11 @@ export const OverUnderKiller: React.FC = () => {
 
                     if (won) {
                         sd.wins++;
+                        const wasInRecovery = inManualRecoveryRef.current;
+                        if (wasInRecovery) {
+                            inManualRecoveryRef.current = false;
+                            addLog(`✅ MANUAL RECOVERY WON — back to normal`, 'win');
+                        }
                         consecutiveLossesRef.current = 0;
                         cooldownTicksRef.current = 0;
                         globalStakeRef.current = stakeParsed.current;
@@ -599,6 +632,10 @@ export const OverUnderKiller: React.FC = () => {
                         if (recoveryRef.current) {
                             handleRecovery(sym, Math.abs(profit));
                             return;
+                        }
+                        if (manualRecoveryRef.current && consecutiveLossesRef.current >= 2 && !inManualRecoveryRef.current) {
+                            inManualRecoveryRef.current = true;
+                            addLog(`🔄 MANUAL RECOVERY ACTIVATED — switching to ${recoverySideRef.current === 'DIGITOVER' ? 'OVER' : 'UNDER'} ${recoveryDigitRef.current} until win`, 'info');
                         }
                     }
 
@@ -631,7 +668,7 @@ export const OverUnderKiller: React.FC = () => {
             }
         );
         wsRef.current = mws;
-    }, [stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
+    }, [stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, manualRecovery, recoverySide, recoveryDigit, addLog, flushDisplay, checkLimits, stopKiller, onTickReceived]);
 
     const startKillerRef = useRef(startKiller);
     startKillerRef.current = startKiller;
@@ -649,6 +686,11 @@ export const OverUnderKiller: React.FC = () => {
                 setPredictionDigit(String(cfg.predictionDigit));
                 setContractSide(cfg.contractSide);
                 setRecoveryMode(cfg.recoveryMode);
+                if (cfg.manualRecovery !== undefined) {
+                    setManualRecovery(cfg.manualRecovery);
+                    setRecoverySide(cfg.recoverySide || 'DIGITOVER');
+                    setRecoveryDigit(String(cfg.recoveryDigit ?? 5));
+                }
                 window.DBot.__ou_config = null;
             }
             const t = setTimeout(() => startKillerRef.current(), 200);
@@ -713,6 +755,33 @@ export const OverUnderKiller: React.FC = () => {
                 </label>
             </div>
 
+            <div className='mw-killer__vh'>
+                <label className='mw-killer__vh-toggle'>
+                    <input type='checkbox' checked={manualRecovery}
+                        onChange={e => setManualRecovery(e.target.checked)} disabled={running} />
+                    <span>Manual Recovery <small style={{opacity:0.6,fontWeight:400}}>(2 losses → switch side/digit)</small></span>
+                </label>
+            </div>
+
+            {manualRecovery && !running && (
+                <div className='mw-killer__fields'>
+                    <div className='mw-field'>
+                        <label className='mw-label'>Recovery Digit</label>
+                        <input className='mw-input' type='number' min='0' max='9' step='1'
+                            value={recoveryDigit} onChange={e => setRecoveryDigit(e.target.value)} />
+                    </div>
+                    <div className='mw-field'>
+                        <label className='mw-label'>Recovery Side</label>
+                        <select className='mw-select' value={recoverySide}
+                            onChange={e => setRecoverySide(e.target.value as ContractSide)}>
+                            {CONTRACT_SIDES.map(s => (
+                                <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            )}
+
             <button
                 className={`mw-btn${running ? ' mw-btn--stop' : ' mw-btn--kill'}`}
                 onClick={running ? stopKiller : startKiller}
@@ -724,7 +793,10 @@ export const OverUnderKiller: React.FC = () => {
 
             {running && (
                 <div className='mw-killer__mode-note'>
-                    Auto (Over/Under) — Digit {predictionDigitRef.current} {contractSide === 'DIGITOVER' ? 'OVER' : 'UNDER'}
+                    {inManualRecoveryRef.current
+                        ? <span style={{color:'#f97316'}}>🔴 MANUAL RECOVERY — {recoverySideRef.current === 'DIGITOVER' ? 'OVER' : 'UNDER'} {recoveryDigitRef.current}</span>
+                        : <>Auto (Over/Under) — Digit {predictionDigitRef.current} {contractSide === 'DIGITOVER' ? 'OVER' : 'UNDER'}</>
+                    }
                     {activeContracts > 0 && <span className='mw-killer__active-dot'> ● TRADE LIVE</span>}
                 </div>
             )}
