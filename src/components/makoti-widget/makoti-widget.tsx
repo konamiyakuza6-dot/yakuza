@@ -112,6 +112,7 @@ export const MakotiWidget: React.FC = () => {
             btnDragging.current  = false;
             winDragging.current  = false;
             miniDragging.current = false;
+            hasPending = false;
 
             if (rafId.current !== null) {
                 cancelAnimationFrame(rafId.current);
