@@ -287,7 +287,7 @@ export const MarketKiller: React.FC = () => {
     const getConfidenceThreshold = useCallback(() => {
         if (!accurateRef.current) return CONFIDENCE_THRESHOLD;
         const losses = consecutiveLossesRef.current;
-        return Math.min(CONFIDENCE_THRESHOLD + losses * 2, 80);
+        return Math.min(CONFIDENCE_THRESHOLD + losses, 75);
     }, []);
 
     /* ── Execute ONE trade using the global stake ────────────────────────── */
@@ -577,7 +577,7 @@ export const MarketKiller: React.FC = () => {
             addLog(`🤖 [VIRTUAL HOOK] Enabled — ${vhThresholdRef.current} virtual losses before real trades`, 'info');
         }
         if (accurateMode) {
-            addLog(`🎯 ACCURATE mode ON — confidence rises after each real loss (70➔73➔76➔80)`, 'info');
+            addLog(`🎯 ACCURATE mode ON — confidence rises after each real loss (70➔71➔72…)`, 'info');
         }
 
         // ── Recovery mode override ──
