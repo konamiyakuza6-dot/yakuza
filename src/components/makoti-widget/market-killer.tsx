@@ -585,15 +585,16 @@ export const MarketKiller: React.FC = () => {
         recoveryRef.current = null;
         recoveryPnlRef.current = 0;
         if (recovery?.active) {
+            const vhThresh = Math.max(0, recovery.vhThreshold ?? 1);
             stakeParsed.current = recovery.stake;
             martingaleParsed.current = recovery.martingale;
             globalStakeRef.current = recovery.stake;
             recoveryPnlRef.current = -recovery.pending;
             recoveryRef.current = recovery;
-            vhEnabledRef.current = true;
-            vhThresholdRef.current = 1;
-            vhStateRef.current = { enabled: true, threshold: 1, is_virtual: true, loss_count: 0 };
-            addLog(`🔄 RECOVERY MODE — recover $${recovery.pending.toFixed(2)} loss | stake $${recovery.stake} ×${recovery.martingale} | VH on (threshold 1)`, 'info');
+            vhEnabledRef.current = vhThresh > 0;
+            vhThresholdRef.current = vhThresh || 1;
+            vhStateRef.current = { enabled: vhThresh > 0, threshold: vhThresh || 1, is_virtual: vhThresh > 0, loss_count: 0 };
+            addLog(`🔄 RECOVERY MODE — recover $${recovery.pending.toFixed(2)} loss | stake $${recovery.stake} ×${recovery.martingale} | VH threshold ${vhThresh}`, 'info');
         }
 
         setPnl(0);

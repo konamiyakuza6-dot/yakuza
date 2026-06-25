@@ -36,7 +36,7 @@ const LS_LOGS_KEY    = 'mw_ouk_logs';
 const LS_CONFIG_KEY  = 'mw_ouk_config';
 const MAX_SAVED_LOGS = 80;
 
-const DEFAULT_CONFIG = { stake: '0.35', martingale: '2', takeProfit: '10', stopLoss: '5', predictionDigit: '5', contractSide: 'DIGITOVER' as const, recoveryMode: false, manualRecovery: false, recoverySide: 'DIGITOVER' as const, recoveryDigit: '5' };
+const DEFAULT_CONFIG = { stake: '0.35', martingale: '2', takeProfit: '10', stopLoss: '5', predictionDigit: '5', contractSide: 'DIGITOVER' as const, recoveryMode: false, manualRecovery: false, recoverySide: 'DIGITOVER' as const, recoveryDigit: '5', recoveryLossThreshold: '1' };
 
 function loadSavedLogs(): LogEntry[] {
     try { const raw = localStorage.getItem(LS_LOGS_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
@@ -115,6 +115,7 @@ export const OverUnderKiller: React.FC = () => {
     const [manualRecovery, setManualRecovery] = useState(initCfg.manualRecovery);
     const [recoverySide, setRecoverySide] = useState<ContractSide>(initCfg.recoverySide);
     const [recoveryDigit, setRecoveryDigit] = useState(initCfg.recoveryDigit);
+    const [recoveryLossThreshold, setRecoveryLossThreshold] = useState(initCfg.recoveryLossThreshold);
     const [running,     setRunning]     = useState(false);
     const [pnl,         setPnl]         = useState(0);
     const [logs,        setLogs]        = useState<LogEntry[]>(loadSavedLogs);
@@ -140,6 +141,7 @@ export const OverUnderKiller: React.FC = () => {
     const manualRecoveryRef     = useRef(false);
     const recoverySideRef       = useRef<ContractSide>('DIGITOVER');
     const recoveryDigitRef      = useRef(5);
+    const recoveryLossThresholdRef = useRef(1);
     const inManualRecoveryRef   = useRef(false);
 
     const globalLock            = useRef(false);
@@ -153,7 +155,7 @@ export const OverUnderKiller: React.FC = () => {
 
     /* ── Persist ──────────────────────────────────────────────────────────── */
     useEffect(() => { saveLogs(logs); }, [logs]);
-    useEffect(() => { saveConfig({ stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, manualRecovery, recoverySide, recoveryDigit }); }, [stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, manualRecovery, recoverySide, recoveryDigit]);
+    useEffect(() => { saveConfig({ stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, manualRecovery, recoverySide, recoveryDigit, recoveryLossThreshold }); }, [stake, martingale, takeProfit, stopLoss, predictionDigit, contractSide, recoveryMode, manualRecovery, recoverySide, recoveryDigit, recoveryLossThreshold]);
 
     /* ── Log helper (defined FIRST — no deps) ────────────────────────────── */
     const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
@@ -222,6 +224,7 @@ export const OverUnderKiller: React.FC = () => {
             pending: lossAmount,
             stake: stakeParsed.current,
             martingale: martingaleParsed.current,
+            vhThreshold: recoveryLossThresholdRef.current,
         };
         window.DBot.__ou_config = {
             stake: stakeParsed.current,
@@ -234,6 +237,7 @@ export const OverUnderKiller: React.FC = () => {
             manualRecovery: manualRecoveryRef.current,
             recoverySide: recoverySideRef.current,
             recoveryDigit: recoveryDigitRef.current,
+            recoveryLossThreshold: recoveryLossThresholdRef.current,
         };
         window.DBot.__recovery_auto_start = true;
         if (typeof window.DBot.__switchToTab === 'function') {
@@ -507,6 +511,7 @@ export const OverUnderKiller: React.FC = () => {
         manualRecoveryRef.current = manualRecovery;
         recoverySideRef.current   = recoverySide;
         recoveryDigitRef.current  = Math.min(9, Math.max(0, parseInt(recoveryDigit) || 5));
+        recoveryLossThresholdRef.current = Math.max(0, parseInt(recoveryLossThreshold) || 1);
         inManualRecoveryRef.current = false;
         pnlRef.current           = 0;
         globalLock.current       = false;
@@ -708,6 +713,9 @@ export const OverUnderKiller: React.FC = () => {
                     setRecoverySide(cfg.recoverySide || 'DIGITOVER');
                     setRecoveryDigit(String(cfg.recoveryDigit ?? 5));
                 }
+                if (cfg.recoveryLossThreshold !== undefined) {
+                    setRecoveryLossThreshold(String(cfg.recoveryLossThreshold));
+                }
                 window.DBot.__ou_config = null;
             }
             const t = setTimeout(() => startKillerRef.current(), 200);
@@ -771,6 +779,18 @@ export const OverUnderKiller: React.FC = () => {
                     <span>Recovery Mode <small style={{opacity:0.6,fontWeight:400}}>(on loss → RF via Market Killer)</small></span>
                 </label>
             </div>
+
+            {recoveryMode && !running && (
+                <div className='mw-killer__fields'>
+                    <div className='mw-field'>
+                        <label className='mw-label'>Recovery Virtual Loss Threshold</label>
+                        <input className='mw-input' type='number' min='0' step='1'
+                            value={recoveryLossThreshold}
+                            onChange={e => setRecoveryLossThreshold(e.target.value)} />
+                        <small style={{color:'#64748b',fontSize:'9px',marginTop:'2px'}}>Virtual losses before real trades. 0 = no virtual, start real immediately.</small>
+                    </div>
+                </div>
+            )}
 
             <div className='mw-killer__vh'>
                 <label className='mw-killer__vh-toggle'>
