@@ -11,7 +11,7 @@ const MenuIcon = ({ onClick }: { onClick: () => void }) => (
 );
 
 // Logo asset served from public folder
-const LOGO_SRC = '/makoti-logo.jpg';
+const LOGO_SRC = '/captain-peter-logo.png';
 
 // WhatsApp Icon Component
 const WhatsAppIcon = () => (
