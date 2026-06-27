@@ -321,11 +321,11 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                 <div className='powered-by-deriv-header' ref={whatsappDropdownRef}>
                     <img
                         src='/makoti-logo.jpg'
-                        alt='MAKOTI TRADERS logo'
+                        alt='CAPTAIN PETER TRADING HUB logo'
                         className='powered-by-deriv-header__logo'
                     />
                     <div className='powered-by-deriv-header__text'>
-                        <span className='deriv-word'>MAKOTI TRADERS</span>
+                        <span className='deriv-word'>CAPTAIN PETER TRADING HUB</span>
                         <span className='powered-by-deriv-header__label'>POWERED BY DERIV</span>
                     </div>
                 </div>

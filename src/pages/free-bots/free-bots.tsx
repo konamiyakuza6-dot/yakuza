@@ -32,7 +32,7 @@ const FreeBots = observer(() => {
     const getBotDescription = (botName: string): string => {
         const descriptions: { [key: string]: string } = {
             'STARTER BOT':
-                'Official starter bot for Makoti Traders. Optimized for beginners with standard risk management.',
+                'Official starter bot for Captain Peter Trading Hub. Optimized for beginners with standard risk management.',
             'POVERTY KILLER':
                 'High-performance digit trading bot with intelligent recovery and profit optimization.',
             'POVERTY KILLER V2.1':

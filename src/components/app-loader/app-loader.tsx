@@ -14,7 +14,7 @@ const SUBTITLES = [
     'MISSION READY',
 ];
 
-const TITLE = 'MAKOTI TRADERS';
+const TITLE = 'CAPTAIN PETER TRADING HUB';
 
 const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete, duration = 9000 }) => {
     const [show, setShow] = useState(true);

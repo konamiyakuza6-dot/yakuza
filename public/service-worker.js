@@ -1,8 +1,8 @@
-// MakotiTraders PWA Service Worker
+// Captain Peter Trading Hub PWA Service Worker
 // Bump CACHE_VERSION on every deployment to refresh caches.
 const CACHE_VERSION = 'v3';
-const CACHE_NAME = `makoti-pwa-cache-${CACHE_VERSION}`;
-const API_CACHE = `makoti-api-cache-${CACHE_VERSION}`;
+const CACHE_NAME = `captainpeter-pwa-cache-${CACHE_VERSION}`;
+const API_CACHE = `captainpeter-api-cache-${CACHE_VERSION}`;
 
 const STATIC_ASSET = /\.(js|css|woff2?|ttf|eot|png|jpg|jpeg|gif|svg|ico|webp)(\?.*)?$/i;
 const API_ROUTES = ['/api/', '//api.', '//ws.', '/translations/'];

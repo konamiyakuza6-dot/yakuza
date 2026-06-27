@@ -51,11 +51,11 @@ const LoginScreenInner = () => {
 
             <div className='login-screen__content'>
                 <div className='login-screen__logo-wrap'>
-                    <img src='/makoti-logo.jpg' alt='Makoti Traders' className='login-screen__logo' />
+                    <img src='/makoti-logo.jpg' alt='Captain Peter Trading Hub' className='login-screen__logo' />
                 </div>
 
                 <div className='login-screen__brand'>
-                    <h1 className='login-screen__title'>MAKOTI TRADERS</h1>
+                    <h1 className='login-screen__title'>CAPTAIN PETER TRADING HUB</h1>
                     <p className='login-screen__sub'>POWERED BY DERIV</p>
                 </div>
 

@@ -1,4 +1,4 @@
-# MakotiTraders — Professional Deriv trading bot builder and copy trading dashboard
+# Captain Peter Trading Hub — Professional Deriv trading bot builder and copy trading dashboard
 
 ## Run & Operate
 - **Dev server**: `npm run start` (runs on port 5000)
