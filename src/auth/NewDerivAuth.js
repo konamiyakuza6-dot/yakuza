@@ -420,7 +420,7 @@ export function logoutNewSystem() {
   window.location.href =
     "https://auth.deriv.com/oauth2/sessions/logout" +
     "?redirect_uri=" +
-    encodeURIComponent("https://makotitraderss.vercel.app")
+    encodeURIComponent("https://poundprinterpro.vercel.app")
 }
 
 export async function createNewWebSocket() {
