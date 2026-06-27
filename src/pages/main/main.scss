@@ -42,10 +42,20 @@
 
     // Scrollable tab content for custom full-page tools
     &[data-active-tab='over_under'],
-    &[data-active-tab='makoti_magic'] {
+    &[data-active-tab='makoti_magic'],
+    &[data-active-tab='signal_zone'],
+    &[data-active-tab='elite_prime_ai'],
+    &[data-active-tab='smart_trader'] {
         .dc-tabs__content {
             overflow-y: auto !important;
             overflow-x: hidden !important;
+        }
+    }
+
+    // Full-height no-scroll tabs (manage their own scroll internally)
+    &[data-active-tab='overlord_2026'] {
+        .dc-tabs__content {
+            overflow: hidden !important;
         }
     }
 
