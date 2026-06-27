@@ -126,8 +126,6 @@
         "babel-jest": "^29.7.0",
         "babel-loader": "^8.1.0",
         "babel-plugin-syntax-dynamic-import": "^6.18.0",
-        "copy-webpack-plugin": "^12.0.2",
-        "css-hot-loader": "^1.4.4",
         "css-loader": "^7.1.2",
         "eslint": "^8.56.0",
         "eslint-plugin-prettier": "^5.0.0",
@@ -162,10 +160,7 @@
         "ts-jest": "^29.4.11",
         "tsconfig-paths-webpack-plugin": "^4.1.0",
         "typescript": "^5.9.3",
-        "url": "^0.11.3",
-        "webpack": "^5.92.1",
-        "webpack-cli": "^5.1.4",
-        "webpack-dev-server": "^5.1.0"
+        "url": "^0.11.3"
     },
     "optionalDependencies": {
         "@rspack/binding-linux-x64-gnu": "^1.7.11",
@@ -193,6 +188,7 @@
     "overrides": {
         "cross-spawn": "^7.0.6",
         "braces": "^3.0.3",
-        "brace-expansion@2.0.1": "2.0.2"
+        "brace-expansion@2.0.1": "2.0.2",
+        "shell-quote": "^1.7.4"
     }
 }
