@@ -1,6 +1,5 @@
 import './Overlord.css';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import TransactionJournal from '../TransactionJournal';
 import Swal from 'sweetalert2';
 
 import { WS_SERVERS, isProduction } from '@/components/shared';
@@ -1650,14 +1649,6 @@ const Overlord = () => {
                 </div>
             )}
 
-            <TransactionJournal
-                results={results}
-                wins={wins}
-                losses={losses}
-                totalRuns={totalRuns}
-                totalProfit={totalProfit}
-                onClear={() => setResults([])}
-            />
         </div>
     );
 };

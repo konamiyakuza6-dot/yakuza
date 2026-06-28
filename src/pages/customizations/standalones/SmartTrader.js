@@ -17,7 +17,6 @@ import { TradeTypesDigitsUnderIcon } from '@deriv/quill-icons/TradeTypes';
 import { TradeTypesUpsAndDownsFallIcon } from '@deriv/quill-icons/TradeTypes';
 import { TradeTypesUpsAndDownsRiseIcon } from '@deriv/quill-icons/TradeTypes';
 import Marketview from '../MiniAnalysis/Marketview';
-import TransactionJournal from '../TransactionJournal';
 import './SmartTrader.css';
 
 const DERIV_PUBLIC_WS_URL = isProduction() ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
@@ -1317,14 +1316,6 @@ const SmartTrader = () => {
                     </div>
                 )}
 
-                <TransactionJournal
-                    results={results}
-                    wins={wins}
-                    losses={losses}
-                    totalRuns={totalRuns}
-                    totalProfit={totalProfit}
-                    onClear={() => setResults([])}
-                />
             </div>
         </div>
     );

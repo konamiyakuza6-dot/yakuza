@@ -319,7 +319,7 @@ const RunPanel = observer(() => {
         />
     );
 
-    const show_run_panel = [BOT_BUILDER, CHART, TRADING_BOTS, ANALYSIS_TOOL, DBOT_TABS.MAKOTI_MAGIC, DBOT_TABS.OVER_UNDER].includes(active_tab) || active_tour;
+    const show_run_panel = [BOT_BUILDER, CHART, TRADING_BOTS, DBOT_TABS.MAKOTI_MAGIC, DBOT_TABS.OVER_UNDER, DBOT_TABS.OVERLORD, DBOT_TABS.ELITE_PRIME_AI, DBOT_TABS.SMART_TRADER].includes(active_tab) || active_tour;
     // Don't show RunPanel on DTrader tab - manual trading only
     const { DTRADER } = DBOT_TABS;
     if (active_tab === DTRADER) return null;

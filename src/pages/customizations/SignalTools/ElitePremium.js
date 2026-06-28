@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import TransactionJournal from '../TransactionJournal';
 import Swal from 'sweetalert2';
 import { FaPlay, FaStop } from 'react-icons/fa';
 import { WS_SERVERS, isProduction } from '@/components/shared';
@@ -1423,14 +1422,6 @@ const ElitePremium = () => {
 
             {renderCompactMonitor('main')}
 
-            <TransactionJournal
-                results={results}
-                wins={wins}
-                losses={losses}
-                totalRuns={totalRuns}
-                totalProfit={totalProfit}
-                onClear={() => setResults([])}
-            />
         </div>
     );
 };
