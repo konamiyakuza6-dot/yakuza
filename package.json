@@ -85,7 +85,11 @@
         "usehooks-ts": "^3.1.1",
         "uuid": "^9.0.1",
         "ws": "^8.21.0",
-        "yup": "^1.7.1"
+        "yup": "^1.7.1",
+        "@rsbuild/core": "^1.7.6",
+        "@rsbuild/plugin-basic-ssl": "^1.2.3",
+        "@rsbuild/plugin-react": "^1.4.6",
+        "@rsbuild/plugin-sass": "^1.5.3"
     },
     "devDependencies": {
         "@babel/core": "^7.29.0",
@@ -107,10 +111,6 @@
         "@commitlint/config-conventional": "^17.1.0",
         "@deriv/api-types": "^1.0.2463",
         "@jest/globals": "^29.7.0",
-        "@rsbuild/core": "^1.7.6",
-        "@rsbuild/plugin-basic-ssl": "^1.2.3",
-        "@rsbuild/plugin-react": "^1.4.6",
-        "@rsbuild/plugin-sass": "^1.5.3",
         "@testing-library/dom": "^10.4.1",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.2",
