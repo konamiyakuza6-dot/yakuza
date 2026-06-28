@@ -69,7 +69,7 @@
         flex-direction: column;
 
         @include mobile-or-tablet-screen {
-            padding-bottom: var(--mobile-footer-height, 6rem); // Space for fixed footer
+            padding-bottom: 0; // No fixed footer on mobile
         }
 
         &.no-scroll {
@@ -92,6 +92,11 @@
         }
 
         .dc-tabs {
+            @include mobile-or-tablet-screen {
+                height: 100%;
+                min-height: 0;
+            }
+
             &__active-line {
                 display: none !important; // hide default line, we'll draw our own
             }
@@ -215,8 +220,12 @@
 
                 @include mobile-or-tablet-screen {
                     width: 100%;
-                    overflow-x: auto;
-                    padding-bottom: 6rem; // Space for fixed footer
+                    height: 100%;
+                    min-height: 0;
+                    overflow-x: hidden;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                    padding-bottom: 0;
 
                     // Allow scrolling for Strategies on mobile
                     &:has(.strategies--standalone),
