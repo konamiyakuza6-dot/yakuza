@@ -18,6 +18,7 @@ import useThemeSwitcher from '@/hooks/useThemeSwitcher';
 import useTrackjs from '@/hooks/useTrackjs';
 import initDatadog from '@/utils/datadog';
 import initHotjar from '@/utils/hotjar';
+import { updateSymbolDisplayNames } from '@/utils/symbol-display-name';
 import { setSmartChartsPublicPath } from '@deriv/deriv-charts';
 import { ThemeProvider } from '@deriv-com/quill-ui';
 import { localize } from '@deriv-com/translations';
@@ -165,6 +166,7 @@ const AppContent = observer(() => {
         const retrieveActiveSymbols = () => {
             const { active_symbols } = ApiHelpers.instance;
             active_symbols.retrieveActiveSymbols(true).then(() => {
+                updateSymbolDisplayNames(active_symbols.active_symbols || []);
                 setIsLoading(false);
             });
         };

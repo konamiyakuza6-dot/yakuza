@@ -1,0 +1,1 @@
+- [Customizations zip import](customizations-zip.md) — 4 zip tabs (Overlord, ElitePremium, CustomDash, Aibots) live in src/pages/customizations/; symbol-display-name utility bridges SmartTrader to live Deriv data.
