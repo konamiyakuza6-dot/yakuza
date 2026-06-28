@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
 import IframeWrapper from '@/components/iframe-wrapper';
-import { getAppId } from '@/components/shared/utils/config/config';
 import {
     getMainAppActiveToken,
     getMainAppActiveLoginId,
@@ -12,8 +11,6 @@ const Dtrader = observer(() => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
     const buildIframeUrl = useCallback((token: string, loginId: string) => {
-        const appId = getAppId() || 101585;
-
         // Read all accounts from clientAccounts (has loginid, token, currency for each)
         // and pass them all as acct1/token1/cur1, acct2/token2/cur2 etc.
         // so DTrader can pick the active one.
@@ -73,20 +70,19 @@ const Dtrader = observer(() => {
             ];
         }
 
-        // Build URL params — pass all accounts, active account as acct1/token1/cur1
-        const params: Record<string, string> = {
-            lang: 'EN',
-            app_id: appId.toString(),
-        };
+        // Build URL params — ONLY the standard Deriv acct/token/cur pairs.
+        // Do NOT inject app_id or lang — those override DTrader's internal
+        // registered app and break WebSocket trade execution.
+        const params = new URLSearchParams();
 
         allAccounts.slice(0, 10).forEach((acc, idx) => {
             const n = idx + 1;
-            params[`acct${n}`] = acc.loginid;
-            params[`token${n}`] = acc.token;
-            params[`cur${n}`] = acc.currency || 'USD';
+            params.set(`acct${n}`, acc.loginid);
+            params.set(`token${n}`, acc.token);
+            params.set(`cur${n}`, acc.currency || 'USD');
         });
 
-        const url = `https://deriv-dtrader.vercel.app/?${new URLSearchParams(params).toString()}`;
+        const url = `https://deriv-dtrader.vercel.app/?${params.toString()}`;
         setIframeSrc(url);
     }, []);
 
