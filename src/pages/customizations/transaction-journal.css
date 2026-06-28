@@ -1,0 +1,317 @@
+/* =====================================================
+   Transaction Journal — OU Terminal Style
+   ===================================================== */
+
+.tj2-root {
+  margin-top: 20px;
+}
+
+.tj2-wrap {
+  background: #070e1c;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.40);
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  color: #dceaf8;
+}
+
+/* Gradient top border */
+.tj2-topbar {
+  height: 2px;
+  background: linear-gradient(90deg, #10b981, #06b6d4);
+}
+
+/* ── Header ──────────────────────────────────────── */
+.tj2-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.015);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tj2-head__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.tj2-head__icon {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.tj2-head__badge {
+  background: #3b82f6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.tj2-head__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tj2-chevron {
+  color: #3a526b;
+  font-size: 10px;
+}
+
+.tj2-clr {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
+  color: #3a526b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.tj2-clr:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+/* ── Stats bar ───────────────────────────────────── */
+.tj2-stats {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.tj2-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 6px;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tj2-stat:last-child {
+  border-right: none;
+}
+
+.tj2-stat--wide {
+  flex: 1.4;
+}
+
+.tj2-stat__lbl {
+  font-size: 9px;
+  font-weight: 800;
+  color: #3a526b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tj2-stat__val {
+  font-size: 17px;
+  font-weight: 900;
+  color: #dceaf8;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tj2-stat__val--win  { color: #10b981; }
+.tj2-stat__val--loss { color: #ef4444; }
+
+/* ── Body ────────────────────────────────────────── */
+.tj2-body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 380px;
+  background: #020710;
+}
+
+.tj2-body::-webkit-scrollbar { width: 3px; }
+.tj2-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+}
+
+/* Empty state */
+.tj2-empty {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+.tj2-empty__icon {
+  font-size: 28px;
+  opacity: 0.25;
+}
+
+/* ── Log rows ────────────────────────────────────── */
+.tj2-logs {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px;
+}
+
+.tj2-log {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+
+.tj2-log:hover {
+  background: rgba(255, 255, 255, 0.022);
+}
+
+/* Left accent bar */
+.tj2-log__bar {
+  width: 2px;
+  min-height: 36px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  align-self: stretch;
+}
+
+.tj2-log--win {
+  background: rgba(16, 185, 129, 0.035);
+}
+.tj2-log--win .tj2-log__bar {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.tj2-log--loss {
+  background: rgba(239, 68, 68, 0.035);
+}
+.tj2-log--loss .tj2-log__bar {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+.tj2-log--pending .tj2-log__bar {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+/* Row body */
+.tj2-log__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tj2-log__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tj2-log__type {
+  font-size: 11px;
+  font-weight: 800;
+  color: #dceaf8;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tj2-log__market {
+  font-size: 10px;
+  font-weight: 600;
+  color: #7fa0be;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.tj2-log__time {
+  font-size: 10px;
+  color: #3a526b;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.tj2-log__bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tj2-log__lbl {
+  font-size: 9px;
+  color: #3a526b;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.tj2-log__entry,
+.tj2-log__exit,
+.tj2-log__stake {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  color: #7fa0be;
+}
+
+.tj2-log__arrow {
+  font-size: 10px;
+  color: #3a526b;
+}
+
+.tj2-log__pl {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  font-weight: 900;
+  margin-left: auto;
+  color: #3a526b;
+}
+
+.tj2-log__pl--win  { color: #34d399; }
+.tj2-log__pl--loss { color: #f87171; }
+
+/* ── Responsive ─────────────────────────────────── */
+@media (max-width: 760px) {
+  .tj2-stats {
+    flex-wrap: wrap;
+  }
+  .tj2-stat {
+    flex: 1 1 30%;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .tj2-log__market {
+    max-width: 100px;
+  }
+}

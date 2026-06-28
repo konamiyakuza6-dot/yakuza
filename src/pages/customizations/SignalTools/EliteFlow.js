@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import TransactionJournal from '../TransactionJournal';
 import {
     FaPlay,
     FaStop,
@@ -920,110 +921,20 @@ const EliteFlow = () => {
                 ))}
             </div>
 
-            {(isExpanded || results.length > 0) && (
-                <div className={`main-transactions-section ${isExpanded ? 'expanded' : ''}`}>
-                    <div className='expanded-top'>
-                        <div className='header-left'>
-                            <button onClick={() => setIsExpanded(!isExpanded)} className='table-collapse-btn'>
-                                <IoChevronDown size={22} />
-                            </button>
-                            <div className={isRunning ? 'bot-status-elite active' : 'bot-status-elite idle'}>
-                                <span className='status-dot' />
-                                <span>
-                                    {isRunning ? 'Finding Patterns & Executing Trades...' : 'Run Bot to Start Trading'}
-                                </span>
-                            </div>
-                            <div className='mobile-signal-strip'>{SYMBOLS.map(symbol => renderMiniSignal(symbol, activeTool, true))}</div>
-                        </div>
-                        <div className='user-buttons' style={{ display: 'flex', gap: '10px' }}>
-                            <button onClick={handleStart} className={isRunning ? 'my-stop-button' : 'my-run-button'}>
-                                {isRunning ? (
-                                    <>
-                                        <FaStop /> STOP BOT
-                                    </>
-                                ) : (
-                                    <>
-                                        <FaPlay /> RUN BOT
-                                    </>
-                                )}
-                            </button>
-                            <button onClick={handleReset} className='data-reset-btn' disabled={isRunning}>
-                                <FaUndo /> RESET
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className='main-table-contents'>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Contract Type</th>
-                                    <th>Entry/Exit </th>
-                                    <th>Stake & P/L</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {results.map(r => (
-                                    <tr key={r.contract_id} className='transaction-row'>
-                                        <td>
-                                            <div className='contract-cell'>
-                                                <span>{String(r.contract_type || '-').replace('DIGIT', '')}</span>
-                                                <div className='contract-icon-wrapper'>
-                                                    {String(r.contract_type || '').includes('EVEN') && <TradeTypesDigitsEvenIcon />}
-                                                    {String(r.contract_type || '').includes('ODD') && <TradeTypesDigitsOddIcon />}
-                                                    {String(r.contract_type || '').includes('OVER') && <TradeTypesDigitsOverIcon />}
-                                                    {String(r.contract_type || '').includes('UNDER') && <TradeTypesDigitsUnderIcon />}
-                                                    {r.contract_type === 'CALL' && <TradeTypesUpsAndDownsRiseIcon />}
-                                                    {r.contract_type === 'PUT' && <TradeTypesUpsAndDownsFallIcon />}
-                                                    <span className='market-superscript'>{formatSymbolDisplay(r.symbol)}</span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className='entry-exit'>
-                                            <div className='cell-stack align-end'>
-                                                <span>{r.entry_spot}</span>
-                                                <span>{r.exit_tick}</span>
-                                            </div>
-                                        </td>
-                                        <td className='stake-profit'>
-                                            <div className='cell-stack align-end'>
-                                                <span className='stake'>{parseFloat(r.stake).toFixed(2)} USD</span>
-                                                <span
-                                                    className={`profit ${
-                                                        r.status === 'PENDING'
-                                                            ? ''
-                                                            : parseFloat(r.profit) >= 0
-                                                              ? 'profit-win '
-                                                              : 'profit-loss'
-                                                    }`}
-                                                >
-                                                    {r.status === 'PENDING' ? '--' : `${parseFloat(r.profit).toFixed(2)} USD`}
-                                                </span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div className='pro-summary-grid'>
-                        <SummaryCard label='Runs' value={totalRuns} />
-                        <SummaryCard label='Wins' value={wins} />
-                        <SummaryCard label='Losses' value={losses} />
-                        <SummaryCard
-                            label='Net P/L'
-                            value={totalProfit}
-                            className={totalProfit >= 0 ? 'profit-won' : 'profit-lost'}
-                        />
-                    </div>
-                    {proposalError && (
-                        <div style={{ color: '#ff8080', marginTop: '12px', fontSize: '12px' }}>
-                            <strong>Error:</strong> {proposalError}
-                        </div>
-                    )}
+            {proposalError && (
+                <div style={{ color: '#ff8080', marginTop: '12px', fontSize: '12px' }}>
+                    <strong>Error:</strong> {proposalError}
                 </div>
             )}
+
+            <TransactionJournal
+                results={results}
+                wins={wins}
+                losses={losses}
+                totalRuns={totalRuns}
+                totalProfit={totalProfit}
+                onClear={() => { setResults([]); }}
+            />
         </div>
     );
 };

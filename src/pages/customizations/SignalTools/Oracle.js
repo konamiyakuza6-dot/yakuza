@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './Oracle.css';
+import TransactionJournal from '../TransactionJournal';
 import Swal from "sweetalert2";
 import { WS_SERVERS, isProduction } from '@/components/shared';
 import { useStore } from '@/hooks/useStore';
@@ -1630,6 +1631,15 @@ const finalizeBestSignal = (sessionId = scanSessionRef.current) => {
             <strong>Error:</strong> {proposalError}
           </div>
         )}
+
+        <TransactionJournal
+            results={results}
+            wins={wins}
+            losses={losses}
+            totalRuns={totalRuns}
+            totalProfit={totalProfit}
+            onClear={() => setResults([])}
+        />
       </div>
     
   );

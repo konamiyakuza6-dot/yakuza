@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import TransactionJournal from '../TransactionJournal';
 import { FaPlay, FaStop } from 'react-icons/fa';
 import Swal from 'sweetalert2';
 
@@ -1363,6 +1364,15 @@ const Higherlower = () => {
             </div>
 
             {renderCompactMonitor()}
+
+            <TransactionJournal
+                results={results}
+                wins={wins}
+                losses={losses}
+                totalRuns={totalRuns}
+                totalProfit={totalProfit}
+                onClear={() => setResults([])}
+            />
         </div>
     );
 };
