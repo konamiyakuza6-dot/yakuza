@@ -124,6 +124,10 @@ export const V2GetActiveClientId = () => {
 };
 
 
+// Real Deriv API tokens start with a digit-letter pattern like "a1-..."
+// Loginid placeholders look like "CR123456", "VRTC987654", "MF123456" — never a real token.
+const isRealDerivToken = token => typeof token === 'string' && /^a\d+-.+$/.test(token);
+
 export const getMainAppActiveToken = () => {
     if (typeof window === 'undefined') return null;
 
@@ -131,30 +135,35 @@ export const getMainAppActiveToken = () => {
     if (newAuthToken && newAuthToken !== 'null') {
         // New auth is active — the OIDC token cannot be used for Deriv WebSocket authorize.
         // Read the real Deriv API token (a1-xxx) stored by useTMB.processTokens() instead.
+        // For new-auth users, createNewWebSocket() stores the loginid as a placeholder token
+        // (not a real a1-xxx token), so we validate before returning.
         const activeLoginId = localStorage.getItem('active_loginid');
         if (activeLoginId && activeLoginId !== 'null') {
             try {
                 const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
-                const realToken = Array.isArray(clientAccounts)
+                const candidate = Array.isArray(clientAccounts)
                     ? clientAccounts.find(a => a.loginid === activeLoginId)?.token
                     : clientAccounts[activeLoginId]?.token;
-                if (realToken && realToken !== 'null') return realToken;
+                if (isRealDerivToken(candidate)) return candidate;
             } catch (_) {}
 
             try {
                 const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
-                const realToken = accountsList[activeLoginId];
-                if (realToken && realToken !== 'null') return realToken;
+                const candidate = accountsList[activeLoginId];
+                if (isRealDerivToken(candidate)) return candidate;
             } catch (_) {}
         }
-        // Fall through to legacy path if clientAccounts not yet populated
+        // No real a1-xxx token found for new-auth user — return null so callers
+        // (e.g. DTrader iframe) can fall back to their own auth flow rather than
+        // sending an invalid token that triggers "Input validation failed: authorize".
+        return null;
     }
 
     const legacyToken = V2GetActiveToken();
     if (legacyToken && legacyToken !== 'null') return legacyToken;
 
     const authToken = localStorage.getItem('authToken');
-    if (authToken && authToken !== 'null') return authToken;
+    if (isRealDerivToken(authToken)) return authToken;
 
     return null;
 };
