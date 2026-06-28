@@ -35,7 +35,6 @@ const CopyTrading = lazy(() => import('../copy-trading'));
 const Dtrader = lazy(() => import('../dtrader'));
 const Overlord = lazy(() => import('../customizations/SignalTools/Overlord'));
 const ElitePrimeAI = lazy(() => import('../customizations/SignalTools/ElitePremium'));
-const SignalZone = lazy(() => import('../customizations/SignalTools/CustomDash'));
 const SmartTrader = lazy(() => import('../customizations/standalones/SmartTrader'));
 
 import TradingBots from '../free-bots/trading-bots';
@@ -45,7 +44,7 @@ import BlocklyIOSPrompt from '@/components/blockly-ios-prompt/blockly-ios-prompt
 const FULL_PAGE_TABS = [
     'trading_bots', 'dtrader',
     'copy_trading', 'overlord_2026', 'elite_prime_ai',
-    'signal_zone', 'smart_trader',
+    'smart_trader',
 ];
 
 const AppWrapper = observer(() => {
@@ -75,8 +74,7 @@ const AppWrapper = observer(() => {
         'dtrader',        // 6
         'overlord_2026',  // 7
         'elite_prime_ai', // 8
-        'signal_zone',    // 9
-        'smart_trader',   // 10
+        'smart_trader',   // 9
     ];
 
     const { isDesktop } = useDevice();
@@ -161,11 +159,7 @@ const AppWrapper = observer(() => {
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>🤖</span><Localize i18n_default_text='Elite Prime AI' /></>} id='id-elite-prime-ai'>
                             <Suspense fallback={<ChunkLoader message={localize('Loading Elite Prime AI...')} />}><ElitePrimeAI /></Suspense>
                         </div>
-                        {/* 9 – Signal Zone */}
-                        <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>📡</span><Localize i18n_default_text='Signal Zone' /></>} id='id-signal-zone'>
-                            <Suspense fallback={<ChunkLoader message={localize('Loading Signal Zone...')} />}><SignalZone /></Suspense>
-                        </div>
-                        {/* 10 – Smart Trader */}
+                        {/* 9 – Smart Trader */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>💹</span><Localize i18n_default_text='Smart Trader' /></>} id='id-smart-trader'>
                             <Suspense fallback={<ChunkLoader message={localize('Loading Smart Trader...')} />}><SmartTrader /></Suspense>
                         </div>
