@@ -2,91 +2,112 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
 import IframeWrapper from '@/components/iframe-wrapper';
 import { getAppId } from '@/components/shared/utils/config/config';
-import { V2GetActiveToken, V2GetActiveClientId } from '@/external/bot-skeleton/services/api/appId';
+import {
+    getMainAppActiveToken,
+    getMainAppActiveLoginId,
+} from '@/external/bot-skeleton/services/api/appId';
 
 const Dtrader = observer(() => {
     const [iframeSrc, setIframeSrc] = useState<string>('');
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
     const buildIframeUrl = useCallback((token: string, loginId: string) => {
-        // Get currency from clientAccounts or accountsList
-        const clientAccountsStr = localStorage.getItem('clientAccounts') || '{}';
-        const accountsListStr = localStorage.getItem('accountsList') || '{}';
-        let currency = 'USD'; // Default currency
+        const appId = getAppId() || 101585;
+
+        // Read all accounts from clientAccounts (has loginid, token, currency for each)
+        // and pass them all as acct1/token1/cur1, acct2/token2/cur2 etc.
+        // so DTrader can pick the active one.
+        let allAccounts: Array<{ loginid: string; token: string; currency: string }> = [];
 
         try {
+            const clientAccountsStr = localStorage.getItem('clientAccounts') || '{}';
             const clientAccounts = JSON.parse(clientAccountsStr);
-            const account = clientAccounts[loginId];
-            if (account?.currency) {
-                currency = account.currency;
+
+            if (Array.isArray(clientAccounts)) {
+                allAccounts = clientAccounts;
             } else {
-                // Fallback to accountsList
-                const accountsList = JSON.parse(accountsListStr);
-                const accountInfo = Object.keys(accountsList).find(key => key === loginId);
-                if (accountInfo) {
-                    // Try to get currency from account info if available
-                    const accountData = JSON.parse(localStorage.getItem('accountList') || '[]');
-                    const acc = accountData.find((a: any) => a.loginid === loginId);
-                    if (acc?.currency) {
-                        currency = acc.currency;
-                    }
-                }
+                allAccounts = Object.values(clientAccounts) as Array<{
+                    loginid: string;
+                    token: string;
+                    currency: string;
+                }>;
             }
-        } catch (error) {
-            console.error('Error parsing clientAccounts:', error);
+        } catch (_) {}
+
+        // Fallback: if clientAccounts empty, try accountsList
+        if (!allAccounts.length) {
+            try {
+                const accountsListStr = localStorage.getItem('accountsList') || '{}';
+                const accountsList = JSON.parse(accountsListStr) as Record<string, string>;
+                allAccounts = Object.entries(accountsList).map(([lid, tok]) => ({
+                    loginid: lid,
+                    token: tok,
+                    currency: 'USD',
+                }));
+            } catch (_) {}
         }
 
-        // Get app ID (same as used in login auth)
-        // getAppId() always returns the correct app_id and updates localStorage
-        const appId = getAppId() || 114292;
+        // Ensure the active account is always included (covers new-auth token)
+        const activeAlreadyIncluded = allAccounts.some(
+            a => a.loginid === loginId && a.token === token
+        );
+        if (!activeAlreadyIncluded) {
+            // Get currency for active account
+            let activeCurrency = 'USD';
+            try {
+                const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
+                if (Array.isArray(clientAccounts)) {
+                    const found = clientAccounts.find((a: any) => a.loginid === loginId);
+                    if (found?.currency) activeCurrency = found.currency;
+                } else if (clientAccounts[loginId]?.currency) {
+                    activeCurrency = clientAccounts[loginId].currency;
+                }
+            } catch (_) {}
+            // Put active account first
+            allAccounts = [{ loginid: loginId, token, currency: activeCurrency }, ...allAccounts];
+        } else {
+            // Sort so active account is first
+            allAccounts = [
+                ...allAccounts.filter(a => a.loginid === loginId),
+                ...allAccounts.filter(a => a.loginid !== loginId),
+            ];
+        }
 
-        // Build iframe URL with authentication parameters
-        // Try multiple parameters to disable bot controls in DTrader
-        const params = new URLSearchParams({
-            acct1: loginId,
-            token1: token,
-            cur1: currency,
+        // Build URL params — pass all accounts, active account as acct1/token1/cur1
+        const params: Record<string, string> = {
             lang: 'EN',
             app_id: appId.toString(),
-            chart_type: 'area',
-            interval: '1t',
-            symbol: '1HZ100V',
-            trade_type: 'over_under',
-            // Multiple attempts to disable bot controls
-            hide_bot: '1',
-            bot_disabled: 'true',
-            disable_bot: '1',
-            no_bot: '1',
-            manual_only: '1',
-            hide_bot_controls: 'true',
+        };
+
+        allAccounts.slice(0, 10).forEach((acc, idx) => {
+            const n = idx + 1;
+            params[`acct${n}`] = acc.loginid;
+            params[`token${n}`] = acc.token;
+            params[`cur${n}`] = acc.currency || 'USD';
         });
 
-        const url = `https://deriv-dtrader.vercel.app/?${params.toString()}`;
+        const url = `https://deriv-dtrader.vercel.app/?${new URLSearchParams(params).toString()}`;
         setIframeSrc(url);
     }, []);
 
     useEffect(() => {
-        // Check if user is authenticated
-        const token = V2GetActiveToken();
-        const activeLoginId = V2GetActiveClientId();
+        const token = getMainAppActiveToken();
+        const activeLoginId = getMainAppActiveLoginId();
 
         if (token && activeLoginId) {
             setIsAuthenticated(true);
             buildIframeUrl(token, activeLoginId);
         } else {
             setIsAuthenticated(false);
-            // Load dtrader without authentication (will prompt login)
-            setIframeSrc(
-                'https://deriv-dtrader.vercel.app/dtrader?chart_type=area&interval=1t&symbol=1HZ100V&trade_type=over_under'
-            );
+            setIframeSrc('https://deriv-dtrader.vercel.app/');
         }
     }, [buildIframeUrl]);
 
     // Listen for account switches and authentication changes
     useEffect(() => {
         const checkAuthAndUpdate = () => {
-            const token = V2GetActiveToken();
-            const activeLoginId = V2GetActiveClientId();
+            const token = getMainAppActiveToken();
+            const activeLoginId = getMainAppActiveLoginId();
 
             if (token && activeLoginId) {
                 if (!isAuthenticated) {
@@ -95,9 +116,7 @@ const Dtrader = observer(() => {
                 buildIframeUrl(token, activeLoginId);
             } else if (isAuthenticated) {
                 setIsAuthenticated(false);
-                setIframeSrc(
-                    'https://deriv-dtrader.vercel.app/dtrader?chart_type=area&interval=1t&symbol=1HZ100V&trade_type=over_under'
-                );
+                setIframeSrc('https://deriv-dtrader.vercel.app/');
             }
         };
 
@@ -105,6 +124,7 @@ const Dtrader = observer(() => {
         const handleStorageChange = (e: StorageEvent) => {
             if (
                 e.key === 'authToken' ||
+                e.key === 'NEW_AUTH_token' ||
                 e.key === 'active_loginid' ||
                 e.key === 'clientAccounts' ||
                 e.key === 'accountsList' ||
@@ -116,8 +136,7 @@ const Dtrader = observer(() => {
 
         window.addEventListener('storage', handleStorageChange);
 
-        // Check periodically for localStorage changes (same tab)
-        // This handles cases where auth is set after component mount
+        // Poll for same-tab localStorage changes (e.g. auth completes after mount)
         const interval = setInterval(checkAuthAndUpdate, 2000);
 
         return () => {
