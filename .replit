@@ -31,20 +31,20 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node --experimental-vm-modules node_modules/@rsbuild/core/bin/rsbuild.js dev"
+args = "npm install --legacy-peer-deps && node --experimental-vm-modules node_modules/@rsbuild/core/bin/rsbuild.js dev"
 waitForPort = 5000
 
 [[workflows.workflow]]
 name = "API Server"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run server"
-waitForPort = 3001
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node server/index.js"
+waitForPort = 3001
 
 [[ports]]
 localPort = 3001
@@ -52,11 +52,7 @@ externalPort = 3001
 
 [[ports]]
 localPort = 5000
-externalPort = 80
-
-[[ports]]
-localPort = 5001
-externalPort = 3000
+externalPort = 5000
 
 [deployment]
 deploymentTarget = "autoscale"
