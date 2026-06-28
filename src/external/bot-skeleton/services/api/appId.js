@@ -128,7 +128,27 @@ export const getMainAppActiveToken = () => {
     if (typeof window === 'undefined') return null;
 
     const newAuthToken = sessionStorage.getItem('NEW_AUTH_token') || localStorage.getItem('NEW_AUTH_token');
-    if (newAuthToken && newAuthToken !== 'null') return newAuthToken;
+    if (newAuthToken && newAuthToken !== 'null') {
+        // New auth is active — the OIDC token cannot be used for Deriv WebSocket authorize.
+        // Read the real Deriv API token (a1-xxx) stored by useTMB.processTokens() instead.
+        const activeLoginId = localStorage.getItem('active_loginid');
+        if (activeLoginId && activeLoginId !== 'null') {
+            try {
+                const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
+                const realToken = Array.isArray(clientAccounts)
+                    ? clientAccounts.find(a => a.loginid === activeLoginId)?.token
+                    : clientAccounts[activeLoginId]?.token;
+                if (realToken && realToken !== 'null') return realToken;
+            } catch (_) {}
+
+            try {
+                const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
+                const realToken = accountsList[activeLoginId];
+                if (realToken && realToken !== 'null') return realToken;
+            } catch (_) {}
+        }
+        // Fall through to legacy path if clientAccounts not yet populated
+    }
 
     const legacyToken = V2GetActiveToken();
     if (legacyToken && legacyToken !== 'null') return legacyToken;
