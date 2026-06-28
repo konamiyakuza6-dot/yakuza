@@ -66,6 +66,7 @@ const SmartTrader = () => {
     const [proposalError, setProposalError] = useState('');
     const [currentPrice, setCurrentPrice] = useState(null);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [journalOpen, setJournalOpen] = useState(true);
 
     const wsRef = useRef(null);
     const totalProfitRef = useRef(0);
@@ -649,11 +650,13 @@ const SmartTrader = () => {
                     {
                         contract_id,
                         contract_type: trade_meta.uiContractType,
+                        market: getSymbolDisplayNameSync(market),
                         entry_spot: '-',
                         exit_spot: '-',
                         stake: Number(buy_price ?? trade_meta.stake).toFixed(2),
                         profit: null,
                         status: 'PENDING',
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                     },
                     ...prev_results,
                 ]);
@@ -1313,6 +1316,106 @@ const SmartTrader = () => {
                         <strong>Error:</strong> {proposalError}
                     </div>
                 )}
+
+                <div className='tj-wrapper'>
+                    <div className='tj-header' onClick={() => setJournalOpen(o => !o)}>
+                        <span className='tj-title'>
+                            📋 Transaction Journal
+                            {results.length > 0 && (
+                                <span className='tj-badge'>{results.length}</span>
+                            )}
+                        </span>
+                        <div className='tj-header-right'>
+                            {results.length > 0 && (
+                                <button
+                                    className='tj-clear-btn'
+                                    onClick={e => { e.stopPropagation(); setResults([]); }}
+                                >
+                                    Clear
+                                </button>
+                            )}
+                            <span className='tj-chevron'>{journalOpen ? '▲' : '▼'}</span>
+                        </div>
+                    </div>
+
+                    {journalOpen && (
+                        <>
+                            <div className='tj-stats-bar'>
+                                <div className='tj-stat'>
+                                    <span className='tj-stat-label'>Trades</span>
+                                    <span className='tj-stat-value'>{totalRuns}</span>
+                                </div>
+                                <div className='tj-stat'>
+                                    <span className='tj-stat-label'>Wins</span>
+                                    <span className='tj-stat-value tj-wins'>{wins}</span>
+                                </div>
+                                <div className='tj-stat'>
+                                    <span className='tj-stat-label'>Losses</span>
+                                    <span className='tj-stat-value tj-losses'>{losses}</span>
+                                </div>
+                                <div className='tj-stat'>
+                                    <span className='tj-stat-label'>Win Rate</span>
+                                    <span className='tj-stat-value'>
+                                        {totalRuns > 0 ? `${Math.round((wins / totalRuns) * 100)}%` : '—'}
+                                    </span>
+                                </div>
+                                <div className='tj-stat tj-stat-pl'>
+                                    <span className='tj-stat-label'>Total P/L</span>
+                                    <span className={`tj-stat-value ${totalProfit >= 0 ? 'tj-wins' : 'tj-losses'}`}>
+                                        {totalProfit >= 0 ? '+' : ''}{Number(totalProfit).toFixed(2)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className='tj-table-scroller'>
+                                {results.length === 0 ? (
+                                    <div className='tj-empty'>
+                                        No trades yet. Start the bot to see your transaction history.
+                                    </div>
+                                ) : (
+                                    <table className='tj-table'>
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>Market</th>
+                                                <th>Type</th>
+                                                <th>Stake</th>
+                                                <th>Entry</th>
+                                                <th>Exit</th>
+                                                <th>P/L</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {results.map((r, idx) => (
+                                                <tr key={r.contract_id || idx} className='tj-row'>
+                                                    <td className='tj-cell-time'>{r.timestamp || '—'}</td>
+                                                    <td>{r.market || '—'}</td>
+                                                    <td>
+                                                        <span className='tj-type-badge'>{r.contract_type}</span>
+                                                    </td>
+                                                    <td>{r.stake}</td>
+                                                    <td className='tj-mono'>{r.entry_spot}</td>
+                                                    <td className='tj-mono'>{r.exit_spot}</td>
+                                                    <td className={r.profit !== null ? (parseFloat(r.profit) >= 0 ? 'pro-pl-win' : 'pro-pl-loss') : ''}>
+                                                        {r.profit !== null
+                                                            ? `${parseFloat(r.profit) >= 0 ? '+' : ''}${r.profit}`
+                                                            : '—'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`tj-status tj-status-${(r.status || '').toLowerCase()}`}>
+                                                            {r.status}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );

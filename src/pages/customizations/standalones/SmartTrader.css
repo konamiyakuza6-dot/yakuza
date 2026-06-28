@@ -596,3 +596,237 @@ input:checked + .pro-slider-track::before {
   }
 }
 
+/* =============================================
+   TRANSACTION JOURNAL
+   ============================================= */
+
+.tj-wrapper {
+  margin-top: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.tj-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #0f172a;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tj-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tj-badge {
+  background: #3b82f6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.tj-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tj-chevron {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.tj-clear-btn {
+  background: #334155;
+  color: #f1f5f9;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tj-clear-btn:hover {
+  background: #ef4444;
+}
+
+/* Stats bar */
+.tj-stats-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.tj-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 6px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.tj-stat:last-child {
+  border-right: none;
+}
+
+.tj-stat-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tj-stat-value {
+  font-size: 16px;
+  font-weight: 900;
+  color: #0f172a;
+  margin-top: 2px;
+}
+
+.tj-wins {
+  color: #16a34a;
+}
+
+.tj-losses {
+  color: #dc2626;
+}
+
+.tj-stat-pl {
+  flex: 1.4;
+}
+
+/* Table */
+.tj-table-scroller {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.tj-table-scroller::-webkit-scrollbar {
+  width: 5px;
+}
+
+.tj-table-scroller::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.tj-empty {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 24px;
+}
+
+.tj-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.tj-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f1f5f9;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.tj-row td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.tj-row:last-child td {
+  border-bottom: none;
+}
+
+.tj-row:hover {
+  background: #f8fafc;
+}
+
+.tj-cell-time {
+  color: #64748b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.tj-mono {
+  font-family: monospace;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.tj-type-badge {
+  background: #1e293b;
+  color: #e2e8f0;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tj-status {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.tj-status-pending {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.tj-status-win {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.tj-status-loss {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+@media (max-width: 768px) {
+  .tj-stats-bar {
+    flex-wrap: wrap;
+  }
+  .tj-stat {
+    flex: 1 1 45%;
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .tj-table {
+    font-size: 11px;
+  }
+}
+
