@@ -43,8 +43,7 @@ import BlocklyIOSPrompt from '@/components/blockly-ios-prompt/blockly-ios-prompt
 
 const FULL_PAGE_TABS = [
     'trading_bots', 'dtrader',
-    'copy_trading', 'overlord_2026', 'elite_prime_ai',
-    'smart_trader',
+    'copy_trading',
 ];
 
 const AppWrapper = observer(() => {

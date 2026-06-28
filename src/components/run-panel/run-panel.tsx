@@ -319,10 +319,16 @@ const RunPanel = observer(() => {
         />
     );
 
-    const show_run_panel = [BOT_BUILDER, CHART, TRADING_BOTS, DBOT_TABS.MAKOTI_MAGIC, DBOT_TABS.OVER_UNDER, DBOT_TABS.OVERLORD, DBOT_TABS.ELITE_PRIME_AI, DBOT_TABS.SMART_TRADER].includes(active_tab) || active_tour;
-    // Don't show RunPanel on DTrader tab - manual trading only
-    const { DTRADER } = DBOT_TABS;
-    if (active_tab === DTRADER) return null;
+    // Tab positions in main.tsx (0-based child index):
+    // 0=Dashboard, 1=BotBuilder, 2=TradingBots, 3=OverUnder,
+    // 4=AnalysisTool, 5=CopyTrading, 6=DTrader, 7=Overlord, 8=ElitePrime, 9=SmartTrader
+    const OVERLORD_TAB = 7;
+    const ELITE_PRIME_TAB = 8;
+    const SMART_TRADER_TAB = 9;
+    const DTRADER_TAB = 6;
+    const show_run_panel = [BOT_BUILDER, CHART, TRADING_BOTS, DBOT_TABS.MAKOTI_MAGIC, DBOT_TABS.OVER_UNDER, OVERLORD_TAB, ELITE_PRIME_TAB, SMART_TRADER_TAB].includes(active_tab) || active_tour;
+    // DTrader tab uses manual trading only — RunPanel is also hidden by FULL_PAGE_TABS in main.tsx
+    if (active_tab === DTRADER_TAB) return null;
     if ((!show_run_panel && isDesktop) || active_tour === 'bot_builder') return null;
 
     return (
