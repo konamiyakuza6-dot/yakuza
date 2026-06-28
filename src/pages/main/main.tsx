@@ -38,10 +38,10 @@ const AnalysisTools = lazy(() => import('../analysis-tool'));
 const CopyTrading = lazy(() => import('../copy-trading'));
 const Strategies = lazy(() => import('../free-bots/strategies'));
 const Dtrader = lazy(() => import('../dtrader'));
-const Overlord = lazy(() => import('../overlord'));
-const ElitePrimeAI = lazy(() => import('../elite-prime-ai'));
-const SignalZone = lazy(() => import('../signal-zone'));
-const SmartTrader = lazy(() => import('../smart-trader/smart-trader'));
+const Overlord = lazy(() => import('../customizations/SignalTools/Overlord'));
+const ElitePrimeAI = lazy(() => import('../customizations/SignalTools/ElitePremium'));
+const SignalZone = lazy(() => import('../customizations/SignalTools/CustomDash'));
+const SmartTrader = lazy(() => import('../customizations/standalones/SmartTrader'));
 
 import TradingBots from '../free-bots/trading-bots';
 import { MakotiWidget } from '@/components/makoti-widget/makoti-widget';
