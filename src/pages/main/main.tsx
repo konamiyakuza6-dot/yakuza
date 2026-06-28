@@ -19,7 +19,7 @@ import {
     LabelPairedPuzzlePieceTwoCaptionBoldIcon,
     LabelPairedPlayCaptionBoldIcon,
 } from '@deriv/quill-icons/LabelPaired';
-import { LegacyChartsIcon, LegacyIndicatorsIcon } from '@deriv/quill-icons/Legacy';
+import { LegacyIndicatorsIcon } from '@deriv/quill-icons/Legacy';
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import RunPanel from '../../components/run-panel';
@@ -28,15 +28,10 @@ import ChartModal from '../chart/chart-modal';
 import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
 import OverUnder from '../OverUnder';
-import MakotiMagic from '../MakotiMagic';
-import MakotiMagicStore from '@/stores/makoti-magic-store';
 import './main.scss';
 
-const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
-const TradingView = lazy(() => import('../tradingview'));
 const AnalysisTools = lazy(() => import('../analysis-tool'));
 const CopyTrading = lazy(() => import('../copy-trading'));
-const Strategies = lazy(() => import('../free-bots/strategies'));
 const Dtrader = lazy(() => import('../dtrader'));
 const Overlord = lazy(() => import('../customizations/SignalTools/Overlord'));
 const ElitePrimeAI = lazy(() => import('../customizations/SignalTools/ElitePremium'));
@@ -48,8 +43,8 @@ import { MakotiWidget } from '@/components/makoti-widget/makoti-widget';
 import BlocklyIOSPrompt from '@/components/blockly-ios-prompt/blockly-ios-prompt';
 
 const FULL_PAGE_TABS = [
-    'strategies', 'makoti_magic', 'trading_bots', 'dtrader',
-    'copy_trading', 'tradingview', 'overlord_2026', 'elite_prime_ai',
+    'trading_bots', 'dtrader',
+    'copy_trading', 'overlord_2026', 'elite_prime_ai',
     'signal_zone', 'smart_trader',
 ];
 
@@ -62,7 +57,6 @@ const AppWrapper = observer(() => {
         setActiveTab,
         setWebSocketState,
         setTourDialogVisibility,
-        setPendingFreeBot,
     } = dashboard;
     const { stopBot } = run_panel;
     const { is_open } = quick_strategy;
@@ -74,30 +68,20 @@ const AppWrapper = observer(() => {
     const hash = [
         'dashboard',      // 0
         'bot_builder',    // 1
-        'chart',          // 2
-        'trading_bots',   // 3
-        'over_under',     // 4
-        'makoti_magic',   // 5
-        'analysis_tool',  // 6
-        'strategies',     // 7
-        'copy_trading',   // 8
-        'dtrader',        // 9
-        'tradingview',    // 10
-        'overlord_2026',  // 11
-        'elite_prime_ai', // 12
-        'signal_zone',    // 13
-        'smart_trader',   // 14
+        'trading_bots',   // 2
+        'over_under',     // 3
+        'analysis_tool',  // 4
+        'copy_trading',   // 5
+        'dtrader',        // 6
+        'overlord_2026',  // 7
+        'elite_prime_ai', // 8
+        'signal_zone',    // 9
+        'smart_trader',   // 10
     ];
 
     const { isDesktop } = useDevice();
     const location = useLocation();
     const navigate = useNavigate();
-
-    useEffect(() => {
-        MakotiMagicStore.setBotLoadCallback((xmlContent: string) => {
-            setPendingFreeBot({ name: 'Makoti Magic Bot', xml: xmlContent });
-        });
-    }, [setPendingFreeBot]);
 
     const GetHashedValue = (tab: number) => {
         const tab_val = location.hash?.split('#')[1];
@@ -149,55 +133,39 @@ const AppWrapper = observer(() => {
                         </div>
                         {/* 1 – Bot Builder */}
                         <div label={<><LabelPairedPuzzlePieceTwoCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Bot Builder' /></>} id='id-bot-builder' />
-                        {/* 2 – Charts */}
-                        <div label={<><LabelPairedChartLineCaptionRegularIcon height='24px' width='24px' /><Localize i18n_default_text='Charts' /></>} id='id-charts'>
-                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading chart...')} />}><ChartWrapper show_digits_stats={false} /></Suspense>
-                        </div>
-                        {/* 3 – Trading Bots */}
+                        {/* 2 – Trading Bots */}
                         <div label={<><LabelPairedPuzzlePieceTwoCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Trading Bots' /></>} id='id-trading-bots'>
                             <TradingBots />
                         </div>
-                        {/* 4 – Over/Under */}
+                        {/* 3 – Over/Under */}
                         <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Over/Under' /></>} id='over_under'>
                             <OverUnder />
                         </div>
-                        {/* 5 – Makoti Magic */}
-                        <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Makoti Magic' /></>} id='makoti_magic'>
-                            <MakotiMagic />
-                        </div>
-                        {/* 6 – Analysis Tool */}
+                        {/* 4 – Analysis Tool */}
                         <div label={<><LegacyIndicatorsIcon height='16px' width='16px' /><Localize i18n_default_text='Analysis Tool' /></>} id='id-analysis-tool'>
                             <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Analysis Tool...')} />}><AnalysisTools /></Suspense>
                         </div>
-                        {/* 7 – Strategies */}
-                        <div label={<><LabelPairedPuzzlePieceTwoCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Strategies' /></>} id='id-strategies'>
-                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Strategies...')} />}><Strategies /></Suspense>
-                        </div>
-                        {/* 8 – Copy Trading */}
+                        {/* 5 – Copy Trading */}
                         <div label={<><LabelPairedObjectsColumnCaptionRegularIcon height='24px' width='24px' /><Localize i18n_default_text='Copy Trading' /></>} id='id-copy-trading'>
                             <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Copy Trading...')} />}><CopyTrading /></Suspense>
                         </div>
-                        {/* 9 – DTrader */}
+                        {/* 6 – DTrader */}
                         <div label={<><LabelPairedChartLineCaptionRegularIcon height='24px' width='24px' /><Localize i18n_default_text='DTrader' /></>} id='id-dtrader'>
                             <Suspense fallback={<ChunkLoader message={localize('Please wait, loading DTrader...')} />}><Dtrader /></Suspense>
                         </div>
-                        {/* 10 – TradingView */}
-                        <div label={<><LegacyChartsIcon height='16px' width='16px' /><Localize i18n_default_text='TradingView' /></>} id='id-tradingview'>
-                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading TradingView...')} />}><TradingView /></Suspense>
-                        </div>
-                        {/* 11 – Overlord-2026 */}
+                        {/* 7 – Overlord-2026 */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>⚔️</span><Localize i18n_default_text='Overlord-2026' /></>} id='id-overlord'>
                             <Suspense fallback={<ChunkLoader message={localize('Loading Overlord-2026...')} />}><Overlord /></Suspense>
                         </div>
-                        {/* 12 – Elite Prime AI */}
+                        {/* 8 – Elite Prime AI */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>🤖</span><Localize i18n_default_text='Elite Prime AI' /></>} id='id-elite-prime-ai'>
                             <Suspense fallback={<ChunkLoader message={localize('Loading Elite Prime AI...')} />}><ElitePrimeAI /></Suspense>
                         </div>
-                        {/* 13 – Signal Zone */}
+                        {/* 9 – Signal Zone */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>📡</span><Localize i18n_default_text='Signal Zone' /></>} id='id-signal-zone'>
                             <Suspense fallback={<ChunkLoader message={localize('Loading Signal Zone...')} />}><SignalZone /></Suspense>
                         </div>
-                        {/* 14 – Smart Trader */}
+                        {/* 10 – Smart Trader */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>💹</span><Localize i18n_default_text='Smart Trader' /></>} id='id-smart-trader'>
                             <Suspense fallback={<ChunkLoader message={localize('Loading Smart Trader...')} />}><SmartTrader /></Suspense>
                         </div>
