@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
 import { FaPlay, FaStop } from 'react-icons/fa';
 import { WS_SERVERS, isProduction } from '@/components/shared';
+import { isNewLoggedIn, sendViaNewSystem, onNewSystemMessage, createNewWebSocket } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
 import { contract_stages } from '@/constants/contract-stage';
 import { run_panel as run_panel_tabs } from '@/constants/run-panel';
@@ -12,8 +13,7 @@ import './ElitePremium.css';
 
 const DERIV_PUBLIC_WS_URL = isProduction() ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
 const DERIV_OPTIONS_API_URL = DERIV_PUBLIC_WS_URL.replace(/^wss:\/\//, 'https://').replace(/ws\/public$/, '');
-// Legacy Deriv API — supports { authorize: token } with standard API tokens
-const LEGACY_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=101585';
+
 const JOURNAL_SLOT_ID = 'db-journal-custom-slot';
 const MAX_STRATEGIES = 5;
 const MONITOR_WINDOW = 5;
@@ -184,6 +184,7 @@ const ElitePremium = () => {
     const isConnectingRef = useRef(false);
     const shouldReconnectRef = useRef(true);
     const skipReconnectRef = useRef(false);
+    const unregisterNewSystemRef = useRef(null);
     const socketRequiresAuthRef = useRef(false);
     const activeContractsRef = useRef(new Set());
     const isProcessingRef = useRef(false);
@@ -836,6 +837,32 @@ const ElitePremium = () => {
     const connectTradingSocket = useCallback(
         async (options = {}) => {
             const { requireAuth = false, forceReconnect = false } = options;
+
+            if (isNewLoggedIn()) {
+                let gWs = window._newSystemWS;
+                if (!gWs || gWs.readyState !== WebSocket.OPEN) {
+                    gWs = await createNewWebSocket();
+                    if (!gWs) {
+                        logMessage('⚠️ New auth: OTP WebSocket unavailable — please log in again.');
+                        return false;
+                    }
+                    if (gWs.readyState !== WebSocket.OPEN) {
+                        await new Promise(res => gWs.addEventListener('open', res, { once: true }));
+                    }
+                }
+                wsRef.current = {
+                    get readyState() { return window._newSystemWS?.readyState ?? WebSocket.CLOSED; },
+                    send: raw => { try { sendViaNewSystem(JSON.parse(raw)); } catch (e) {} },
+                    close: () => {},
+                };
+                isAuthorizedRef.current = true;
+                if (unregisterNewSystemRef.current) unregisterNewSystemRef.current();
+                unregisterNewSystemRef.current = onNewSystemMessage(ev => {
+                    handleSocketMessage({ data: ev.data });
+                });
+                return true;
+            }
+
             const wsReady = wsRef.current?.readyState;
 
             if (
@@ -951,6 +978,10 @@ const ElitePremium = () => {
                 highlightTimeoutRef.current = null;
             }
 
+            if (unregisterNewSystemRef.current) {
+                unregisterNewSystemRef.current();
+                unregisterNewSystemRef.current = null;
+            }
             if (wsRef.current) {
                 wsRef.current.close();
                 wsRef.current = null;

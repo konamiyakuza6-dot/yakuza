@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Swal from 'sweetalert2';
 
 import { WS_SERVERS, isProduction } from '@/components/shared';
+import { isNewLoggedIn, sendViaNewSystem, onNewSystemMessage, createNewWebSocket } from '@/auth/NewDerivAuth';
 import { contract_stages } from '@/constants/contract-stage';
 import { run_panel as run_panel_tabs } from '@/constants/run-panel';
 import { observer } from '@/external/bot-skeleton';
@@ -51,8 +52,7 @@ const getDerivContractType = type => CONTRACT_TYPE_MAP[type] || type;
 
 const DERIV_PUBLIC_WS_URL = isProduction() ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
 const DERIV_OPTIONS_API_URL = DERIV_PUBLIC_WS_URL.replace(/^wss:\/\//, 'https://').replace(/ws\/public$/, '');
-// Legacy Deriv API — supports { authorize: token } with standard API tokens
-const SCAN_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=101585';
+const SCAN_WS_URL = DERIV_PUBLIC_WS_URL;
 const SCAN_TIMEOUT_MS = 6000;
 const SCAN_MAX_RETRIES = 3;
 
@@ -118,6 +118,7 @@ const Overlord = () => {
     const reconnectTimeoutRef = useRef(null);
     const shouldReconnectRef = useRef(true);
     const skipReconnectRef = useRef(false);
+    const unregisterNewSystemRef = useRef(null);
     const socketRequiresAuthRef = useRef(false);
     const contractMetaRef = useRef({});
     const lastProcessedContractIdRef = useRef(null);
@@ -836,6 +837,32 @@ const Overlord = () => {
     const connectTradingSocket = useCallback(
         async (options = {}) => {
             const { requireAuth = false, forceReconnect = false } = options;
+
+            if (isNewLoggedIn()) {
+                let gWs = window._newSystemWS;
+                if (!gWs || gWs.readyState !== WebSocket.OPEN) {
+                    gWs = await createNewWebSocket();
+                    if (!gWs) {
+                        logMessage('⚠️ New auth: OTP WebSocket unavailable — please log in again.');
+                        return false;
+                    }
+                    if (gWs.readyState !== WebSocket.OPEN) {
+                        await new Promise(res => gWs.addEventListener('open', res, { once: true }));
+                    }
+                }
+                wsRef.current = {
+                    get readyState() { return window._newSystemWS?.readyState ?? WebSocket.CLOSED; },
+                    send: raw => { try { sendViaNewSystem(JSON.parse(raw)); } catch (e) {} },
+                    close: () => {},
+                };
+                isAuthorizedRef.current = true;
+                if (unregisterNewSystemRef.current) unregisterNewSystemRef.current();
+                unregisterNewSystemRef.current = onNewSystemMessage(ev => {
+                    handleSocketMessage({ data: ev.data });
+                });
+                return true;
+            }
+
             const wsReady = wsRef.current?.readyState;
 
             if (
@@ -982,6 +1009,10 @@ const Overlord = () => {
         }
 
         return () => {
+            if (unregisterNewSystemRef.current) {
+                unregisterNewSystemRef.current();
+                unregisterNewSystemRef.current = null;
+            }
             if (wsRef.current) {
                 wsRef.current.close();
                 wsRef.current = null;

@@ -3,6 +3,7 @@ import { FaPlay, FaStop } from 'react-icons/fa';
 import { IoChevronDown } from 'react-icons/io5';
 import Swal from 'sweetalert2';
 import { isProduction, WS_SERVERS } from '@/components/shared';
+import { isNewLoggedIn, sendViaNewSystem, onNewSystemMessage, createNewWebSocket } from '@/auth/NewDerivAuth';
 import { contract_stages } from '@/constants/contract-stage';
 import { run_panel as run_panel_tabs } from '@/constants/run-panel';
 import { observer } from '@/external/bot-skeleton';
@@ -21,8 +22,7 @@ import './SmartTrader.css';
 
 const DERIV_PUBLIC_WS_URL = isProduction() ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
 const DERIV_OPTIONS_API_URL = DERIV_PUBLIC_WS_URL.replace(/^wss:\/\//, 'https://').replace(/ws\/public$/, '');
-// Legacy Deriv API — supports { authorize: token } with standard API tokens
-const LEGACY_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=101585';
+
 
 const CONTRACT_TYPE_MAP = Object.freeze({
     CALL: 'CALL',
@@ -79,6 +79,7 @@ const SmartTrader = () => {
     const shouldReconnectRef = useRef(true);
     const reconnectTimeoutRef = useRef(null);
     const skipReconnectRef = useRef(false);
+    const unregisterNewSystemRef = useRef(null);
     const socketRequiresAuthRef = useRef(false);
     const pendingProposalRef = useRef(false);
     const pendingTradeMetaRef = useRef(null);
@@ -833,6 +834,32 @@ const SmartTrader = () => {
     const connectTradingSocket = useCallback(
         async (options = {}) => {
             const { requireAuth = false, forceReconnect = false } = options;
+
+            if (isNewLoggedIn()) {
+                let gWs = window._newSystemWS;
+                if (!gWs || gWs.readyState !== WebSocket.OPEN) {
+                    gWs = await createNewWebSocket();
+                    if (!gWs) {
+                        logMessage('⚠️ New auth: OTP WebSocket unavailable — please log in again.');
+                        return false;
+                    }
+                    if (gWs.readyState !== WebSocket.OPEN) {
+                        await new Promise(res => gWs.addEventListener('open', res, { once: true }));
+                    }
+                }
+                wsRef.current = {
+                    get readyState() { return window._newSystemWS?.readyState ?? WebSocket.CLOSED; },
+                    send: raw => { try { sendViaNewSystem(JSON.parse(raw)); } catch (e) {} },
+                    close: () => {},
+                };
+                isAuthorizedRef.current = true;
+                if (unregisterNewSystemRef.current) unregisterNewSystemRef.current();
+                unregisterNewSystemRef.current = onNewSystemMessage(ev => {
+                    handleSocketMessage({ data: ev.data });
+                });
+                return true;
+            }
+
             const socket_state = wsRef.current?.readyState;
 
             if (
@@ -1039,6 +1066,10 @@ const SmartTrader = () => {
 
             clearRecoveryTimeouts();
 
+            if (unregisterNewSystemRef.current) {
+                unregisterNewSystemRef.current();
+                unregisterNewSystemRef.current = null;
+            }
             if (wsRef.current) {
                 skipReconnectRef.current = true;
                 wsRef.current.close();
