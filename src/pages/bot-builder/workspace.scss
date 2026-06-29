@@ -6,6 +6,7 @@
     width: calc(100vw - 3.2rem);
     height: var(--bot-content-height);
     top: 0;
+    background: rgba(10, 18, 44, 0.97);
 
     @include mobile-or-tablet-screen {
         width: 100%;
@@ -23,39 +24,77 @@
 }
 
 .blocklyTreeLabel {
-    color: var(--text-prominent);
+    color: #ffffff !important;
 }
 
 .blocklyTreeRow {
+    transition: background-color 0.15s ease;
+
+    &:hover {
+        background-color: rgba(59, 130, 246, 0.15) !important;
+    }
+
     &.blocklyTreeSelected {
-        background-color: #7c3aed !important;
+        background-color: #3b82f6 !important;
+
+        .blocklyTreeLabel {
+            color: #ffffff !important;
+        }
     }
 }
 
 .blocklyFlyoutBackground {
-    fill: var(--general-section-1);
-    fill-opacity: 0.9;
+    fill: rgba(10, 18, 44, 0.97) !important;
+    fill-opacity: 1;
 }
 
-// Only recolour the root/entry block headers (numbered sections like
-// "1. Trade parameters").  Regular inner blocks keep their original colours.
-// The :has() selector targets only blocklyDraggable groups that contain
-// a root-block header text element.
+.blocklyFlyout {
+    border-right: 1px solid rgba(255, 215, 0, 0.25);
+}
+
+.blocklyToolboxDiv {
+    background: rgba(10, 18, 44, 0.96) !important;
+    border-right: 1px solid rgba(255, 215, 0, 0.3) !important;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.4) !important;
+    color: #ffffff !important;
+}
+
+.blocklyTreeIcon {
+    opacity: 0.7;
+}
+
+// Root/entry block headers — blue accent
 .blocklyDraggable:has(.blocklyTextRootBlockHeader) > .blocklyPath {
-    fill: #7c3aed !important;
-    stroke: #9d65f5 !important;
+    fill: #1e3a8a !important;
+    stroke: rgba(255, 215, 0, 0.5) !important;
 }
 
 .blocklyDraggable:has(.blocklyTextRootBlockHeaderCollapsed) > .blocklyPath {
-    fill: #7c3aed !important;
-    stroke: #9d65f5 !important;
+    fill: #1e3a8a !important;
+    stroke: rgba(255, 215, 0, 0.5) !important;
 }
 
-// Keep the selected highlight consistent
+// Selected root block highlight
 .blocklySelected:has(.blocklyTextRootBlockHeader) > .blocklyPath,
 .blocklySelected:has(.blocklyTextRootBlockHeaderCollapsed) > .blocklyPath {
-    stroke: #c4b5fd !important;
+    stroke: #f5c542 !important;
     stroke-width: 3px !important;
+}
+
+// Workspace canvas background
+svg.blocklySvg {
+    background: rgba(10, 18, 44, 0.97) !important;
+}
+
+.blocklyMainBackground {
+    fill: rgba(10, 18, 44, 0.97) !important;
+}
+
+// Grid dots on the workspace
+.blocklyGridPattern {
+    path {
+        stroke: rgba(255, 215, 0, 0.08) !important;
+    }
 }
 
 .blocklyMainWorkspaceScrollbar {
