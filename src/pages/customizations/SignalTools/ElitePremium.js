@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
 import { FaPlay, FaStop } from 'react-icons/fa';
-import { WS_SERVERS, isProduction } from '@/components/shared';
+import { WS_SERVERS, isProduction, getAppId, getSocketURL } from '@/components/shared';
 import { isNewLoggedIn, sendViaNewSystem, onNewSystemMessage, createNewWebSocket } from '@/auth/NewDerivAuth';
 import { useStore } from '@/hooks/useStore';
 import { contract_stages } from '@/constants/contract-stage';
@@ -185,6 +185,8 @@ const ElitePremium = () => {
     const shouldReconnectRef = useRef(true);
     const skipReconnectRef = useRef(false);
     const unregisterNewSystemRef = useRef(null);
+    const tickWsRef = useRef(null);
+    const tickWsReconnectRef = useRef(null);
     const socketRequiresAuthRef = useRef(false);
     const activeContractsRef = useRef(new Set());
     const isProcessingRef = useRef(false);
@@ -953,6 +955,57 @@ const ElitePremium = () => {
         },
         [getAuthenticatedUrl, handleSocketMessage, subscribeToTicks]
     );
+
+    useEffect(() => {
+        if (!isNewLoggedIn()) return;
+
+        function startTickWs() {
+            if (
+                tickWsRef.current?.readyState === WebSocket.OPEN ||
+                tickWsRef.current?.readyState === WebSocket.CONNECTING
+            ) return;
+            if (tickWsReconnectRef.current) {
+                clearTimeout(tickWsReconnectRef.current);
+                tickWsReconnectRef.current = null;
+            }
+            try {
+                const ws = new WebSocket(
+                    `wss://${getSocketURL()}/websockets/v3?app_id=${getAppId()}`
+                );
+                tickWsRef.current = ws;
+                ws.onopen = () => {
+                    ALL_SYMBOLS.forEach(sym =>
+                        ws.send(JSON.stringify({ ticks: sym, subscribe: 1 }))
+                    );
+                };
+                ws.onmessage = event => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.msg_type === 'tick' && data.tick) handleTick(data.tick);
+                    } catch (_) {}
+                };
+                ws.onclose = () => {
+                    if (tickWsRef.current === ws) tickWsRef.current = null;
+                    tickWsReconnectRef.current = setTimeout(startTickWs, 2500);
+                };
+                ws.onerror = () => {};
+            } catch (_) {}
+        }
+
+        startTickWs();
+
+        return () => {
+            if (tickWsReconnectRef.current) {
+                clearTimeout(tickWsReconnectRef.current);
+                tickWsReconnectRef.current = null;
+            }
+            if (tickWsRef.current) {
+                tickWsRef.current.onclose = null;
+                tickWsRef.current.close();
+                tickWsRef.current = null;
+            }
+        };
+    }, [handleTick]);
 
     useEffect(() => {
         shouldReconnectRef.current = true;
