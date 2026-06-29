@@ -6,7 +6,7 @@
     align-items: center;
     flex-direction: column;
     justify-content: center;
-    background: linear-gradient(180deg, var(--general-section-2) 0%, rgb(242 243 244 / 0%) 80%);
+    background: linear-gradient(180deg, rgba(10, 18, 44, 0.96) 0%, rgba(30, 58, 138, 0.4) 80%);
     width: 100%;
 
     @include desktop-screen {
@@ -36,37 +36,72 @@
         width: 32%;
         max-width: 32%;
         text-align: center;
-        background-color: var(--general-section-1);
+        background: rgba(10, 18, 44, 0.85);
+        border: 1px solid rgba(255, 215, 0, 0.25);
+        box-shadow:
+            0 0 0 1px rgba(255, 215, 0, 0.1),
+            inset 0 0 8px rgba(59, 130, 246, 0.05);
         padding: 8px 8px 0;
         margin-bottom: 2%;
         height: 56px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+        &:hover {
+            border-color: rgba(255, 215, 0, 0.5);
+            box-shadow:
+                0 0 0 1px rgba(255, 215, 0, 0.25),
+                inset 0 0 12px rgba(59, 130, 246, 0.08);
+        }
 
         &-title {
             height: 18px;
             margin-bottom: 4px;
+            color: rgba(255, 215, 0, 0.85) !important;
+            font-weight: bold;
+            font-size: 1.1rem;
 
             @include typeface(--small-center-bold-black, none);
+
+            * { color: rgba(255, 215, 0, 0.85) !important; }
         }
 
         &-content {
             height: 18px;
             margin-bottom: 4px;
+            color: #ffffff !important;
 
             @include typeface(--small-center-normal-black, none);
+
+            * { color: #ffffff !important; }
         }
     }
 
     &__amount {
         @include typeface(--small-center-normal-black, none);
 
+        color: #ffffff !important;
+
+        * { color: #ffffff !important; }
+
         &--positive {
             font-weight: bold;
-            color: var(--text-profit-success);
+            color: #4ade80 !important;
+
+            * { color: #4ade80 !important; }
         }
 
         &--negative {
             font-weight: bold;
-            color: var(--text-loss-danger);
+            color: #f87171 !important;
+
+            * { color: #f87171 !important; }
         }
+    }
+
+    span,
+    div,
+    p,
+    label {
+        color: #ffffff;
     }
 }

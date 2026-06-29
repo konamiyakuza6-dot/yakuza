@@ -34,6 +34,7 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
+        background: rgba(10, 18, 44, 0.85);
 
         &-box {
             display: grid;
@@ -43,6 +44,7 @@
 
         &__header {
             padding: 0.8rem;
+            color: rgba(255, 215, 0, 0.85) !important;
         }
 
         &__icon-box {
@@ -53,7 +55,7 @@
             svg {
                 g {
                     path {
-                        fill: var(--text-less-prominent);
+                        fill: #f5c542;
                     }
                 }
             }
@@ -61,14 +63,22 @@
 
         &__icon {
             align-self: center;
+
+            svg,
+            svg > path,
+            svg > g > path {
+                fill: #f5c542 !important;
+            }
         }
 
         &__message {
             margin: 0 auto;
             margin-bottom: 2rem;
+            color: #ffffff !important;
 
             & .dc-text {
                 line-height: var(--text-lh-xxl);
+                color: #ffffff !important;
             }
         }
 
@@ -77,22 +87,27 @@
             margin-left: 2rem;
             font-size: var(--text-size-xxs);
             line-height: var(--text-lh-xl);
-            color: var(--text-less-prominent);
+            color: rgba(255, 255, 255, 0.7) !important;
         }
     }
 
     &__header {
-        border-bottom: 1px solid var(--general-section-1);
+        background: rgba(10, 18, 44, 0.96);
+        border-bottom: 1px solid rgba(255, 215, 0, 0.35) !important;
+        border-top: none;
         width: 100%;
         display: grid;
+        color: rgba(255, 215, 0, 0.85) !important;
 
         @include typeface(--small-left-bold-black, none);
 
         grid-template-columns: $grid-template-columns;
         grid-template-areas: 'type spot profit';
-        padding: 0.8rem 1.6rem; // Equal l+r with transaction__item padding.
+        padding: 0.8rem 1.6rem;
         height: 6.4rem;
         align-items: center;
+
+        * { color: rgba(255, 215, 0, 0.85) !important; }
 
         $header-grid-items: (string.unquote('type'), string.unquote('spot'), string.unquote('profit'));
 
@@ -125,6 +140,7 @@
 
     &__content {
         height: calc(100% - 11rem);
+        background: rgba(10, 18, 44, 0.75);
 
         &--mobile {
             height: calc(100% - 4.2rem);
@@ -148,6 +164,7 @@
         grid-template-rows: auto auto;
         grid-template-areas: ('trade-type entry-spot stake' 'trade-type exit-spot  profit');
         padding: 0.8rem 0;
+        color: #ffffff;
 
         @include rtl {
             direction: rtl;
@@ -158,10 +175,13 @@
             padding: 0 1.6rem;
             cursor: pointer;
             position: relative;
-            border-top: 1px solid var(--general-section-2);
+            border-top: 1px solid rgba(255, 215, 0, 0.12) !important;
+            background: transparent;
+            transition: background-color 0.15s ease;
 
             &:hover {
-                background-color: var(--state-hover);
+                background-color: rgba(59, 130, 246, 0.12) !important;
+                border-color: rgba(255, 215, 0, 0.25) !important;
             }
         }
     }
@@ -190,12 +210,12 @@
     }
 
     &__divider {
-        border-top: 1px solid var(--general-section-2);
+        border-top: 1px solid rgba(255, 215, 0, 0.18) !important;
         padding: 8px 16px;
 
         &-line {
             height: 4px;
-            background-color: var(--general-section-2);
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.4), rgba(255, 215, 0, 0.2));
         }
     }
 
@@ -225,6 +245,12 @@
         &-icon {
             width: 2.4rem;
             height: 2.4rem;
+
+            svg,
+            svg > path,
+            svg > g > path {
+                fill: #f5c542 !important;
+            }
         }
     }
 
@@ -234,17 +260,30 @@
         max-width: 1.6rem;
         min-height: 1.6rem;
         min-width: 1.6rem;
+
+        svg,
+        svg > path,
+        svg > g > path {
+            fill: #f5c542 !important;
+        }
     }
 
     &__cell {
         display: flex;
         align-items: center;
-        color: var(--text-general);
+        color: #ffffff !important;
+
+        span,
+        div,
+        p {
+            color: #ffffff !important;
+        }
     }
 
     &__profit {
         &--win {
-            color: var(--text-profit-success);
+            color: #4ade80 !important;
+            font-weight: bold;
 
             &:before {
                 content: '+';
@@ -252,7 +291,8 @@
         }
 
         &--loss {
-            color: var(--text-loss-danger);
+            color: #f87171 !important;
+            font-weight: bold;
 
             &:before {
                 content: '-';
@@ -263,16 +303,21 @@
     &__info {
         &-header {
             font-weight: bold;
+            color: rgba(255, 215, 0, 0.85) !important;
         }
     }
 
     &__popover {
         &-title {
             @include typeface(--xsmall-left-normal-black, none);
+
+            color: rgba(255, 215, 0, 0.85) !important;
         }
 
         &-item {
             @include typeface(--small-left-bold-black, none);
+
+            color: #ffffff !important;
 
             &:not(:last-of-type) {
                 margin-bottom: 0.8rem;
