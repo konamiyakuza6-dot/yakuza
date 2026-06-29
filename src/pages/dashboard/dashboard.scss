@@ -1,3 +1,4 @@
+@use 'components/shared/styles/constants' as *;
 @use 'components/shared/styles/mixins' as *;
 
 .bot-dashboard {
@@ -8,6 +9,7 @@
     position: relative;
     height: calc(100vh - 4.4rem);
     overflow: hidden;
+    background: $color-hub-navy-mid;
 
     .toolbar__section {
         justify-content: end;
@@ -65,7 +67,8 @@
 
     &-sidebar {
         position: relative;
-        background-color: var(--general-main-1);
+        background: $color-hub-navy-mid;
+        border-right: 1px solid $color-hub-gold-border;
         padding: 2.4rem;
         height: 100%;
         display: none;
@@ -75,7 +78,9 @@
         }
 
         &__images {
-            background: var(--general-section-6);
+            background: rgba(30, 58, 138, 0.25);
+            border: 1px solid $color-hub-gold-border-light;
+            border-radius: $BORDER_RADIUS;
         }
     }
 
@@ -89,19 +94,23 @@
             line-height: 2.3rem;
             text-align: center;
             border-radius: 1rem;
+            color: $color-white;
+            transition: background-color 0.15s ease;
 
             &:hover {
                 cursor: pointer;
-                background: var(--general-section-1);
+                background: rgba(255, 215, 0, 0.15);
             }
         }
 
         &__content {
             cursor: pointer;
+            color: $color-white !important;
+            transition: color 0.15s ease;
 
             &:hover {
                 text-decoration: underline;
-                color: var(--button-primary-default);
+                color: $color-hub-blue !important;
             }
         }
     }
@@ -137,6 +146,9 @@
             .title {
                 text-align: center;
                 height: 7.2rem;
+                color: $color-hub-gold-label !important;
+
+                * { color: $color-hub-gold-label !important; }
 
                 @include mobile-or-tablet-screen {
                     height: auto;
@@ -147,6 +159,9 @@
                 text-align: center;
                 margin-top: 1.6rem;
                 margin-bottom: 1rem;
+                color: $color-white !important;
+
+                * { color: $color-white !important; }
 
                 &__has-list {
                     text-align: center;
@@ -171,7 +186,7 @@
             align-items: flex-start;
             height: var(--tab-content-height);
             flex-grow: 1;
-            background: var(--general-main-1);
+            background: $color-hub-navy-mid;
             overflow: hidden;
             position: relative;
 
@@ -232,16 +247,23 @@
 
             &__retrigger {
                 button {
-                    background: var(--general-section-1);
+                    background: rgba(30, 58, 138, 0.4);
+                    border: 1px solid $color-hub-gold-border;
                     border-radius: 2.4rem;
                     outline: none;
-                    border: none;
                     height: 4rem;
                     padding: 1rem;
+                    color: $color-white;
+                    transition: background-color 0.2s ease, border-color 0.2s ease;
 
                     @include flex-center;
 
                     cursor: pointer;
+
+                    &:hover {
+                        background: $color-hub-blue-glow;
+                        border-color: $color-hub-gold;
+                    }
 
                     @include mobile-or-tablet-screen {
                         width: 3.2rem;
@@ -252,12 +274,18 @@
 
                 &__text {
                     margin-left: 0.4rem;
-                    color: var(--text-general);
+                    color: $color-white !important;
                 }
 
                 &__icon {
                     width: var(--icon-width);
                     height: var(--icon-height);
+
+                    svg,
+                    svg > path,
+                    svg > g > path {
+                        fill: $color-hub-gold !important;
+                    }
                 }
             }
         }
@@ -270,31 +298,48 @@
                 padding: 2rem;
 
                 button {
-                    background: var(--general-section-1);
+                    background: rgba(30, 58, 138, 0.4);
+                    border: 1px solid $color-hub-gold-border;
                     border-radius: 2.4rem;
                     outline: none;
-                    border: none;
                     height: 4rem;
                     padding: 1rem;
+                    color: $color-white;
+                    transition: background-color 0.2s ease, border-color 0.2s ease;
 
                     @include flex-center;
 
                     cursor: pointer;
+
+                    &:hover {
+                        background: $color-hub-blue-glow;
+                        border-color: $color-hub-gold;
+                    }
                 }
 
                 &__text {
                     margin-left: 0.4rem;
-                    color: var(--text-general);
+                    color: $color-white !important;
                 }
 
                 &__icon {
                     width: var(--icon-width);
                     height: var(--icon-height);
+
+                    svg,
+                    svg > path,
+                    svg > g > path {
+                        fill: $color-hub-gold !important;
+                    }
                 }
             }
         }
 
         &__description {
+            color: $color-white !important;
+
+            * { color: $color-white !important; }
+
             @include desktop-screen {
                 text-align: center;
                 margin-bottom: 4rem;
@@ -303,12 +348,16 @@
 
         &__info-panel {
             position: relative;
-            background-color: var(--general-main-1);
+            background: $color-hub-navy-mid;
+            border: 1px solid $color-hub-gold-border;
+            border-radius: $BORDER_RADIUS;
             padding: 2.4rem;
             margin-inline-start: 1.6rem;
             display: none;
             height: calc(100vh - 16.7rem);
             overflow-y: auto;
+            color: $color-white;
+            box-shadow: $shadow-hub-panel;
 
             &--active {
                 display: block;
@@ -370,12 +419,23 @@
 
                 &:hover {
                     cursor: pointer;
+
+                    .tab__dashboard__table__images {
+                        border-color: $color-hub-gold;
+                        box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.25);
+                    }
+
+                    span {
+                        color: $color-hub-gold !important;
+                    }
                 }
 
                 span {
                     width: 9.1rem;
                     word-wrap: break-word;
                     text-align: center;
+                    color: $color-white !important;
+                    transition: color 0.15s ease;
 
                     @include mobile-or-tablet-screen {
                         height: auto;
@@ -390,15 +450,25 @@
                     & .dc-text {
                         width: 8rem;
                         text-align: center;
+                        color: $color-white !important;
                     }
                 }
             }
 
             &__images {
-                background-color: var(--general-section-1);
+                background: rgba(30, 58, 138, 0.35);
+                border: 1px solid $color-hub-gold-border;
+                box-shadow: $shadow-hub-gold;
                 margin-bottom: 0.8rem;
                 border-radius: 0.8rem;
                 padding: 1.6rem;
+                transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+                svg,
+                svg > path,
+                svg > g > path {
+                    fill: $color-hub-gold !important;
+                }
 
                 &--minimized {
                     @include mobile-or-tablet-screen {
@@ -426,10 +496,12 @@
         @include flex-center;
 
         padding: 0.8rem 1.4rem;
-        border: none;
+        border: 1px solid $color-hub-gold-border;
         outline: none;
         border-radius: 2.4rem;
-        background-color: var(--general-section-1);
+        background: rgba(30, 58, 138, 0.4);
+        color: $color-white;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
 
         @include mobile-or-tablet-screen {
             height: 3.2rem;
@@ -441,12 +513,20 @@
 
         &:hover {
             cursor: pointer;
+            background: $color-hub-blue-glow;
+            border-color: $color-hub-gold;
         }
     }
 
     &__icon {
         height: 24px;
         width: 24px;
+
+        svg,
+        svg > path,
+        svg > g > path {
+            fill: $color-hub-gold !important;
+        }
 
         @include mobile-or-tablet-screen {
             height: 16px;
@@ -456,5 +536,6 @@
 
     &__label {
         margin-inline-start: 0.4rem;
+        color: $color-white !important;
     }
 }
