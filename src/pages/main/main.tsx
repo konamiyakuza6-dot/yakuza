@@ -1,4 +1,36 @@
-import React, { lazy, Suspense, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, Component } from 'react';
+
+class TabErrorBoundary extends Component<
+    { children: React.ReactNode; tabName: string },
+    { hasError: boolean }
+> {
+    constructor(props: { children: React.ReactNode; tabName: string }) {
+        super(props);
+        this.state = { hasError: false };
+    }
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+    componentDidCatch(error: Error) {
+        console.error(`Tab "${this.props.tabName}" crashed:`, error);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-prominent)' }}>
+                    <p>Something went wrong loading {this.props.tabName}.</p>
+                    <button
+                        style={{ marginTop: '1rem', padding: '0.8rem 1.6rem', cursor: 'pointer' }}
+                        onClick={() => this.setState({ hasError: false })}
+                    >
+                        Retry
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -113,6 +145,7 @@ const AppWrapper = observer(() => {
     }, [active_tab]);
 
     const handleTabChange = (tab_index: number) => {
+        navigate(`#${hash[tab_index] || 'bot_builder'}`);
         setActiveTab(tab_index);
     };
 
@@ -160,7 +193,9 @@ const AppWrapper = observer(() => {
                         </div>
                         {/* 9 – Smart Trader */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>💹</span><Localize i18n_default_text='Smart Trader' /></>} id='id-smart-trader'>
-                            <Suspense fallback={<ChunkLoader message={localize('Loading Smart Trader...')} />}><SmartTrader /></Suspense>
+                            <TabErrorBoundary tabName='Smart Trader'>
+                                <Suspense fallback={<ChunkLoader message={localize('Loading Smart Trader...')} />}><SmartTrader /></Suspense>
+                            </TabErrorBoundary>
                         </div>
                     </Tabs>
                 </div>

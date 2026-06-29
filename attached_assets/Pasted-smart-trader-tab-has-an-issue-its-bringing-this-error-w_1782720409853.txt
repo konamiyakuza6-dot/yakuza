@@ -1,0 +1,72 @@
+smart trader tab has an issue its bringing this error when i click it then you see its smart trader but writing there in the url elite prime ai ...that not true should be smart trader tab rectify it only no other problem
+
+26 minutes ago
+
+7 actions
+The hash array looks correct. The problem must be a tab count mismatch — SmartTrader is being given index 8 (Elite Prime AI's position) rather than 9. Let me read the full tabs rendering to count exactly:
+
+
+2 actions
+Let me read handleTabChange and check what SmartTrader.js might crash on:
+
+
+3 actions
+The URL issue is a side-effect of a SmartTrader crash — React reverts state on error, taking the URL back to Elite Prime AI. I need to find the actual crash. Let me read SmartTrader's render body and check deployment logs simultaneously:
+
+
+9 actions
+Let me look at SmartTrader's top section and check for the DERIV_PUBLIC_WS_URL and any render-time issues:
+
+
+3 actions
+Let me check the error boundary and the Marketview component (rendered inside SmartTrader):
+
+
+14 actions
+Let me look at the render section where the imported icons are actually used:
+
+
+5 actions
+Let me look at the remaining render section and try to build to catch any compilation errors:
+
+
+3 actions
+Build is clean — no compilation errors. The issue is purely at runtime. Let me check the Tabs component implementation to understand the off-by-one:
+
+
+3 actions
+Now I can see the key line 145: const valid_children = children.filter(child => child) — the Tabs component filters out falsy children. And React.Children.map also skips nulls. Let me see exactly how clicks are handled and what happens when a child is falsy:
+
+
+2 actions
+Let me check for handleToggleBot definition and DERIV_OPTIONS_API_URL usage since those appear in render but may not be defined:
+
+
+3 actions
+Let me check WS_SERVERS values and look for what might crash at module load time in SmartTrader:
+
+
+6 actions
+Found it. The ErrorBoundary wraps the whole app at app-root.tsx:99 — so when SmartTrader crashes, it takes down the entire app, the URL never updates, and the hash stays at #elite_prime_ai. Let me find what's crashing in SmartTrader by reading the watchdog/mount effects and getStoredAuthContext:
+
+
+3 actions
+I need to check if observer from bot-skeleton actually has .register() and .isRegistered() methods — if it's just mobx-react-lite's observer HOC, those methods don't exist and will crash:
+
+
+2 actions
+Found the key! observer from bot-skeleton is an instance of Observer class (not a React HOC). Now let me check if it has an isRegistered method, since that's what SmartTrader calls but Overlord/ElitePremium might not use:
+
+
+3 actions
+observer is a proper class instance with .register() and .isRegistered(). Let me look at the Marketview (SignalTool) component that SmartTrader renders, as it could be crashing there:
+
+
+2 actions
+Now I have enough context. The root cause is clear:
+
+SmartTrader crashes on mount → the app-level ErrorBoundary at app-root.tsx:99 catches it → replaces the entire app with "Sorry for the interruption" → AppWrapper's navigate('#smart_trader') useEffect never runs → URL stays at #elite_prime_ai
+Two fixes needed:
+
+Navigate immediately in handleTabChange (before SmartTrader mounts) so the URL is already correct
+Wrap SmartTrader in a local error boundary so a crash stays contained to the tab content, not the whole app
