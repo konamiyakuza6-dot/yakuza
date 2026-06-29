@@ -159,33 +159,47 @@ const AppWrapper = observer(() => {
                     <Tabs active_index={active_tab} className='main__tabs' onTabItemClick={handleTabChange} top is_scrollable>
                         {/* 0 – Dashboard */}
                         <div label={<><LabelPairedObjectsColumnCaptionRegularIcon height='24px' width='24px' /><Localize i18n_default_text='Dashboard' /></>} id='id-dbot-dashboard'>
-                            <Dashboard handleTabChange={handleTabChange} />
+                            <TabErrorBoundary tabName='Dashboard'>
+                                <Dashboard handleTabChange={handleTabChange} />
+                            </TabErrorBoundary>
                         </div>
                         {/* 1 – Bot Builder */}
                         <div label={<><LabelPairedPuzzlePieceTwoCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Bot Builder' /></>} id='id-bot-builder' />
                         {/* 2 – Trading Bots */}
                         <div label={<><LabelPairedPuzzlePieceTwoCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Trading Bots' /></>} id='id-trading-bots'>
-                            <TradingBots />
+                            <TabErrorBoundary tabName='Trading Bots'>
+                                <TradingBots />
+                            </TabErrorBoundary>
                         </div>
                         {/* 3 – Over/Under */}
                         <div label={<><LabelPairedPlayCaptionBoldIcon height='24px' width='24px' /><Localize i18n_default_text='Over/Under' /></>} id='over_under'>
-                            <OverUnder />
+                            <TabErrorBoundary tabName='Over/Under'>
+                                <OverUnder />
+                            </TabErrorBoundary>
                         </div>
                         {/* 4 – Analysis Tool */}
                         <div label={<><LegacyIndicatorsIcon height='16px' width='16px' /><Localize i18n_default_text='Analysis Tool' /></>} id='id-analysis-tool'>
-                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Analysis Tool...')} />}><AnalysisTools /></Suspense>
+                            <TabErrorBoundary tabName='Analysis Tool'>
+                                <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Analysis Tool...')} />}><AnalysisTools /></Suspense>
+                            </TabErrorBoundary>
                         </div>
                         {/* 5 – Copy Trading */}
                         <div label={<><LabelPairedObjectsColumnCaptionRegularIcon height='24px' width='24px' /><Localize i18n_default_text='Copy Trading' /></>} id='id-copy-trading'>
-                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Copy Trading...')} />}><CopyTrading /></Suspense>
+                            <TabErrorBoundary tabName='Copy Trading'>
+                                <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Copy Trading...')} />}><CopyTrading /></Suspense>
+                            </TabErrorBoundary>
                         </div>
                         {/* 6 – DTrader */}
                         <div label={<><LabelPairedChartLineCaptionRegularIcon height='24px' width='24px' /><Localize i18n_default_text='DTrader' /></>} id='id-dtrader'>
-                            <Suspense fallback={<ChunkLoader message={localize('Please wait, loading DTrader...')} />}><Dtrader /></Suspense>
+                            <TabErrorBoundary tabName='DTrader'>
+                                <Suspense fallback={<ChunkLoader message={localize('Please wait, loading DTrader...')} />}><Dtrader /></Suspense>
+                            </TabErrorBoundary>
                         </div>
                         {/* 7 – Overlord-2026 */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>⚔️</span><Localize i18n_default_text='Overlord-2026' /></>} id='id-overlord'>
-                            <Suspense fallback={<ChunkLoader message={localize('Loading Overlord-2026...')} />}><Overlord /></Suspense>
+                            <TabErrorBoundary tabName='Overlord-2026'>
+                                <Suspense fallback={<ChunkLoader message={localize('Loading Overlord-2026...')} />}><Overlord /></Suspense>
+                            </TabErrorBoundary>
                         </div>
                         {/* 8 – Elite Prime AI */}
                         <div label={<><span style={{ fontSize: '16px', lineHeight: 1 }}>🤖</span><Localize i18n_default_text='Elite Prime AI' /></>} id='id-elite-prime-ai'>
