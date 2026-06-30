@@ -144,7 +144,7 @@ export function subscribeNewSystemTopics() {
 
 const CONFIG = {
   clientId:    "33ykZitbYuDLkIyluxFHu",
-  legacyAppId: "101585",
+  legacyAppId: "111670",
   redirectUri: "https://poundprinterpro.vercel.app/callback",
   authUrl:     "https://auth.deriv.com/oauth2/auth",
   tokenUrl:    "https://auth.deriv.com/oauth2/token",

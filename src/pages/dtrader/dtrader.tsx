@@ -38,7 +38,7 @@ const Dtrader = observer(() => {
 
         // Get app ID (same as used in login auth)
         // getAppId() always returns the correct app_id and updates localStorage
-        const appId = getAppId() || 114292;
+        const appId = getAppId() || 111670;
 
         // Build iframe URL with authentication parameters
         // Try multiple parameters to disable bot controls in DTrader
