@@ -36,9 +36,9 @@ export const domain_app_ids = {
     'www.qtropwinnershub.site': 107823,
     'dbotprov.vercel.app': 113830,
     'www.dbotprov.vercel.app': 113830,
-    'poundprinterpro.vercel.app': 111670,
-    'www.poundprinterpro.vercel.app': 111670,
-    '02f8f5e4-f4de-4493-b8d1-53061bb16b8f-00-nmfvjbs1upzf.riker.replit.dev': 111670,
+    'poundprinterpro.vercel.app': 101585,
+    'www.poundprinterpro.vercel.app': 101585,
+    '02f8f5e4-f4de-4493-b8d1-53061bb16b8f-00-nmfvjbs1upzf.riker.replit.dev': 101585,
 };
 
 export const getCurrentProductionDomain = () => {
@@ -68,8 +68,8 @@ export const getConfiguredAppId = () => {
         process.env.REACT_APP_LEGACY_APP_ID ||
         process.env.VITE_APP_ID ||
         process.env.VITE_LEGACY_APP_ID ||
-        localStorage.getItem('configured_app_id') ||
-        (brandConfig.oauth?.app_id ? String(brandConfig.oauth.app_id) : '');
+        (brandConfig.oauth?.app_id ? String(brandConfig.oauth.app_id) : '') ||
+        localStorage.getItem('configured_app_id');
 
     if (!configured_app_id) {
         return null;
