@@ -143,8 +143,8 @@ export function subscribeNewSystemTopics() {
 }
 
 const CONFIG = {
-  clientId:    "337DJLKi2OJ4VsyFSLIt9",
-  legacyAppId: "101585",
+  clientId:    "33ykZitbYuDLkIyluxFHu",
+  legacyAppId: "111670",
   get redirectUri() {
     return window.location.protocol + '//' + window.location.host + '/callback';
   },
