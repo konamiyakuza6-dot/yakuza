@@ -1,138 +1,178 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
+import { getBrandLabel, getBrandTitle } from '@/components/shared/utils/brand/brand';
 import './app-loader.scss';
 
 interface AppLoaderProps {
     onLoadingComplete: () => void;
-    duration?: number;
+    duration?: number; // Duration in milliseconds, default 12000ms (12 seconds)
 }
 
-const SUBTITLES = [
-    'DEPLOYING ASSETS',
-    'LOADING ORDNANCE',
-    'TARGET ACQUIRED',
-    'MISSION READY',
-];
-
-const TITLE = 'CAPTAIN PETER TRADING HUB';
-
-const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete, duration = 9000 }) => {
-    const [show, setShow] = useState(true);
-    const [subIndex, setSubIndex] = useState(0);
+const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete, duration = 12000 }) => {
+    const [isVisible, setIsVisible] = useState(true);
     const [progress, setProgress] = useState(0);
+    const [messageIndex, setMessageIndex] = useState(0);
+    const brandLabel = getBrandLabel();
+    const brandTitle = getBrandTitle();
+
+    const messages = [
+        { title: 'Initializing' },
+        { title: 'Connecting to trading server...' },
+        { title: 'Loading charts' },
+        { title: 'Loading Blocky' },
+        { title: 'Preparing dashboard' },
+    ];
+
+    const steps = ['Connection', 'Market Data', 'AI Engine', 'Trading Bots', 'Final Setup'] as const;
+    const stepIndex = Math.min(steps.length - 1, Math.max(0, messageIndex));
+
+    // Initialize loading timer
+    // Total loader duration fixed at 6 seconds
+    const effectiveDuration = 6000;
 
     useEffect(() => {
-        const subInterval = setInterval(() => {
-            setSubIndex(prev => Math.min(prev + 1, SUBTITLES.length - 1));
-        }, duration / SUBTITLES.length);
-
-        const progressInterval = setInterval(() => {
-            setProgress(prev => {
-                const next = prev + Math.random() * 6 + 2;
-                return next >= 100 ? 100 : next;
-            });
-        }, duration / 18);
-
         const timer = setTimeout(() => {
-            setProgress(100);
-            setTimeout(() => {
-                setShow(false);
-                onLoadingComplete();
-            }, 200);
-        }, duration);
+            setIsVisible(false);
+            setTimeout(onLoadingComplete, 300); // Wait for fade out animation
+        }, effectiveDuration);
 
-        return () => {
-            clearTimeout(timer);
-            clearInterval(subInterval);
-            clearInterval(progressInterval);
-        };
-    }, [onLoadingComplete, duration]);
+        return () => clearTimeout(timer);
+    }, [onLoadingComplete, effectiveDuration]);
 
-    if (!show) return null;
+    // Progress bar and message advancement
+    useEffect(() => {
+        if (!isVisible) return;
+
+        setProgress(0);
+        // Evenly split the 6s across all messages
+        const totalPerMessageMs = Math.max(200, Math.floor(effectiveDuration / messages.length));
+        const stepMs = totalPerMessageMs / 100;
+        let current = 0;
+
+        const interval = setInterval(
+            () => {
+                current += 1;
+                if (current > 100) {
+                    clearInterval(interval);
+                    // move to next message if any, and restart
+                    setMessageIndex(prev => {
+                        const next = prev + 1;
+                        if (next < messages.length) {
+                            // trigger next cycle
+                            setProgress(0);
+                            return next;
+                        }
+                        return prev;
+                    });
+                    return;
+                }
+                setProgress(current);
+            },
+            Math.max(4, stepMs)
+        );
+
+        return () => clearInterval(interval);
+    }, [isVisible, messageIndex, duration]);
+
+    if (!isVisible) return null;
 
     return (
-        <div className='cod-loader'>
-            <div className='loader-bg' />
-            <div className='loader-overlay' />
-            <div className='loader-vignette' />
+        <div className='georgetown-loader'>
+            <div className='smart-loader-bg' />
 
-            <div className='loader-center'>
-                <div className='emblem anim-emblem'>
-                    <svg width='80' height='80' viewBox='0 0 80 80' fill='none'>
-                        <defs>
-                            <linearGradient id='eg' x1='0' y1='0' x2='1' y2='1'>
-                                <stop offset='0%' stopColor='#85acb0' />
-                                <stop offset='100%' stopColor='#ffa500' />
-                            </linearGradient>
-                            <linearGradient id='eg2' x1='0' y1='1' x2='1' y2='0'>
-                                <stop offset='0%' stopColor='#ffa500' />
-                                <stop offset='100%' stopColor='#85acb0' />
-                            </linearGradient>
-                        </defs>
-                        <path d='M40 4L76 40L40 76L4 40L40 4Z' stroke='url(#eg)' strokeWidth='3' fill='none' />
-                        <path d='M40 14L66 40L40 66L14 40L40 14Z' stroke='url(#eg2)' strokeWidth='2' fill='none' opacity='0.6' />
-                        <path d='M40 24L56 40L40 56L24 40L40 24Z' stroke='url(#eg)' strokeWidth='1.5' fill='none' opacity='0.4' />
-                        <circle cx='40' cy='40' r='6' fill='#85acb0' />
-                        <circle cx='40' cy='40' r='2' fill='#fff' opacity='0.8' />
-                    </svg>
-                </div>
+            <div className='smart-loader__wrap'>
+                <div className='smart-loader__card'>
+                    <div className='smart-loader__header'>
+                        <div className='smart-loader__brand'>
+                            <div className='smart-loader__brand-mark' aria-hidden='true'>
+                                <svg
+                                    width='22'
+                                    height='22'
+                                    viewBox='0 0 24 24'
+                                    fill='none'
+                                    xmlns='http://www.w3.org/2000/svg'
+                                >
+                                    <path
+                                        d='M4 19V5M4 19H20M7 15L11 11L14 14L19 9'
+                                        stroke='currentColor'
+                                        strokeWidth='2'
+                                        strokeLinecap='round'
+                                        strokeLinejoin='round'
+                                    />
+                                </svg>
+                            </div>
+                            <div className='smart-loader__brand-text'>
+                                <div className='smart-loader__brand-title'>{brandTitle}</div>
+                                <div className='smart-loader__brand-subtitle'>LOADING</div>
+                            </div>
+                        </div>
 
-                {/* ── Rotating padlock ── */}
-                <div className='lock-wrap'>
-                    <svg width='36' height='40' viewBox='0 0 36 40' fill='none' className='lock-svg'>
-                        <rect x='5' y='16' width='26' height='20' rx='3' fill='none' stroke='url(#eg)' strokeWidth='2' />
-                        <rect x='5' y='16' width='26' height='20' rx='3' fill='rgba(133,172,176,0.08)' />
-                        <circle cx='18' cy='28' r='4' fill='none' stroke='#85acb0' strokeWidth='1.5' opacity='0.3' />
-                        <circle className='lock-inner' cx='18' cy='28' r='2' fill='none' stroke='#ffa500' strokeWidth='1.5' strokeDasharray='3 4' />
-                        <path className='lock-shackle' d='M18 16V12C18 8.5 15 6 12 6C9 6 6 8.5 6 12V14' stroke='url(#eg)' strokeWidth='2.5' strokeLinecap='round' fill='none' />
-                    </svg>
-                </div>
-
-                <div className='title-wrap'>
-                    {TITLE.split('').map((letter, i) => (
-                        <span key={i} className='title-letter' style={{ animationDelay: `${1.2 + i * 0.07}s` }}>
-                            {letter === ' ' ? '\u00A0' : letter}
-                        </span>
-                    ))}
-                </div>
-
-                <motion.p
-                    className='loader-subtitle'
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 2.8, duration: 0.5 }}
-                >
-                    ⚔️ TRADING PLATFORM 🔥
-                </motion.p>
-
-                <div className='progress-container'>
-                    <div className='progress-bar'>
-                        <div className='progress-track'>
-                            <div className='progress-fill' style={{ animationDuration: `${duration}ms` }} />
+                        <div className='smart-loader__welcome'>
+                            <div className='smart-loader__welcome-line'>
+                                Welcome to <span className='smart-loader__welcome-accent'>{brandLabel}</span>
+                            </div>
+                            <div className='smart-loader__welcome-sub'>Automated Precision Trading System</div>
                         </div>
                     </div>
-                    <div className='progress-info'>
-                        <span className='progress-label'>⚡ LOADING</span>
-                        <span className='progress-pct'>{Math.round(progress)}%</span>
+
+                    <div className='smart-loader__steps'>
+                        {steps.map((label, idx) => {
+                            const is_done = idx < stepIndex;
+                            const is_active = idx === stepIndex;
+                            return (
+                                <div
+                                    key={label}
+                                    className={[
+                                        'smart-loader__step',
+                                        is_done ? 'smart-loader__step--done' : '',
+                                        is_active ? 'smart-loader__step--active' : '',
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                >
+                                    <div className='smart-loader__step-dot' aria-hidden='true'>
+                                        {is_done ? '✓' : idx + 1}
+                                    </div>
+                                    <div className='smart-loader__step-label'>{label}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className='smart-loader__tiles'>
+                        {[
+                            { label: 'Free Bots', icon: '🤖' },
+                            { label: 'AI Bots', icon: '🧠' },
+                            { label: 'Analysis Tool', icon: '📊' },
+                            { label: 'Smart Analysis', icon: '✨' },
+                            { label: 'Copy Trading', icon: '📄' },
+                            { label: 'Signals', icon: '📡' },
+                        ].map(t => (
+                            <div key={t.label} className='smart-loader__tile' aria-hidden='true'>
+                                <div className='smart-loader__tile-icon'>{t.icon}</div>
+                                <div className='smart-loader__tile-label'>{t.label}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className='smart-loader__status'>
+                        <div className='smart-loader__status-line'>Establishing secure connection...</div>
+                        <div className='smart-loader__status-sub'>
+                            {messages[messageIndex]?.title || 'Connecting...'}
+                        </div>
+                    </div>
+
+                    <div className='progress-wrapper'>
+                        <div className='progress-track'>
+                            <div className='loading-bar-glow' style={{ width: `${progress}%` }} />
+                            <div className='loading-bar-pulse' />
+                        </div>
+                        <div className='progress-counter'>{progress}%</div>
+                    </div>
+
+                    <div className='smart-loader__footer'>
+                        © 2025 {brandLabel}. Powered by Deriv. All rights reserved.
                     </div>
                 </div>
-
-                <div className='status-wrap'>
-                    <AnimatePresence mode='wait'>
-                        <motion.p
-                            key={subIndex}
-                            className='status-text'
-                            initial={{ y: 10, opacity: 0 }}
-                            animate={{ y: 0, opacity: 0.6 }}
-                            exit={{ y: -10, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                        >
-                            ▸ {SUBTITLES[subIndex]}
-                        </motion.p>
-                    </AnimatePresence>
-                </div>
-
-                <div className='bottom-tag'>💀 EST. 2024 🏆</div>
             </div>
         </div>
     );

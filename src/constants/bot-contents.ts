@@ -13,36 +13,34 @@ export const tabs_title: TTabsTitle = Object.freeze({
 
 export const DBOT_TABS: TDashboardTabIndex = Object.freeze({
     DASHBOARD: 0,
-    BOT_BUILDER: 1,
-    CHART: 2,
-    TRADING_BOTS: 3,
-    OVER_UNDER: 4,
-    MAKOTI_MAGIC: 5,
-    ANALYSIS_TOOL: 6,
-    STRATEGIES: 7,
-    COPY_TRADING: 8,
-    DTRADER: 9,
-    TRADINGVIEW: 10,
-    OVERLORD: 11,
-    ELITE_PRIME_AI: 12,
-    SMART_TRADER: 14,
-    SPEEDBOT: 15,
+    MATCHES: 1,
+    BOT_BUILDER: 2,
+    CHART: 3,
+    TRADING_BOTS: 4,
+    ANALYSIS_TOOL: 5,
+    STRATEGIES: 6,
+    COPY_TRADING: 7,
+    DTRADER: 8,
+    TRADINGVIEW: 9,
+    SPEEDBOT: 12,
     // Keep TUTORIAL as a non-active sentinel to avoid index mismatches in legacy checks
     TUTORIAL: 999,
-    // Legacy tabs - kept for backward compatibility
-    HYBRID_BOTS: 3,
-    FREE_BOTS: 3,
-    MATCHES: 3,
-    HYPERBOT: 3,
-    DIFFBOT: 3,
-    DCIRCLES: 6,
-    DP_TOOLS: 6,
+    // Legacy tabs - kept for backward compatibility but redirect to TRADING_BOTS
+    HYBRID_BOTS: 4,
+    FREE_BOTS: 4,
+    HYPERBOT: 4,
+    DIFFBOT: 4,
+    DCIRCLES: 5,
+    DP_TOOLS: 5,
+    // Legacy SMART_TRADER redirects to STRATEGIES
+    SMART_TRADER: 6,
 });
 
 export const MAX_STRATEGIES = 10;
 
 export const TAB_IDS = [
     'id-dbot-dashboard',
+    'id-matches',
     'id-bot-builder',
     'id-charts',
     'id-trading-bots',
@@ -51,9 +49,6 @@ export const TAB_IDS = [
     'id-copy-trading',
     'id-dtrader',
     'id-tradingview',
-    'id-overlord',
-    'id-elite-prime-ai',
-    'id-smart-trader',
     'id-speedbot',
 ];
 

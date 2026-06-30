@@ -1,5 +1,11 @@
 import '@testing-library/jest-dom/jest-globals';
 import '@testing-library/jest-dom';
+import { webcrypto } from 'crypto';
+
+Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: webcrypto,
+});
 
 let originalLocalStorage: Storage;
 const localStorageMock: Storage = {

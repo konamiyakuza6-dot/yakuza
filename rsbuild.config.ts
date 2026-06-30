@@ -45,19 +45,51 @@ export default defineConfig({
                 RUDDERSTACK_KEY: JSON.stringify(process.env.RUDDERSTACK_KEY),
                 GROWTHBOOK_CLIENT_KEY: JSON.stringify(process.env.GROWTHBOOK_CLIENT_KEY),
                 GROWTHBOOK_DECRYPTION_KEY: JSON.stringify(process.env.GROWTHBOOK_DECRYPTION_KEY),
+                APP_ID: JSON.stringify(process.env.APP_ID),
+                CLIENT_ID: JSON.stringify(process.env.CLIENT_ID),
+                DERIV_APP_ID: JSON.stringify(process.env.DERIV_APP_ID),
+                DERIV_OAUTH_CLIENT_ID: JSON.stringify(process.env.DERIV_OAUTH_CLIENT_ID),
+                OAUTH_CLIENT_ID: JSON.stringify(process.env.OAUTH_CLIENT_ID),
+                REACT_APP_OAUTH_CLIENT_ID: JSON.stringify(process.env.REACT_APP_OAUTH_CLIENT_ID),
+                VITE_OAUTH_CLIENT_ID: JSON.stringify(process.env.VITE_OAUTH_CLIENT_ID),
+                DERIV_LEGACY_APP_ID: JSON.stringify(process.env.DERIV_LEGACY_APP_ID),
+                LEGACY_APP_ID: JSON.stringify(process.env.LEGACY_APP_ID),
+                REACT_APP_LEGACY_APP_ID: JSON.stringify(process.env.REACT_APP_LEGACY_APP_ID),
+                VITE_LEGACY_APP_ID: JSON.stringify(process.env.VITE_LEGACY_APP_ID),
+                OAUTH_REDIRECT_URI: JSON.stringify(process.env.OAUTH_REDIRECT_URI),
+                DERIV_REDIRECT_URI: JSON.stringify(process.env.DERIV_REDIRECT_URI),
+                REDIRECT_URI: JSON.stringify(process.env.REDIRECT_URI),
+                REACT_APP_OAUTH_REDIRECT_URI: JSON.stringify(process.env.REACT_APP_OAUTH_REDIRECT_URI),
+                VITE_OAUTH_REDIRECT_URI: JSON.stringify(process.env.VITE_OAUTH_REDIRECT_URI),
+                REACT_APP_SITE_URL: JSON.stringify(process.env.REACT_APP_SITE_URL || 'http://localhost:3000'),
+                VITE_SITE_URL: JSON.stringify(process.env.VITE_SITE_URL || 'http://localhost:3000'),
+                REACT_APP_OAUTH_AUTHORIZATION_URL: JSON.stringify(process.env.REACT_APP_OAUTH_AUTHORIZATION_URL || 'https://auth.deriv.com/oauth2/auth'),
+                VITE_OAUTH_AUTHORIZATION_URL: JSON.stringify(process.env.VITE_OAUTH_AUTHORIZATION_URL || 'https://auth.deriv.com/oauth2/auth'),
+                REACT_APP_OAUTH_TOKEN_URL: JSON.stringify(process.env.REACT_APP_OAUTH_TOKEN_URL || 'https://auth.deriv.com/oauth2/token'),
+                VITE_OAUTH_TOKEN_URL: JSON.stringify(process.env.VITE_OAUTH_TOKEN_URL || 'https://auth.deriv.com/oauth2/token'),
+                REACT_APP_OAUTH_SCOPES: JSON.stringify(process.env.REACT_APP_OAUTH_SCOPES || 'trade,account_manage'),
+                VITE_OAUTH_SCOPES: JSON.stringify(process.env.VITE_OAUTH_SCOPES || 'trade,account_manage'),
+                DERIV_OAUTH_SCOPES: JSON.stringify(process.env.DERIV_OAUTH_SCOPES),
+                DERIV_APP_NAME: JSON.stringify(process.env.DERIV_APP_NAME),
+                DERIV_REFERRAL_LINK: JSON.stringify(process.env.DERIV_REFERRAL_LINK),
+                DERIV_ENV: JSON.stringify(process.env.DERIV_ENV),
+                SCOPE: JSON.stringify(process.env.SCOPE),
+                OAUTH_SCOPE: JSON.stringify(process.env.OAUTH_SCOPE),
+                REACT_APP_SCOPE: JSON.stringify(process.env.REACT_APP_SCOPE),
+                REACT_APP_OAUTH_SCOPE: JSON.stringify(process.env.REACT_APP_OAUTH_SCOPE),
+                VITE_SCOPE: JSON.stringify(process.env.VITE_SCOPE),
+                VITE_OAUTH_SCOPE: JSON.stringify(process.env.VITE_OAUTH_SCOPE),
             },
         },
         alias: {
             react: path.resolve('./node_modules/react'),
             'react-dom': path.resolve('./node_modules/react-dom'),
             'react-dom/server': path.resolve('./node_modules/react-dom/server.browser'),
-            // Temporary shim for malformed @deriv-com/ui import path "Submenu /index.js"
             './components/AppLayout/Submenu /index.js': path.resolve(
                 __dirname,
                 './src/components/shims/ui-submenu/index.js'
             ),
             '../Submenu /index.js': path.resolve(__dirname, './src/components/shims/ui-submenu/index.js'),
-            // Route all @deriv/quill-icons paths to the top-level package (now complete with all categories)
             '@deriv/quill-icons': path.resolve(
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/index.js'
@@ -106,7 +138,6 @@ export default defineConfig({
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/react/Illustrative'
             ),
-            // Shim for the "Illustration" sub-path — points to actual dist path
             '@deriv/quill-icons/Illustration': path.resolve(
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/react/Illustration'
@@ -115,12 +146,6 @@ export default defineConfig({
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/react/TradeTypes'
             ),
-            // Ensure rudderstack analytics-js resolves from top-level node_modules
-            '@rudderstack/analytics-js': path.resolve(
-                __dirname,
-                'node_modules/@rudderstack/analytics-js/dist/npm/modern/cjs/index.cjs'
-            ),
-            // Stub object.fromentries to avoid pulling in broken es-abstract/2024 dependencies
             'object.fromentries': path.resolve(
                 __dirname,
                 'src/components/shims/object-fromentries/index.js'

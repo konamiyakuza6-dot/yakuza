@@ -291,32 +291,27 @@ function updateOverUnder() {
     const counts = new Array(10).fill(0);
     for (let i = 0; i < digitsQueue.length; i++) counts[digitsQueue[i]]++;
     const prefix = new Array(10).fill(0);
+    const suffix = new Array(10).fill(0);
     for (let i = 0; i < 10; i++) prefix[i] = counts[i] + (i > 0 ? prefix[i - 1] : 0);
-
-    const renderSeries = (chartEl, values, title) => {
+    for (let i = 9; i >= 0; i--) suffix[i] = counts[i] + (i < 9 ? suffix[i + 1] : 0);
+    const ns = 'http://www.w3.org/2000/svg';
+    const TOP_Y = 10,
+        BOTTOM_Y = 250,
+        H = BOTTOM_Y - TOP_Y;
+    function renderSeries(chartEl, values, title) {
         if (!chartEl) return;
-
-        const ns = 'http://www.w3.org/2000/svg';
-        const VIEWBOX_WIDTH = 400;
-        const TOP_Y = 10;
-        const BOTTOM_Y = 250;
-        const H = BOTTOM_Y - TOP_Y;
-
         if (!chartEl.__gridDrawn) {
-            const GRID_LEFT = 50;
-            const GRID_RIGHT = 380;
-            const STEP = H / 10;
-
+            const HEIGHT = H;
+            const STEP = HEIGHT / 10;
             for (let i = 0; i <= 10; i++) {
                 const y = BOTTOM_Y - i * STEP;
                 const line = document.createElementNS(ns, 'line');
-                line.setAttribute('x1', String(GRID_LEFT));
-                line.setAttribute('x2', String(GRID_RIGHT));
+                line.setAttribute('x1', '50');
+                line.setAttribute('x2', '560');
                 line.setAttribute('y1', String(y));
                 line.setAttribute('y2', String(y));
                 line.setAttribute('class', 'grid-line');
                 chartEl.appendChild(line);
-
                 const label = document.createElementNS(ns, 'text');
                 label.setAttribute('x', '30');
                 label.setAttribute('y', String(y + 4));
@@ -324,17 +319,15 @@ function updateOverUnder() {
                 label.textContent = String(i * 10);
                 chartEl.appendChild(label);
             }
-
-            const titleEl = document.createElementNS(ns, 'text');
-            titleEl.setAttribute('x', String(VIEWBOX_WIDTH / 2));
-            titleEl.setAttribute('y', '20');
-            titleEl.setAttribute('class', 'grid-label');
-            titleEl.setAttribute('text-anchor', 'middle');
-            titleEl.textContent = title;
-            chartEl.appendChild(titleEl);
+            const t = document.createElementNS(ns, 'text');
+            t.setAttribute('x', '300');
+            t.setAttribute('y', '20');
+            t.setAttribute('class', 'grid-label');
+            t.setAttribute('text-anchor', 'middle');
+            t.textContent = title;
+            chartEl.appendChild(t);
             chartEl.__gridDrawn = true;
         }
-
         let barsGroup = chartEl.__barsGroup;
         if (!barsGroup) {
             barsGroup = document.createElementNS(ns, 'g');
@@ -342,57 +335,48 @@ function updateOverUnder() {
             chartEl.__barsGroup = barsGroup;
         }
         while (barsGroup.firstChild) barsGroup.removeChild(barsGroup.firstChild);
-
-        const BARS_LEFT = 50;
-        const BARS_RIGHT = 380;
-        const totalBarAreaWidth = BARS_RIGHT - BARS_LEFT;
-        const numSlots = 10;
-        const slotWidth = totalBarAreaWidth / numSlots;
-        const gap = slotWidth * 0.2;
-        const barW = slotWidth - gap;
-
+        const left = 60,
+            right = 540,
+            width = right - left;
+        const slot = width / 10;
+        const gap = 10;
+        const barW = Math.max(6, slot - gap);
         for (let t = 0; t <= 9; t++) {
             const v = values[t];
             const pct = total > 0 ? (v / total) * 100 : 0;
             const h = (pct / 100) * H;
-            const x = BARS_LEFT + t * slotWidth + gap / 2;
+            const x = left + t * slot + gap / 2;
             const y = BOTTOM_Y - h;
-
             const rect = document.createElementNS(ns, 'rect');
             rect.setAttribute('x', String(x));
             rect.setAttribute('y', String(y));
             rect.setAttribute('width', String(barW));
             rect.setAttribute('height', String(h));
-            rect.setAttribute('rx', '3');
-            rect.setAttribute('ry', '3');
+            rect.setAttribute('rx', '4');
+            rect.setAttribute('ry', '4');
             rect.setAttribute('class', title === 'Over' ? 'bar-rect-odd' : 'bar-rect-even');
             barsGroup.appendChild(rect);
-
             const label = document.createElementNS(ns, 'text');
             const xCenter = x + barW / 2;
-            label.setAttribute('x', String(xCenter));
-            label.setAttribute('y', String(Math.max(TOP_Y, y - 5)));
+            const dx = t % 2 === 0 ? -10 : 10;
+            label.setAttribute('x', String(xCenter + dx));
+            label.setAttribute('y', String(Math.max(TOP_Y + 12, y - 6)));
             label.setAttribute('class', 'bar-perc');
-            label.setAttribute('text-anchor', 'middle');
-            label.style.fontSize = '10px';
-            label.textContent = `${pct.toFixed(1)}%`;
+            label.textContent = `${pct.toFixed(2)}%`;
             barsGroup.appendChild(label);
-
             const tickLabel = document.createElementNS(ns, 'text');
             tickLabel.setAttribute('x', String(x + barW / 2));
-            tickLabel.setAttribute('y', String(BOTTOM_Y + 15));
+            tickLabel.setAttribute('y', '245');
             tickLabel.setAttribute('class', 'grid-label');
             tickLabel.setAttribute('text-anchor', 'middle');
             tickLabel.textContent = String(t);
             barsGroup.appendChild(tickLabel);
         }
-    };
-
+    }
     const overVals = new Array(10).fill(0);
     for (let t = 0; t <= 9; t++) overVals[t] = t < 9 ? total - prefix[t] : 0;
     const underVals = new Array(10).fill(0);
     for (let t = 0; t <= 9; t++) underVals[t] = t > 0 ? prefix[t - 1] : 0;
-
     renderSeries(ouOverChart, overVals, 'Over');
     renderSeries(ouUnderChart, underVals, 'Under');
 }

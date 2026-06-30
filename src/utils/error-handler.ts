@@ -3,9 +3,14 @@ export const handleError = (error: unknown, context?: string) => {
 };
 
 export const isBackendError = (error: unknown): error is { code: string; message: string } => {
-    return typeof error === 'object' && error !== null && 'code' in error && 'message' in error;
+    return (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        'message' in error
+    );
 };
 
 export const handleBackendError = (error: { code: string; message: string }): string => {
-    return `[${error.code}] ${error.message}`;
+    return error.message || error.code || 'An unknown error occurred';
 };

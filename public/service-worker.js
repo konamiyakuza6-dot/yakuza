@@ -1,82 +1,105 @@
-// Captain Peter Trading Hub PWA Service Worker
-// Bump CACHE_VERSION on every deployment to refresh caches.
-const CACHE_VERSION = 'v3';
-const CACHE_NAME = `captainpeter-pwa-cache-${CACHE_VERSION}`;
-const API_CACHE = `captainpeter-api-cache-${CACHE_VERSION}`;
+/* Simple Service Worker to pre-cache Free Bots XMLs for instant repeat visits */
+const CACHE_NAME = 'freebots-cache-v1';
+const getManifestURL = () => {
+    try {
+        const url = new URL(self.location);
+        const params = new URLSearchParams(url.search);
+        const override = (params.get('bots_domain') || '').toLowerCase().replace(/^www\./, '');
+        const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+        const domain = override || hostname;
+        return `/xml/${encodeURIComponent(domain)}/bots.json`;
+    } catch (_) {
+        return '/xml/bots.json';
+    }
+};
 
-const STATIC_ASSET = /\.(js|css|woff2?|ttf|eot|png|jpg|jpeg|gif|svg|ico|webp)(\?.*)?$/i;
-const API_ROUTES = ['/api/', '//api.', '//ws.', '/translations/'];
+const MANIFEST_URL = getManifestURL();
 
-// Skip waiting so new SW activates immediately for all clients.
 self.addEventListener('install', event => {
     self.skipWaiting();
-});
-
-// Delete all old caches, then take control.
-self.addEventListener('activate', event => {
     event.waitUntil(
-        caches.keys().then(keys =>
-            Promise.all(keys.filter(k => k !== CACHE_NAME && k !== API_CACHE).map(k => caches.delete(k)))
-        ).then(() => self.clients.claim())
+        (async () => {
+            const cache = await caches.open(CACHE_NAME);
+            // Pre-cache the manifest first
+            try {
+                await cache.add(new Request(MANIFEST_URL, { cache: 'no-cache' }));
+            } catch (_) {}
+
+            // Try to fetch manifest and pre-cache XMLs
+            try {
+                const res = await fetch(MANIFEST_URL, { cache: 'no-cache' });
+                if (res.ok) {
+                    const items = await res.json();
+                    const files = Array.isArray(items) ? items.map(i => `/xml/${encodeURIComponent(i.file)}`) : [];
+                    // Batch cache XML files to avoid long install stalls
+                    for (let i = 0; i < files.length; i += 5) {
+                        const batch = files.slice(i, i + 5);
+                        await Promise.all(
+                            batch.map(async url => {
+                                try {
+                                    const resp = await fetch(url, { cache: 'no-cache' });
+                                    if (resp.ok) await cache.put(url, resp.clone());
+                                } catch (_) {}
+                            })
+                        );
+                    }
+                }
+            } catch (e) {
+                // Ignore; caching will happen lazily in fetch handler
+            }
+        })()
     );
 });
 
-self.addEventListener('fetch', event => {
-    const { method } = event.request;
-    if (method !== 'GET') return;
-
-    const url = new URL(event.request.url);
-    const path = url.pathname;
-
-    // --- Network-first for HTML (always get latest, fall back to cache) ---
-    if (event.request.mode === 'navigate' || path === '/' || path.endsWith('.html')) {
-        event.respondWith(networkFirst(event.request, CACHE_NAME));
-        return;
-    }
-
-    // --- Cache-first for static assets (JS, CSS, fonts, images) ---
-    if (STATIC_ASSET.test(path)) {
-        event.respondWith(cacheFirst(event.request, CACHE_NAME));
-        return;
-    }
-
-    // --- Network-first for API / translations (serve cached on failure) ---
-    if (API_ROUTES.some(route => path.includes(route) || url.href.includes(route))) {
-        event.respondWith(networkFirst(event.request, API_CACHE));
-        return;
-    }
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        (async () => {
+            // Clean up old caches
+            const keys = await caches.keys();
+            await Promise.all(
+                keys.map(key => {
+                    if (key !== CACHE_NAME) return caches.delete(key);
+                })
+            );
+            self.clients.claim();
+        })()
+    );
 });
 
-async function networkFirst(request, cacheName) {
-    try {
-        const response = await fetch(request);
-        if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(cacheName).then(cache => cache.put(request, copy));
-        }
-        return response;
-    } catch {
-        const cached = await caches.match(request);
-        if (cached) return cached;
-        // Final fallback: serve index.html for navigation
-        if (request.mode === 'navigate') {
-            return caches.match('/index.html');
-        }
-        return new Response('Offline', { status: 503 });
-    }
-}
+// Cache-first for XML and manifest; network fallback and cache update
+self.addEventListener('fetch', event => {
+    const { request } = event;
+    const url = new URL(request.url);
 
-async function cacheFirst(request, cacheName) {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    try {
-        const response = await fetch(request);
-        if (response && response.status === 200 && response.type === 'basic') {
-            const copy = response.clone();
-            caches.open(cacheName).then(cache => cache.put(request, copy));
-        }
-        return response;
-    } catch {
-        return new Response('Offline', { status: 503 });
-    }
-}
+    const isXml = url.pathname.startsWith('/xml/');
+    const isManifest = url.pathname === MANIFEST_URL;
+    if (!isXml && !isManifest) return; // Only handle XML and manifest
+
+    event.respondWith(
+        (async () => {
+            const cache = await caches.open(CACHE_NAME);
+            const cached = await cache.match(request);
+            if (cached) {
+                // Update cache in background
+                event.waitUntil(
+                    (async () => {
+                        try {
+                            const fresh = await fetch(request, { cache: 'no-cache' });
+                            if (fresh && fresh.ok) await cache.put(request, fresh.clone());
+                        } catch (_) {}
+                    })()
+                );
+                return cached;
+            }
+            // No cache -> fetch and cache
+            try {
+                const resp = await fetch(request, { cache: 'no-cache' });
+                if (resp && resp.ok) await cache.put(request, resp.clone());
+                return resp;
+            } catch (e) {
+                // Last resort: return cached even if stale (handled above), else error
+                return new Response('Offline', { status: 503, statusText: 'Offline' });
+            }
+        })()
+    );
+});

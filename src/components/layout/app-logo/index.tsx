@@ -1,4 +1,6 @@
+import { useDevice } from '@deriv-com/ui';
 import { useState, useEffect, useRef } from 'react';
+
 import { LegacyMenuHamburger1pxIcon } from '@deriv/quill-icons/Legacy';
 // Custom icons to match uploaded images exactly
 import './app-logo.scss';
@@ -11,7 +13,7 @@ const MenuIcon = ({ onClick }: { onClick: () => void }) => (
 );
 
 // Logo asset served from public folder
-const LOGO_SRC = '/captain-peter-logo.png';
+const LOGO_SRC = '/assets/images/dinsider.jpg';
 
 // WhatsApp Icon Component
 const WhatsAppIcon = () => (
@@ -81,9 +83,11 @@ const MessageMenu = () => {
 };
 
 export const AppLogo = ({ onMenuClick }: { onMenuClick?: () => void }) => {
+    const { isDesktop } = useDevice();
+
     return (
         <div className='app-header__logo-container'>
-            {onMenuClick && <MenuIcon onClick={onMenuClick} />}
+            {!isDesktop && onMenuClick && <MenuIcon onClick={onMenuClick} />}
         </div>
     );
 };

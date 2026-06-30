@@ -7,7 +7,11 @@ export const getAccountType = (loginid?: string): 'demo' | 'real' => {
 };
 
 export const getAccountId = (): string | null => {
-    return localStorage.getItem('active_loginid') || null;
+    return (
+        localStorage.getItem('active_loginid') ||
+        localStorage.getItem('client.active_loginid') ||
+        null
+    );
 };
 
 export const removeUrlParameter = (param: string): void => {
