@@ -282,16 +282,73 @@ export async function handleNewCallback() {
   _callbackHandled = true
   
   console.log("[NEW AUTH] Starting callback handler")
-  console.log("[NEW AUTH] URL:", window.location.search)
-  
+  console.log("[NEW AUTH] Full URL search:", window.location.search)
+  console.log("[NEW AUTH] Full URL hash:", window.location.hash)
+
+  // Read ALL params BEFORE wiping the URL from the address bar
   const urlParams = new URLSearchParams(window.location.search)
-  const code = urlParams.get("code")
-  const returnedState = urlParams.get("state")
-  
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+
+  const code         = urlParams.get("code")         || hashParams.get("code")
+  const returnedState = urlParams.get("state")        || hashParams.get("state")
+  const derivError   = urlParams.get("error")         || hashParams.get("error")
+  const derivErrDesc = urlParams.get("error_description") || hashParams.get("error_description")
+
+  // Check for legacy Deriv token-in-URL flow (acct1/token1 params)
+  const legacyAcct  = urlParams.get("acct1")
+  const legacyToken = urlParams.get("token1")
+
+  console.log("[NEW AUTH] Params — code:", !!code, "state:", !!returnedState,
+    "error:", derivError, "legacy:", !!legacyAcct)
+
+  // Safe to wipe the URL now — we've captured everything
   window.history.replaceState({}, '', '/callback')
-  
+
+  // 1. Deriv sent an explicit error
+  if (derivError) {
+    throw new Error(
+      `Deriv auth error: ${derivError}` +
+      (derivErrDesc ? ` — ${derivErrDesc}` : '') +
+      `\n\nThis usually means the Client ID or redirect URI isn't registered correctly in the Deriv developer portal.`
+    )
+  }
+
+  // 2. Legacy token flow fallback (acct1/token1 in URL params)
+  if (!code && legacyAcct && legacyToken) {
+    console.log("[NEW AUTH] Detected legacy Deriv token flow — seeding localStorage directly")
+    localStorage.setItem('authToken', legacyToken)
+    localStorage.setItem('active_loginid', legacyAcct)
+    const accountsList = { [legacyAcct]: legacyToken }
+    const clientAccounts = {
+      [legacyAcct]: {
+        loginid: legacyAcct,
+        token: legacyToken,
+        currency: urlParams.get("cur1") || '',
+        account_type: legacyAcct.startsWith('VR') ? 'demo' : 'real',
+        balance: '0',
+      }
+    }
+    localStorage.setItem('accountsList', JSON.stringify(accountsList))
+    localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts))
+    try {
+      const Cookies = (await import('js-cookie')).default
+      Cookies.set('logged_state', 'true', {
+        domain: window.location.hostname, expires: 30, path: '/',
+        secure: window.location.protocol === 'https:',
+      })
+    } catch (_) {}
+    return legacyToken
+  }
+
+  // 3. Normal PKCE code flow
   if (!code) {
-    throw new Error("Missing authorization code from Deriv")
+    throw new Error(
+      "Missing authorization code from Deriv.\n\n" +
+      "This can happen if:\n" +
+      "• The Client ID isn't registered for PKCE/code flow in the Deriv developer portal\n" +
+      "• The redirect URI doesn't exactly match the registered one\n" +
+      "• You navigated to /callback directly without logging in"
+    )
   }
   
   if (!returnedState) {
