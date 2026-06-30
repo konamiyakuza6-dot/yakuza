@@ -174,6 +174,9 @@ export function clearNewAuthStorage() {
   sessionStorage.removeItem(K.verifier);
   sessionStorage.removeItem(K.state);
   sessionStorage.removeItem(K.active);
+  // Also clear the shared CSRF keys so useOAuthCallback doesn't see stale state
+  sessionStorage.removeItem('oauth_csrf_token');
+  sessionStorage.removeItem('oauth_csrf_token_timestamp');
   // Clear legacy artifacts set by createNewWebSocket that trick isUserLoggedIn()
   localStorage.removeItem('accountsList');
   localStorage.removeItem('clientAccounts');
@@ -220,6 +223,11 @@ export async function startNewLogin() {
   localStorage.setItem(K.state, state)
   localStorage.setItem(K.active, "true")
 
+  // Mirror state into sessionStorage under the keys that validateCSRFToken()
+  // in useOAuthCallback expects — so both auth systems agree on the same state value.
+  sessionStorage.setItem('oauth_csrf_token', state)
+  sessionStorage.setItem('oauth_csrf_token_timestamp', Date.now().toString())
+
   // Verify values were actually saved
   const savedVerifier = localStorage.getItem(K.verifier)
   const savedActive = localStorage.getItem(K.active)
@@ -260,6 +268,10 @@ export async function startNewSignup() {
   localStorage.setItem(K.verifier, verifier)
   localStorage.setItem(K.state, state)
   localStorage.setItem(K.active, "true")
+
+  // Mirror state into sessionStorage so validateCSRFToken() in useOAuthCallback passes.
+  sessionStorage.setItem('oauth_csrf_token', state)
+  sessionStorage.setItem('oauth_csrf_token_timestamp', Date.now().toString())
 
   const params = new URLSearchParams({
     response_type:         "code",
