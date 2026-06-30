@@ -8,7 +8,7 @@ import { Callback } from '@deriv-com/auth-client';
 import { Button } from '@deriv-com/ui';
 import { PKCE_VERIFIER_KEY, PKCE_STATE_KEY } from '@/utils/pkce';
 import { OAUTH_CLIENT_ID, OAUTH_TOKEN_URL, getCallbackURL } from '@/components/shared/utils/config/config';
-import { handleNewCallback } from '@/auth/NewDerivAuth';
+import { handleNewCallback, bootstrapNewAuthSession } from '@/auth/NewDerivAuth';
 
 class CallbackErrorBoundary extends React.Component<
     { children: React.ReactNode },
@@ -76,6 +76,9 @@ const NewSystemCallbackHandler = () => {
             try {
                 const token = await handleNewCallback();
                 if (token) {
+                    // Populate accountsList / clientAccounts / authToken / active_loginid
+                    // so the Layout sees a valid session and does NOT redirect back to login.
+                    await bootstrapNewAuthSession();
                     setStatus('success');
                     await new Promise(resolve => setTimeout(resolve, 1500));
                     window.location.href = '/';

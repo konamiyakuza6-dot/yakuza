@@ -457,6 +457,87 @@ export async function handleNewCallback() {
   return data.access_token
 }
 
+/**
+ * Called immediately after handleNewCallback() succeeds.
+ * Fetches the user's Deriv accounts via REST and writes all the legacy
+ * localStorage keys (accountsList, clientAccounts, authToken, active_loginid)
+ * that the Layout and the rest of the app read to decide "is user logged in".
+ * Without this the Layout sees logged_state cookie but empty accountsList and
+ * redirects the user back to the Deriv login page in a loop.
+ */
+export async function bootstrapNewAuthSession() {
+  const token = getNewToken()
+  if (!token) {
+    console.error("[NEW AUTH] bootstrapNewAuthSession: no token available")
+    return false
+  }
+
+  console.log("[NEW AUTH] Bootstrapping legacy auth session...")
+
+  // ── Phase 1: guaranteed fallback ────────────────────────────────────────
+  // Write a minimal placeholder immediately so the Layout's
+  // isClientAccountsPopulated check passes and api_base.init() runs with a
+  // real token. Phase 2 (REST API) will overwrite with accurate data.
+  const placeholder = 'deriv_oauth_user'
+  localStorage.setItem('authToken',     token)
+  localStorage.setItem('active_loginid', placeholder)
+  localStorage.setItem('accountsList',   JSON.stringify({ [placeholder]: token }))
+  localStorage.setItem('clientAccounts', JSON.stringify({
+    [placeholder]: { loginid: placeholder, token, currency: 'USD', account_type: 'real', balance: '0' }
+  }))
+  console.log("[NEW AUTH] Phase 1: fallback session written")
+
+  // ── Phase 2: enrich with real account data from Deriv REST API ──────────
+  try {
+    const res = await fetch(CONFIG.restBase + "/options/accounts", {
+      headers: getNewAuthHeaders()
+    })
+    const text = await res.text()
+    console.log("[NEW AUTH] Accounts response:", text.slice(0, 300))
+
+    if (res.ok) {
+      const accountsData = JSON.parse(text)
+      const raw = accountsData?.data || accountsData
+      const accounts = Array.isArray(raw) ? raw : (raw ? [raw] : [])
+
+      if (accounts.length) {
+        const accountsList   = {}
+        const clientAccounts = {}
+
+        accounts.forEach(acc => {
+          const lid = acc.account_id || acc.id
+          if (!lid) return
+          const isDemo = acc.account_type === 'demo' || String(lid).startsWith('VR')
+          accountsList[lid]   = token
+          clientAccounts[lid] = {
+            loginid:      lid,
+            token,
+            currency:     acc.currency || 'USD',
+            account_type: isDemo ? 'demo' : 'real',
+            balance:      acc.balance || '0',
+          }
+        })
+
+        localStorage.setItem('accountsList',   JSON.stringify(accountsList))
+        localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts))
+
+        const preferred = accounts.find(a => a.account_type !== 'demo') || accounts[0]
+        const loginId   = preferred?.account_id || preferred?.id
+        if (loginId) {
+          localStorage.setItem('active_loginid', loginId)
+          console.log("[NEW AUTH] Phase 2: real session bootstrapped. active_loginid:", loginId)
+        }
+      }
+    } else {
+      console.warn("[NEW AUTH] Phase 2: accounts fetch failed (", res.status, ") – using Phase 1 fallback")
+    }
+  } catch (e) {
+    console.warn("[NEW AUTH] Phase 2: accounts fetch error – using Phase 1 fallback:", e)
+  }
+
+  return true
+}
+
 export function getNewToken() {
   let token = localStorage.getItem(K.token)
   let expiry = localStorage.getItem(K.expiry)
