@@ -3,7 +3,7 @@ import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChunkLoader from '@/components/loader/chunk-loader';
-import { generateOAuthURL } from '@/components/shared';
+import { startNewLogin } from '@/auth/NewDerivAuth';
 import DesktopWrapper from '@/components/shared_ui/desktop-wrapper';
 import Dialog from '@/components/shared_ui/dialog';
 import MobileWrapper from '@/components/shared_ui/mobile-wrapper';
@@ -209,24 +209,12 @@ const AppWrapper = observer(() => {
 
     const { isOAuth2Enabled } = useOauth2();
     const handleLoginGeneration = async () => {
-        if (!isOAuth2Enabled) {
-            window.location.replace(await generateOAuthURL());
-            return;
-        }
-
-        const getQueryParams = new URLSearchParams(window.location.search);
-        const currency = getQueryParams.get('account') ?? '';
-        const query_param_currency = currency || sessionStorage.getItem('query_param_currency') || 'USD';
-
         try {
-            // First, explicitly wait for TMB status to be determined
             const tmbEnabled = await isTmbEnabled();
-            // Now use the result of the explicit check
-            if (tmbEnabled) {
+            if (tmbEnabled && isOAuth2Enabled) {
                 await onRenderTMBCheck();
             } else {
-                sessionStorage.setItem('query_param_currency', query_param_currency);
-                window.location.replace(await generateOAuthURL());
+                await startNewLogin();
             }
         } catch (error) {
             // eslint-disable-next-line no-console

@@ -144,9 +144,8 @@ export function subscribeNewSystemTopics() {
 
 const CONFIG = {
   clientId:    "33ykZitbYuDLkIyluxFHu",
-  get redirectUri() {
-    return window.location.protocol + '//' + window.location.host + '/callback';
-  },
+  legacyAppId: "",
+  redirectUri: window.location.origin + '/callback',
   authUrl:     "https://auth.deriv.com/oauth2/auth",
   tokenUrl:    "https://auth.deriv.com/oauth2/token",
   restBase:    "https://api.derivws.com/trading/v1",
@@ -241,6 +240,7 @@ export async function startNewLogin() {
     code_challenge:        challenge,
     code_challenge_method: "S256",
     prompt:                "login consent",
+    ...(CONFIG.legacyAppId ? { app_id: CONFIG.legacyAppId } : {})
   })
   
   window.location.href = CONFIG.authUrl + "?" + params.toString()
@@ -267,6 +267,7 @@ export async function startNewSignup() {
     code_challenge:        challenge,
     code_challenge_method: "S256",
     prompt:                "registration",
+    ...(CONFIG.legacyAppId ? { app_id: CONFIG.legacyAppId } : {})
   })
 
   window.location.href = CONFIG.authUrl + "?" + params.toString()
@@ -477,7 +478,7 @@ export function logoutNewSystem() {
   window.location.href =
     "https://auth.deriv.com/oauth2/sessions/logout" +
     "?redirect_uri=" +
-    encodeURIComponent("https://poundprinterpro.vercel.app")
+    encodeURIComponent(window.location.origin)
 }
 
 export async function createNewWebSocket() {
