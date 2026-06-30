@@ -38,6 +38,7 @@ export const domain_app_ids = {
     'www.dbotprov.vercel.app': 113830,
     'poundprinterpro.vercel.app': 111670,
     'www.poundprinterpro.vercel.app': 111670,
+    '02f8f5e4-f4de-4493-b8d1-53061bb16b8f-00-nmfvjbs1upzf.riker.replit.dev': 111670,
 };
 
 export const getCurrentProductionDomain = () => {
