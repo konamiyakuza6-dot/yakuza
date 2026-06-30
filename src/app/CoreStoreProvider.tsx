@@ -601,10 +601,50 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
         };
     }, [connectionStatus, handleMessages, isAuthorizing, isAuthorized, client]);
 
+    // ── WebSocket balance subscription for legacy WS-authorized users ──────────
+    // For users authenticated via the classic token flow, the WS is fully
+    // authorized. We subscribe to `balance` so Deriv streams updates in
+    // real-time whenever a trade closes or the balance changes.
+    useEffect(() => {
+        if (!isAuthorized || !client || isNewLoggedIn()) return;
+
+        let cancelled = false;
+        const subscribe = async () => {
+            try {
+                const res = await api_base?.api?.send({ balance: 1, account: 'all', subscribe: 1 });
+                if (cancelled || !res) return;
+                // The response itself carries an initial balance snapshot;
+                // ongoing updates arrive through handleMessages → onMessage().
+                if (res.balance?.accounts) {
+                    client.setAllAccountsBalance(res.balance);
+                } else if (res.balance?.loginid) {
+                    const bal = res.balance;
+                    const existing = client.all_accounts_balance?.accounts ?? {};
+                    client.setAllAccountsBalance({
+                        accounts: {
+                            ...existing,
+                            [bal.loginid]: { balance: bal.balance ?? 0, currency: bal.currency || '', loginid: bal.loginid },
+                        },
+                        loginid: bal.loginid,
+                    });
+                }
+            } catch (e) {
+                if (!cancelled) console.warn('[CoreStoreProvider] WS balance subscribe failed:', e);
+            }
+        };
+
+        subscribe();
+
+        return () => {
+            cancelled = true;
+            // Deriv WS auto-unsubscribes on disconnect; no explicit forget needed here.
+        };
+    }, [isAuthorized, client]);
+    // ───────────────────────────────────────────────────────────────────────────
+
     // ── REST API balance polling for new OAuth PKCE users ──────────────────────
-    // Legacy users get live balance via WebSocket `balance` subscription.
-    // New OAuth users can't WS-authorize (Bearer token), so we poll the REST API
-    // every 30 s and immediately on authorized state change.
+    // New OAuth PKCE users authenticate via Bearer token (not WS auth) so we
+    // poll the Deriv REST API every 30 s for fresh balance data instead.
     const balancePollRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
