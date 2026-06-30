@@ -481,3 +481,19 @@ export const generateOAuthURL = async (prompt?: string) => {
     // Fallback to hardcoded URLs if brand config fails
     return '';
 };
+
+export const OAUTH_CLIENT_ID: string =
+    brandConfig.oauth?.client_id || '33ykZitbYuDLkIyluxFHu';
+
+export const OAUTH_TOKEN_URL: string =
+    brandConfig.oauth?.token_url || 'https://auth.deriv.com/oauth2/token';
+
+export const OAUTH_AUTH_URL: string =
+    (brandConfig.oauth?.server_base_url || 'https://auth.deriv.com') +
+    (brandConfig.oauth?.authorization_path || '/oauth2/auth');
+
+export const getCallbackURL = (): string => {
+    const protocol = window.location.protocol;
+    const host = window.location.host;
+    return `${protocol}//${host}/callback`;
+};
