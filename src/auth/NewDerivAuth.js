@@ -145,7 +145,9 @@ export function subscribeNewSystemTopics() {
 const CONFIG = {
   clientId:    "33ykZitbYuDLkIyluxFHu",
   legacyAppId: "111670",
-  redirectUri: "https://poundprinterpro.vercel.app/callback",
+  get redirectUri() {
+    return window.location.protocol + '//' + window.location.host + '/callback';
+  },
   authUrl:     "https://auth.deriv.com/oauth2/auth",
   tokenUrl:    "https://auth.deriv.com/oauth2/token",
   restBase:    "https://api.derivws.com/trading/v1",

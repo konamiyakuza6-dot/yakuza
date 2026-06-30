@@ -178,9 +178,10 @@ function App() {
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
         const state = urlParams.get('state');
-        if (code && state && window.location.pathname !== '/auth/callback') {
-            console.log('[App] OAuth params detected outside callback route, redirecting to /auth/callback...');
-            window.location.replace(`${window.location.origin}/auth/callback?${urlParams.toString()}`);
+        const path = window.location.pathname;
+        if (code && state && path !== '/auth/callback' && path !== '/callback') {
+            console.log('[App] OAuth params detected outside callback route, redirecting to /callback...');
+            window.location.replace(`${window.location.origin}/callback?${urlParams.toString()}`);
         }
     }, []);
 
