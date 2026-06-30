@@ -161,6 +161,39 @@ class APIBase {
                             balance: parseFloat(account.balance) || 0,
                         },
                     });
+
+                    // Authorize the WebSocket connection using the access token.
+                    // Deriv's new OAuth PKCE access tokens work with the WS authorize
+                    // call — without this, every trade API call returns "Please log in."
+                    const wsToken = account.token || localStorage.getItem('NEW_AUTH_token') || localStorage.getItem('authToken');
+                    if (wsToken && this.api) {
+                        try {
+                            const { authorize: wsAuth, error: wsError } = await (this.api as any).authorize(wsToken);
+                            if (wsAuth && !wsError) {
+                                console.log('[APIBase] New auth mode: WS authorized via Bearer token', wsAuth.loginid);
+                                this.is_authorized = true;
+                                this.account_info = {
+                                    balance: (wsAuth.balance ?? parseFloat(account.balance)) || 0,
+                                    currency: wsAuth.currency || account.currency || 'USD',
+                                    loginid: wsAuth.loginid || loginid,
+                                };
+                                // Update observables with real balance from WS if it differs
+                                if (wsAuth.loginid && wsAuth.loginid !== loginid) {
+                                    setAuthData({
+                                        balance: (wsAuth.balance ?? parseFloat(account.balance)) || 0,
+                                        currency: wsAuth.currency || account.currency || 'USD',
+                                        loginid: wsAuth.loginid,
+                                        is_virtual: account.account_type === 'demo' ? 1 : 0,
+                                        account_list: accountListArr,
+                                    });
+                                }
+                            } else if (wsError) {
+                                console.warn('[APIBase] New auth mode: WS authorize returned error:', wsError?.message || wsError);
+                            }
+                        } catch (wsAuthErr) {
+                            console.warn('[APIBase] New auth mode: WS authorize exception (trading may not work):', wsAuthErr);
+                        }
+                    }
                 }
             } catch (e) {
                 console.warn('[APIBase] New auth mode: could not seed auth state from localStorage', e);
