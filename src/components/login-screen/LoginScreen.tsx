@@ -1,46 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { generateOAuthURL } from '@/components/shared';
 import { startNewLogin, startNewSignup } from '@/auth/NewDerivAuth';
-import useTMB from '@/hooks/useTMB';
 import './LoginScreen.scss';
 
 const LoginScreenInner = () => {
-    const [isNewLoginLoading, setIsNewLoginLoading] = useState(false);
-    const [newLoginError, setNewLoginError] = useState('');
+    const [isLoginLoading, setIsLoginLoading] = useState(false);
+    const [loginError, setLoginError] = useState('');
     const [visible, setVisible] = useState(false);
-    const { onRenderTMBCheck, isTmbEnabled } = useTMB();
 
     useEffect(() => {
         const t = setTimeout(() => setVisible(true), 80);
         return () => clearTimeout(t);
     }, []);
 
-    const handleStandardLogin = async () => {
+    const handleLogin = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        if (isLoginLoading) return;
+        setIsLoginLoading(true);
+        setLoginError('');
         try {
-            const tmbEnabled = await isTmbEnabled();
-            if (tmbEnabled) {
-                await onRenderTMBCheck(true, undefined, false);
-            } else {
-                window.location.href = generateOAuthURL(false, 'home');
-            }
+            await startNewLogin();
         } catch (error) {
-            console.error(error);
+            console.error('[Login]', error);
+            setIsLoginLoading(false);
+            setLoginError('Login failed to start. Please try again or use a different browser.');
         }
     };
 
-    const handleNewAccountsLogin = async (e: React.MouseEvent) => {
+    const handleSignup = async (e: React.MouseEvent) => {
         e.preventDefault();
-        if (isNewLoginLoading) return;
-        setIsNewLoginLoading(true);
-        setNewLoginError('');
         try {
-            await startNewLogin();
-            setIsNewLoginLoading(false);
+            await startNewSignup();
         } catch (error) {
-            console.error('[New Accounts Login]', error);
-            setIsNewLoginLoading(false);
-            setNewLoginError('Login failed to start. Please try again or use a different browser.');
+            console.error('[Signup]', error);
         }
     };
 
@@ -66,26 +58,17 @@ const LoginScreenInner = () => {
 
                 <div className='login-screen__buttons'>
                     <button
-                        className='login-screen__btn login-screen__btn--primary'
-                        onClick={handleStandardLogin}
-                        disabled
+                        className={`login-screen__btn login-screen__btn--primary${isLoginLoading ? ' login-screen__btn--loading' : ''}`}
+                        onClick={handleLogin}
+                        disabled={isLoginLoading}
                     >
                         <span className='login-screen__btn-icon'>→</span>
-                        Log In
-                    </button>
-
-                    <button
-                        className={`login-screen__btn login-screen__btn--secondary${isNewLoginLoading ? ' login-screen__btn--loading' : ''}`}
-                        onClick={handleNewAccountsLogin}
-                        disabled={isNewLoginLoading}
-                    >
-                        <span className='login-screen__btn-icon'>✦</span>
-                        {isNewLoginLoading ? 'Preparing…' : 'Login (New Accounts)'}
+                        {isLoginLoading ? 'Preparing…' : 'Log In'}
                     </button>
                 </div>
 
-                {newLoginError && (
-                    <p className='login-screen__error'>{newLoginError}</p>
+                {loginError && (
+                    <p className='login-screen__error'>{loginError}</p>
                 )}
 
                 <div className='login-screen__divider'>
@@ -95,7 +78,7 @@ const LoginScreenInner = () => {
                 <div className='login-screen__create-wrap'>
                     <button
                         className='login-screen__btn login-screen__btn--create'
-                        onClick={startNewSignup}
+                        onClick={handleSignup}
                     >
                         <span className='login-screen__btn-icon'>+</span>
                         Create Account
