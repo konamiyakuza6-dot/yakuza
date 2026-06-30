@@ -623,6 +623,16 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
     useEffect(() => {
         if (!isAuthorizing && isAuthorized && !accountInitialization.current && client) {
             accountInitialization.current = true;
+
+            // New OAuth PKCE users: the WebSocket is connected but not WS-authorized.
+            // getSettings() and landingCompany() both require WS auth and will hang/error.
+            // We only need setLandingCompany() to fire so is_landing_company_loaded = true,
+            // which unblocks app-content.jsx → changeActiveSymbolLoadingState() → spinner gone.
+            if (isNewLoggedIn()) {
+                client?.setLandingCompany({} as TLandingCompany);
+                return;
+            }
+
             api_base.api.getSettings().then((settingRes: TSocketResponseData<'get_settings'>) => {
                 client?.setAccountSettings(settingRes.get_settings);
                 const client_information: TClientInformation = {
