@@ -360,7 +360,13 @@ class APIBase {
             this.subscribe();
         } catch (e) {
             this.is_authorized = false;
-            clearAuthData();
+            // Do NOT wipe auth storage when the new OAuth (Bearer token) system is active.
+            // Bearer tokens don't work with the Deriv WebSocket API, so every WS auth attempt
+            // fails — clearing auth here would cause an infinite reload → login-page loop.
+            const isNewAuthMode = !!localStorage.getItem('NEW_AUTH_token');
+            if (!isNewAuthMode) {
+                clearAuthData();
+            }
             setIsAuthorized(false);
             globalObserver.emit('Error', e);
         } finally {

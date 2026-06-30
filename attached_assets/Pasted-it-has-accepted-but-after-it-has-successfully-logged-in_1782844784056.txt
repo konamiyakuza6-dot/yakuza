@@ -1,0 +1,52 @@
+it has accepted but after it has successfully logged in back to login page as per the screenshot whats up recity on that
+
+3 hours ago
+
+Analyzing authentication callback logic (8 seconds)
+The app loaded but shows "Log in" — auth completed but the token wasn't stored in a format the app recognizes. Let me check the console logs and the post-login storage code simultaneously.
+
+
+2 actions
+The logs show isValidLoginId: false on every reload — the token exchange completed but wasn't stored in the format the rest of the app reads. Let me find exactly what handleNewCallback() stores and what the app's header reads to decide "logged in".
+
+
+4 actions
+Found it. The root cause is clear. Let me read the layout's condition and the rest of NewDerivAuth.js to understand the full gap.
+
+
+3 actions
+I can see the exact problem. The Layout at line 140 checks:
+
+isLoggedInCookie=true AND isClientAccountsPopulated=false → redirect back to login
+
+handleNewCallback() only stores the OAuth token under NEW_AUTH_token and sets the cookie — but never calls createNewWebSocket() to populate accountsList/clientAccounts that the Layout reads. Let me read the rest of createNewWebSocket() to understand its full effect before fixing it.
+
+
+2 actions
+Now I have the complete picture. The issue is clear:
+
+handleNewCallback() stores NEW_AUTH_token but the Layout reads accountsList and clientAccounts. When it finds logged_state=true cookie but empty accountsList → it calls generateOAuthURL() and redirects you back to Deriv login. A loop.
+
+createNewWebSocket() does populate those keys but is never called from NewSystemCallbackHandler. And even when it does run, it stores the loginid instead of the real OAuth token in accountsList.
+
+I'll add a dedicated bootstrapNewAuthSession() function to NewDerivAuth.js that properly populates all the legacy keys the app reads, then call it from the callback handler before redirecting to /.
+
+
+4 actions
+Now wire bootstrapNewAuthSession() into the callback handler, and check the new logs simultaneously.
+
+
+4 actions
+Build is clean. Let me also check that AuthWrapper.tsx "Restoring server-side OAuth session failed" error isn't causing a separate problem.
+
+
+2 actions
+The AuthWrapper is calling clearAuthData() on failure — which could wipe the accounts we just bootstrapped. Let me check that function and when it runs.
+
+
+6 actions
+One more thing — if bootstrapNewAuthSession() fails (REST endpoint unreachable), the user would still be in the loop. Let me add a guaranteed fallback so the Layout always sees accounts even in worst case.
+
+
+2 actions
+I'll update bootstrapNewAuthSession() to store a guaranteed fallback BEFORE the REST API attempt — so even if the accounts endpoint fails or doesn't exist, the Layout check always passes and api_base.init() runs with the real token.
