@@ -36,6 +36,8 @@ export const domain_app_ids = {
     'www.qtropwinnershub.site': 107823,
     'dbotprov.vercel.app': 113830,
     'www.dbotprov.vercel.app': 113830,
+    'poundprinterpro.vercel.app': 101585,
+    'www.poundprinterpro.vercel.app': 101585,
 };
 
 export const getCurrentProductionDomain = () => {
