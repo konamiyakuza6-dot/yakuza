@@ -332,7 +332,7 @@ export default class RunPanelStore {
         const is_ios = mobileOSDetect() === 'iOS';
         this.dbot.saveRecentWorkspace();
         this.dbot.unHighlightAllBlocks();
-        if (!client.is_logged_in) {
+        if (!client.is_logged_in && !api_base.is_authorized) {
             this.showLoginDialog();
             return;
         }

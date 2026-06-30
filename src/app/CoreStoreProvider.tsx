@@ -186,6 +186,23 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeAccount?.loginid, client?.all_accounts_balance]);
 
+    // Fallback: set is_logged_in directly from isAuthorized + activeLoginid.
+    // This handles the case where activeAccount is undefined due to a timing
+    // issue or account-ID mismatch between accountList and activeLoginid, while
+    // the WS/REST auth chain has already confirmed the session is valid.
+    useEffect(() => {
+        if (client && isAuthorized && activeLoginid) {
+            client.setIsLoggedIn(true);
+            if (!client.loginid) {
+                const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
+                client.setLoginId(showAsCR || activeLoginid);
+            }
+            if (accountList?.length && !client.account_list?.length) {
+                client.setAccountList(accountList);
+            }
+        }
+    }, [client, isAuthorized, activeLoginid, accountList]);
+
     useEffect(() => {
         if (client && activeAccount) {
             // Check if show_as_cr is set - if so, use CR6779123 for display

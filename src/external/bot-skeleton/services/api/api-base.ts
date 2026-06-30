@@ -294,16 +294,22 @@ class APIBase {
                 // Reset reconnection counter
                 this.reconnection_attempts = 0;
 
-                // Properly handle logout through the API
-                setIsAuthorized(false);
-                setAccountList([]);
-                setAuthData(null);
+                // Only wipe session when NOT in new OAuth mode.
+                // In new OAuth mode the Bearer token in localStorage is the
+                // source of truth — clearing clientAccounts here would break
+                // handleTokenExchangeIfNeeded() on the next reconnect and force
+                // the user back to the login page.
+                const isNewAuthMode = !!localStorage.getItem('NEW_AUTH_token');
+                if (!isNewAuthMode) {
+                    setIsAuthorized(false);
+                    setAccountList([]);
+                    setAuthData(null);
 
-                // Clear necessary storage items
-                localStorage.removeItem('active_loginid');
-                localStorage.removeItem('account_type');
-                localStorage.removeItem('accountsList');
-                localStorage.removeItem('clientAccounts');
+                    localStorage.removeItem('active_loginid');
+                    localStorage.removeItem('account_type');
+                    localStorage.removeItem('accountsList');
+                    localStorage.removeItem('clientAccounts');
+                }
             }
 
             this.init(true);
