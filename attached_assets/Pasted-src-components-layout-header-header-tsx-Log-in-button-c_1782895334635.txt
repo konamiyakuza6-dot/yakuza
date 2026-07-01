@@ -1,0 +1,43 @@
+src/components/layout/header/header.tsx	"Log in" button — calls startNewLogin()
+src/auth/NewDerivAuth.js	Core auth module — startNewLogin() builds PKCE challenge & redirects to Deriv auth server
+src/pages/auth/callback.tsx	Handles /callback route — calls handleNewCallback() then bootstrapNewAuthSession()
+src/pages/callback/callback-page.tsx	Alternative callback handler (legacy token flow)
+src/hooks/auth/useOAuthCallback.ts	React hook that wires the callback page to auth logic
+🏗️ 2. Auth State → localStorage (session seeding)
+File	Role
+src/auth/NewDerivAuth.js	handleNewCallback() exchanges code→Bearer token; bootstrapNewAuthSession() writes accountsList, clientAccounts, authToken, active_loginid
+src/app/AuthWrapper.tsx	App entry wrapper — calls restoreLoginFromServerSession() or setLocalStorageToken() on load; calls api_base.init()
+src/services/oauth-token-exchange.service.ts	Stores & retrieves Bearer token centrally (setAuthInfo, getAccessToken)
+src/services/derivws-accounts.service.ts	Stores raw account list from REST/WS (storeAccounts, getStoredAccounts)
+src/components/layout/index.tsx	Redirect guard — reads accountsList + logged_state cookie; redirects to login if empty
+🔌 3. WebSocket Connection & Proxy
+File	Role
+src/external/bot-skeleton/services/api/api-base.ts	Central WS manager — init() creates WS, _setupNewSystemApiProxy() routes trade messages through OTP WS, authorizeAndSubscribe() for legacy users
+src/external/bot-skeleton/services/api/appId.js	generateDerivApiInstance() creates WS connection; V2GetActiveToken() / V2GetActiveClientId() resolve active token/account
+src/auth/NewDerivAuth.js	createNewWebSocket() creates the OTP WS (window._newSystemWS); sendViaNewSystemWithPromise() sends trade messages; onNewSystemMessage() registers response handlers
+src/external/bot-skeleton/services/api/api-helpers.ts	Shared API helper utilities, disposeInstance()
+src/external/bot-skeleton/services/api/chart-api.ts	Separate public WS for chart/market data (no auth needed)
+💰 4. Balance Display
+File	Role
+src/external/bot-skeleton/services/api/api-base.ts	subscribe() — subscribes to balance stream ({ balance:1, subscribe:1, account:'all' })
+src/hooks/api/account/useActiveAccount.tsx	React hook — reads active account balance from store/observable
+src/components/layout/header/account-switcher.tsx	Renders balance + currency in the header dropdown
+src/components/layout/header/header.tsx	Consumes useActiveAccount, passes data to account switcher
+src/external/bot-skeleton/services/api/observables/connection-status-stream.ts	Observable streams — setAuthData(), setAccountList(), setIsAuthorized() that the UI subscribes to
+📈 5. Placing a Trade (Proposal → Buy → Settlement)
+File	Role
+src/external/bot-skeleton/services/tradeEngine/trade/index.js	Trade orchestrator — runs the Before/During/After purchase lifecycle
+src/external/bot-skeleton/services/tradeEngine/trade/Proposal.js	Builds & sends { proposal:1, ... } request; waits for proposal ID + ask price
+src/external/bot-skeleton/services/tradeEngine/trade/Purchase.js	Sends { buy: proposalId, price: askPrice }; handles demo-account switching for special CR accounts
+src/external/bot-skeleton/services/tradeEngine/trade/OpenContract.js	Subscribes to proposal_open_contract for the bought contract; watches is_sold/is_expired for settlement
+src/external/bot-skeleton/services/tradeEngine/trade/Sell.js	Sends { sell: contractId } for early exit / stop-loss
+src/external/bot-skeleton/services/tradeEngine/utils/helpers.js	doUntilDone() — retry wrapper used by Proposal, Purchase, OpenContract
+src/auth/NewDerivAuth.js	sendViaNewSystemWithPromise() — converts symbol→underlying_symbol, buy→string, sends through window._newSystemWS
+src/external/bot-skeleton/services/api/api-base.ts	_setupNewSystemApiProxy() — intercepts api.send() for trade message types and routes to OTP WS
+🗂️ Supporting: Stores & Run Control
+File	Role
+src/stores/run-panel-store.ts	Run/stop button logic; switchToDemoAccountForBot() / restoreOriginalAccount() for special CR accounts
+src/stores/common-store.ts	Global app state (currency, landing company, etc.)
+src/stores/transactions-store.ts	Records each completed trade for the Transactions tab
+src/stores/journal-store.ts	Appends human-readable log entries (buy/sell/error)
+src/stores/summary-card-store.ts	Aggregates totals (total stake, payout, profit/loss)
