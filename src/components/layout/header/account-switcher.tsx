@@ -4,9 +4,11 @@ import { observer } from 'mobx-react-lite';
 import { addComma, getCurrencyDisplayCode, getDecimalPlaces } from '@/components/shared';
 import Text from '@/components/shared_ui/text';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
+import { setAuthData, setAccountList } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import { isDemoAccount } from '@/utils/account-helpers';
+import { isNewLoggedIn } from '@/auth/NewDerivAuth';
 import { Localize } from '@deriv-com/translations';
 import AccountInfoWrapper from './account-info-wrapper';
 import './account-switcher.scss';
@@ -54,9 +56,44 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
 
     const handleAccountSelect = useCallback(
         (loginid: string) => {
+            // 1. Persist selection immediately
             localStorage.setItem('active_loginid', loginid);
-            client?.checkAndRegenerateWebSocket();
             setIsOpen(false);
+
+            // 2. Instant UI update — read from clientAccounts so the header
+            //    reflects the new account before the WS reconnects
+            try {
+                const clientAccounts: Record<string, any> = JSON.parse(
+                    localStorage.getItem('clientAccounts') ?? '{}'
+                );
+                const accountListArr = Object.entries(clientAccounts).map(([lid, acc]: [string, any]) => ({
+                    balance: parseFloat(acc.balance) || 0,
+                    currency: acc.currency || 'USD',
+                    is_virtual: acc.account_type === 'demo' ? 1 : 0,
+                    loginid: lid,
+                }));
+                const acc = clientAccounts[loginid];
+                if (acc) {
+                    setAuthData({
+                        loginid,
+                        balance: parseFloat(acc.balance) || 0,
+                        currency: acc.currency || 'USD',
+                        is_virtual: acc.account_type === 'demo' ? 1 : 0,
+                        account_list: accountListArr,
+                    });
+                    setAccountList(accountListArr);
+                }
+            } catch (_) { /* ignore */ }
+
+            // 3. Reconnect WS for the new account
+            if (isNewLoggedIn()) {
+                // Reset OTP flag so handleTokenExchangeIfNeeded fetches a fresh
+                // OTP for the selected account on the next WS open
+                api_base.otp_connection_ready = false;
+                api_base.init(true);
+            } else {
+                client?.checkAndRegenerateWebSocket?.();
+            }
         },
         [client]
     );

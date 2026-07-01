@@ -66,6 +66,7 @@ class APIBase {
     active_symbols_promise: Promise<any[] | undefined> | null = null;
     common_store: CommonStore | undefined;
     reconnection_attempts: number = 0;
+    otp_connection_ready: boolean = false;
 
     // Constants for timeouts - extracted magic numbers for better maintainability
     private readonly ACTIVE_SYMBOLS_TIMEOUT_MS = 10000; // 10 seconds
@@ -162,36 +163,45 @@ class APIBase {
                         },
                     });
 
-                    // Authorize the WebSocket connection using the access token.
-                    // Deriv's new OAuth PKCE access tokens work with the WS authorize
-                    // call — without this, every trade API call returns "Please log in."
-                    const wsToken = account.token || localStorage.getItem('NEW_AUTH_token') || localStorage.getItem('authToken');
-                    if (wsToken && this.api) {
+                    // ── OTP-based WS reconnection ───────────────────────────────────────
+                    // Bearer tokens cannot be used to authorize Deriv's standard WS API.
+                    // Instead, POST to the OTP endpoint to get a pre-authenticated WS URL
+                    // (the URL itself encodes auth — no separate authorize() call needed).
+                    // The otp_connection_ready flag prevents re-entry when the new WS fires
+                    // its own 'open' event, which would call handleTokenExchangeIfNeeded again.
+                    if (!this.otp_connection_ready && this.api) {
+                        const bearerToken = localStorage.getItem('NEW_AUTH_token');
+                        const REST_BASE = 'https://api.derivws.com/trading/v1';
+                        const CLIENT_ID = '33ykZitbYuDLkIyluxFHu';
                         try {
-                            const { authorize: wsAuth, error: wsError } = await (this.api as any).authorize(wsToken);
-                            if (wsAuth && !wsError) {
-                                console.log('[APIBase] New auth mode: WS authorized via Bearer token', wsAuth.loginid);
-                                this.is_authorized = true;
-                                this.account_info = {
-                                    balance: (wsAuth.balance ?? parseFloat(account.balance)) || 0,
-                                    currency: wsAuth.currency || account.currency || 'USD',
-                                    loginid: wsAuth.loginid || loginid,
-                                };
-                                // Update observables with real balance from WS if it differs
-                                if (wsAuth.loginid && wsAuth.loginid !== loginid) {
-                                    setAuthData({
-                                        balance: (wsAuth.balance ?? parseFloat(account.balance)) || 0,
-                                        currency: wsAuth.currency || account.currency || 'USD',
-                                        loginid: wsAuth.loginid,
-                                        is_virtual: account.account_type === 'demo' ? 1 : 0,
-                                        account_list: accountListArr,
-                                    });
+                            const otpRes = await fetch(`${REST_BASE}/options/accounts/${loginid}/otp`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${bearerToken}`,
+                                    'Deriv-App-ID': CLIENT_ID,
+                                    'Content-Type': 'application/json',
+                                },
+                            });
+                            if (otpRes.ok) {
+                                const otpData = await otpRes.json();
+                                const wsUrl = otpData?.data?.url
+                                    || otpData?.data?.websocket_url
+                                    || otpData?.url
+                                    || otpData?.websocket_url;
+                                if (wsUrl) {
+                                    console.log('[APIBase] OTP WS URL obtained — reconnecting on authenticated endpoint');
+                                    this.otp_connection_ready = true;
+                                    this.api.disconnect();
+                                    this.api = generateDerivApiInstance(null, wsUrl) as TApiBaseApi;
+                                    this.api.connection.addEventListener('open', this.onsocketopen.bind(this));
+                                    this.api.connection.addEventListener('close', this.onsocketclose.bind(this));
+                                    // chart_api gets its own standard WS (public market data) — no change needed
                                 }
-                            } else if (wsError) {
-                                console.warn('[APIBase] New auth mode: WS authorize returned error:', wsError?.message || wsError);
+                            } else {
+                                console.warn('[APIBase] OTP endpoint returned', otpRes.status, '— bot trades may fail');
                             }
-                        } catch (wsAuthErr) {
-                            console.warn('[APIBase] New auth mode: WS authorize exception (trading may not work):', wsAuthErr);
+                        } catch (otpErr) {
+                            console.warn('[APIBase] OTP fetch failed — bot trades may fail:', otpErr);
                         }
                     }
                 }
