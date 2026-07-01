@@ -87,6 +87,16 @@ import OAuthTokenExchangeService from '@/services/oauth-token-exchange.service';
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 
 export const V2GetActiveToken = () => {
+    // CRITICAL: For new auth system (PKCE) users, return null so api_base.init() creates
+    // the WS connection for public data only (active_symbols, ticks) without trying to
+    // authorize with a Bearer JWT token — the OTP WebSocket proxy handles trading instead.
+    if (typeof window !== 'undefined') {
+        const newAuthToken = sessionStorage.getItem('NEW_AUTH_token') || localStorage.getItem('NEW_AUTH_token');
+        if (newAuthToken) {
+            return null;
+        }
+    }
+
     // CRITICAL: If show_as_cr flag is set, always use demo account token
     // This ensures all trades are executed on demo account, even when a special CR account is displayed
     const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;

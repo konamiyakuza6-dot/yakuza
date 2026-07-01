@@ -135,7 +135,7 @@ const Layout = () => {
         }
 
         const checkOIDCEnabledWithMissingAccount =
-            !isEndpointPage && !isCallbackPage && !isOAuthCallbackPage && !clientHasCurrency;
+            isLoggedInCookie && !isEndpointPage && !isCallbackPage && !isOAuthCallbackPage && !clientHasCurrency;
         const shouldAuthenticate =
             (isLoggedInCookie && !isClientAccountsPopulated && !isEndpointPage && !isCallbackPage) ||
             checkOIDCEnabledWithMissingAccount;
