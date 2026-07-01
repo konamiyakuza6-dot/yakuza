@@ -130,19 +130,19 @@ export default Engine =>
                     api_base.account_info?.loginid === demoLoginId ||
                     (api_base.account_info?.loginid && api_base.account_info.loginid.startsWith('VRTC'));
 
-                if (!isOnDemoAccount && demoToken && api_base.api) {
+                const isNewAuthMode = !!localStorage.getItem('NEW_AUTH_token');
+
+                if (!isOnDemoAccount && demoToken && api_base.api && !isNewAuthMode) {
                     console.warn('⚠️ [PURCHASE] API not on demo account! Current:', api_base.account_info?.loginid);
                     console.warn('⚠️ [PURCHASE] Re-authorizing with demo token synchronously...');
 
-                    // CRITICAL: Re-authorize synchronously before trade
-                    // This ensures api_base.account_info is updated with demo account balance
+                    // Legacy auth: re-authorize synchronously before trade via WebSocket
                     try {
                         const { authorize, error } = await api_base.api.authorize(demoToken);
                         if (error) {
                             console.error('❌ [PURCHASE] Failed to re-authorize with demo token:', error);
                             throw new Error('Failed to switch to demo account for trade');
                         } else if (authorize) {
-                            // Update api_base.account_info with demo account info
                             api_base.account_info = { ...authorize, loginid: demoLoginId };
                             api_base.token = demoToken;
                             api_base.account_id = demoLoginId;
@@ -155,6 +155,21 @@ export default Engine =>
                         console.error('❌ [PURCHASE] Error re-authorizing:', authError);
                         throw authError;
                     }
+                } else if (!isOnDemoAccount && isNewAuthMode) {
+                    // New OAuth mode: OTP WS is pre-authenticated — calling authorize() would fail.
+                    // Update account_info from localStorage without any WS call.
+                    console.warn('⚠️ [PURCHASE] New auth mode: updating account_info to demo account without WS authorize');
+                    const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
+                    const demoAccount = clientAccounts[demoLoginId];
+                    api_base.account_info = {
+                        loginid: demoLoginId,
+                        balance: demoAccount ? parseFloat(demoAccount.balance) || 0 : 0,
+                        currency: demoAccount?.currency || 'USD',
+                    };
+                    api_base.token = demoToken;
+                    api_base.account_id = demoLoginId;
+                    this.accountInfo = { ...api_base.account_info };
+                    console.log('✅ [PURCHASE] New auth mode: account_info set to demo account:', demoLoginId);
                 } else if (isOnDemoAccount) {
                     console.log('✅ [PURCHASE] API already on demo account:', api_base.account_info?.loginid);
                     // Ensure this.accountInfo is set to demo account even if already on demo

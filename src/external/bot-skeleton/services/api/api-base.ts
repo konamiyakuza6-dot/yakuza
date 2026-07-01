@@ -203,6 +203,12 @@ class APIBase {
                         } catch (otpErr) {
                             console.warn('[APIBase] OTP fetch failed — bot trades may fail:', otpErr);
                         }
+                    } else if (this.otp_connection_ready) {
+                        // OTP WS has connected (second open event) — subscribe to account streams now.
+                        // The first open (public WS) could not subscribe to authenticated streams;
+                        // now that we are on the pre-authenticated OTP WS, set up all account streams.
+                        this.current_auth_subscriptions = [];
+                        this.subscribe();
                     }
                 }
             } catch (e) {
@@ -494,8 +500,7 @@ class APIBase {
                     }
                     return subscription;
                 },
-                [],
-                this
+                []
             );
         };
 
@@ -510,7 +515,7 @@ class APIBase {
         }
 
         try {
-            const apiResult = await doUntilDone(() => this.api?.send({ active_symbols: 'brief' }), [], this);
+            const apiResult = await doUntilDone(() => this.api?.send({ active_symbols: 'brief' }), []);
 
             const { active_symbols = [], error = {} } = apiResult as any;
 

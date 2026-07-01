@@ -244,7 +244,25 @@ export default class RunPanelStore {
             };
             console.log('[Run Panel] 🔄 Stored original account:', this.original_account_info.account_id);
 
-            // Authorize with demo account token
+            // In new OAuth mode the WS is pre-authenticated via OTP URL — calling
+            // api.authorize() with an old-style API token will always fail.
+            // Instead, just update the in-memory account_info from localStorage.
+            const isNewAuthMode = !!localStorage.getItem('NEW_AUTH_token');
+            if (isNewAuthMode) {
+                const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
+                const demoAccount = clientAccounts[demoAccountId];
+                api_base.account_info = {
+                    loginid: demoAccountId,
+                    balance: demoAccount ? parseFloat(demoAccount.balance) || 0 : 0,
+                    currency: demoAccount?.currency || 'USD',
+                };
+                api_base.token = demoToken;
+                api_base.account_id = demoAccountId;
+                console.log(`[Run Panel] ✅ New auth mode: updated account_info to demo account ${demoAccountId}`);
+                return true;
+            }
+
+            // Legacy auth: authorize with demo account token via WebSocket
             console.log('[Run Panel] 🔄 Authorizing with demo account token...');
             const { authorize, error } = await api_base.api.authorize(demoToken);
             if (error) {
@@ -282,6 +300,24 @@ export default class RunPanelStore {
         try {
             const { token, loginid } = this.original_account_info;
             if (!token || !loginid) {
+                return;
+            }
+
+            // In new OAuth mode the WS is pre-authenticated via OTP URL — calling
+            // api.authorize() will always fail. Update account_info from localStorage instead.
+            const isNewAuthMode = !!localStorage.getItem('NEW_AUTH_token');
+            if (isNewAuthMode) {
+                const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
+                const origAccount = clientAccounts[loginid];
+                api_base.account_info = {
+                    loginid,
+                    balance: origAccount ? parseFloat(origAccount.balance) || 0 : 0,
+                    currency: origAccount?.currency || 'USD',
+                };
+                api_base.token = token;
+                api_base.account_id = loginid;
+                console.log(`[Run Panel] New auth mode: restored original account ${loginid}`);
+                this.original_account_info = null;
                 return;
             }
 
