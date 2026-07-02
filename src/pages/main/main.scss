@@ -60,7 +60,7 @@
             }
 
             &__active {
-                background: #3b82f6 !important; // Lighter blue background for active tab like screenshot
+                background: #16a34a !important; // Green background for active tab
                 color: #ffffff !important; // White text for active tab
                 position: relative;
                 border-radius: 4px !important;
@@ -88,7 +88,7 @@
             }
 
             &__list {
-                background: #1e3a8a !important; // Dark blue background like screenshot
+                background: #f97316 !important; // Orange background for nav bar
                 justify-content: flex-start; // Start from left like friend's design
                 border-bottom: none !important; // Remove border
                 padding: 0; // Remove all padding to eliminate space
