@@ -1,11 +1,8 @@
 {
     "version": 2,
-    "installCommand": "rm -rf node_modules && npm install --ignore-scripts --no-audit --no-fund",
-    "buildCommand": "npm run build",
-    "outputDirectory": "dist",
     "rewrites": [
         {
-            "source": "/((?!api|assets|static|js|css|images|fonts|videos|media|xml|circles|pro-tools|service-worker.js).*)",
+            "source": "/(.*)",
             "destination": "/index.html"
         }
     ],
@@ -36,6 +33,25 @@
                     "value": "frame-ancestors *"
                 }
             ]
+        },
+        {
+            "source": "/(index\\.html|service-worker\\.js|manifest\\.json)",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "no-cache, no-store, must-revalidate"
+                }
+            ]
+        },
+        {
+            "source": "/",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "no-cache, no-store, must-revalidate"
+                }
+            ]
         }
-    ]
+    ],
+    "outputDirectory": "dist"
 }
