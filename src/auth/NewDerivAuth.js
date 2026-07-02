@@ -7,7 +7,6 @@ import Cookies from 'js-cookie';
  * @type {Set<(event: MessageEvent) => void>}
  */
 const _newSystemHandlers = new Set()
-let __wsReconnecting = false
 
 // ── Promise-based send (req_id matching) ─────────────────────────────────
 /** @type {Map<number, {resolve: Function, reject: Function}>} */
@@ -27,9 +26,7 @@ _newSystemHandlers.add((event) => {
       }
       _pendingRequests.delete(data.req_id)
     }
-  } catch (e) {
-    console.warn("[NEW WS] handler parse error:", event.data)
-  }
+  } catch (_) {}
 })
 
 /**
@@ -146,9 +143,9 @@ export function subscribeNewSystemTopics() {
 }
 
 const CONFIG = {
-  clientId:    "33ykZitbYuDLkIyluxFHu",
-  legacyAppId: "",
-  redirectUri: window.location.origin + '/callback',
+  clientId:    "337DJLKi2OJ4VsyFSLIt9",
+  legacyAppId: "101585",
+  redirectUri: "https://makotitraderss.vercel.app/callback",
   authUrl:     "https://auth.deriv.com/oauth2/auth",
   tokenUrl:    "https://auth.deriv.com/oauth2/token",
   restBase:    "https://api.derivws.com/trading/v1",
@@ -174,9 +171,6 @@ export function clearNewAuthStorage() {
   sessionStorage.removeItem(K.verifier);
   sessionStorage.removeItem(K.state);
   sessionStorage.removeItem(K.active);
-  // Also clear the shared CSRF keys so useOAuthCallback doesn't see stale state
-  sessionStorage.removeItem('oauth_csrf_token');
-  sessionStorage.removeItem('oauth_csrf_token_timestamp');
   // Clear legacy artifacts set by createNewWebSocket that trick isUserLoggedIn()
   localStorage.removeItem('accountsList');
   localStorage.removeItem('clientAccounts');
@@ -223,14 +217,9 @@ export async function startNewLogin() {
   localStorage.setItem(K.state, state)
   localStorage.setItem(K.active, "true")
 
-  // Mirror state into sessionStorage under the keys that validateCSRFToken()
-  // in useOAuthCallback expects — so both auth systems agree on the same state value.
-  sessionStorage.setItem('oauth_csrf_token', state)
-  sessionStorage.setItem('oauth_csrf_token_timestamp', Date.now().toString())
-
   // Verify values were actually saved
-  const savedVerifier = localStorage.getItem(K.verifier)
-  const savedActive = localStorage.getItem(K.active)
+  const savedVerifier = localStorage.getItem('NEW_AUTH_verifier')
+  const savedActive = localStorage.getItem('NEW_AUTH_active')
   
   console.log('[NEW AUTH] Pre-redirect verification:')
   console.log('[NEW AUTH] verifier saved:', !!savedVerifier)
@@ -251,7 +240,7 @@ export async function startNewLogin() {
     code_challenge:        challenge,
     code_challenge_method: "S256",
     prompt:                "login consent",
-    ...(CONFIG.legacyAppId ? { app_id: CONFIG.legacyAppId } : {})
+    app_id:                CONFIG.legacyAppId
   })
   
   window.location.href = CONFIG.authUrl + "?" + params.toString()
@@ -269,10 +258,6 @@ export async function startNewSignup() {
   localStorage.setItem(K.state, state)
   localStorage.setItem(K.active, "true")
 
-  // Mirror state into sessionStorage so validateCSRFToken() in useOAuthCallback passes.
-  sessionStorage.setItem('oauth_csrf_token', state)
-  sessionStorage.setItem('oauth_csrf_token_timestamp', Date.now().toString())
-
   const params = new URLSearchParams({
     response_type:         "code",
     client_id:             CONFIG.clientId,
@@ -282,7 +267,6 @@ export async function startNewSignup() {
     code_challenge:        challenge,
     code_challenge_method: "S256",
     prompt:                "registration",
-    ...(CONFIG.legacyAppId ? { app_id: CONFIG.legacyAppId } : {})
   })
 
   window.location.href = CONFIG.authUrl + "?" + params.toString()
@@ -298,73 +282,16 @@ export async function handleNewCallback() {
   _callbackHandled = true
   
   console.log("[NEW AUTH] Starting callback handler")
-  console.log("[NEW AUTH] Full URL search:", window.location.search)
-  console.log("[NEW AUTH] Full URL hash:", window.location.hash)
-
-  // Read ALL params BEFORE wiping the URL from the address bar
+  console.log("[NEW AUTH] URL:", window.location.search)
+  
   const urlParams = new URLSearchParams(window.location.search)
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-
-  const code         = urlParams.get("code")         || hashParams.get("code")
-  const returnedState = urlParams.get("state")        || hashParams.get("state")
-  const derivError   = urlParams.get("error")         || hashParams.get("error")
-  const derivErrDesc = urlParams.get("error_description") || hashParams.get("error_description")
-
-  // Check for legacy Deriv token-in-URL flow (acct1/token1 params)
-  const legacyAcct  = urlParams.get("acct1")
-  const legacyToken = urlParams.get("token1")
-
-  console.log("[NEW AUTH] Params — code:", !!code, "state:", !!returnedState,
-    "error:", derivError, "legacy:", !!legacyAcct)
-
-  // Safe to wipe the URL now — we've captured everything
+  const code = urlParams.get("code")
+  const returnedState = urlParams.get("state")
+  
   window.history.replaceState({}, '', '/callback')
-
-  // 1. Deriv sent an explicit error
-  if (derivError) {
-    throw new Error(
-      `Deriv auth error: ${derivError}` +
-      (derivErrDesc ? ` — ${derivErrDesc}` : '') +
-      `\n\nThis usually means the Client ID or redirect URI isn't registered correctly in the Deriv developer portal.`
-    )
-  }
-
-  // 2. Legacy token flow fallback (acct1/token1 in URL params)
-  if (!code && legacyAcct && legacyToken) {
-    console.log("[NEW AUTH] Detected legacy Deriv token flow — seeding localStorage directly")
-    localStorage.setItem('authToken', legacyToken)
-    localStorage.setItem('active_loginid', legacyAcct)
-    const accountsList = { [legacyAcct]: legacyToken }
-    const clientAccounts = {
-      [legacyAcct]: {
-        loginid: legacyAcct,
-        token: legacyToken,
-        currency: urlParams.get("cur1") || '',
-        account_type: legacyAcct.startsWith('VR') ? 'demo' : 'real',
-        balance: '0',
-      }
-    }
-    localStorage.setItem('accountsList', JSON.stringify(accountsList))
-    localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts))
-    try {
-      const Cookies = (await import('js-cookie')).default
-      Cookies.set('logged_state', 'true', {
-        domain: window.location.hostname, expires: 30, path: '/',
-        secure: window.location.protocol === 'https:',
-      })
-    } catch (_) {}
-    return legacyToken
-  }
-
-  // 3. Normal PKCE code flow
+  
   if (!code) {
-    throw new Error(
-      "Missing authorization code from Deriv.\n\n" +
-      "This can happen if:\n" +
-      "• The Client ID isn't registered for PKCE/code flow in the Deriv developer portal\n" +
-      "• The redirect URI doesn't exactly match the registered one\n" +
-      "• You navigated to /callback directly without logging in"
-    )
+    throw new Error("Missing authorization code from Deriv")
   }
   
   if (!returnedState) {
@@ -457,87 +384,6 @@ export async function handleNewCallback() {
   return data.access_token
 }
 
-/**
- * Called immediately after handleNewCallback() succeeds.
- * Fetches the user's Deriv accounts via REST and writes all the legacy
- * localStorage keys (accountsList, clientAccounts, authToken, active_loginid)
- * that the Layout and the rest of the app read to decide "is user logged in".
- * Without this the Layout sees logged_state cookie but empty accountsList and
- * redirects the user back to the Deriv login page in a loop.
- */
-export async function bootstrapNewAuthSession() {
-  const token = getNewToken()
-  if (!token) {
-    console.error("[NEW AUTH] bootstrapNewAuthSession: no token available")
-    return false
-  }
-
-  console.log("[NEW AUTH] Bootstrapping legacy auth session...")
-
-  // ── Phase 1: guaranteed fallback ────────────────────────────────────────
-  // Write a minimal placeholder immediately so the Layout's
-  // isClientAccountsPopulated check passes and api_base.init() runs with a
-  // real token. Phase 2 (REST API) will overwrite with accurate data.
-  const placeholder = 'deriv_oauth_user'
-  localStorage.setItem('authToken',     token)
-  localStorage.setItem('active_loginid', placeholder)
-  localStorage.setItem('accountsList',   JSON.stringify({ [placeholder]: token }))
-  localStorage.setItem('clientAccounts', JSON.stringify({
-    [placeholder]: { loginid: placeholder, token, currency: 'USD', account_type: 'real', balance: '0' }
-  }))
-  console.log("[NEW AUTH] Phase 1: fallback session written")
-
-  // ── Phase 2: enrich with real account data from Deriv REST API ──────────
-  try {
-    const res = await fetch(CONFIG.restBase + "/options/accounts", {
-      headers: getNewAuthHeaders()
-    })
-    const text = await res.text()
-    console.log("[NEW AUTH] Accounts response:", text.slice(0, 300))
-
-    if (res.ok) {
-      const accountsData = JSON.parse(text)
-      const raw = accountsData?.data || accountsData
-      const accounts = Array.isArray(raw) ? raw : (raw ? [raw] : [])
-
-      if (accounts.length) {
-        const accountsList   = {}
-        const clientAccounts = {}
-
-        accounts.forEach(acc => {
-          const lid = acc.account_id || acc.id
-          if (!lid) return
-          const isDemo = acc.account_type === 'demo' || String(lid).startsWith('VR')
-          accountsList[lid]   = token
-          clientAccounts[lid] = {
-            loginid:      lid,
-            token,
-            currency:     acc.currency || 'USD',
-            account_type: isDemo ? 'demo' : 'real',
-            balance:      acc.balance || '0',
-          }
-        })
-
-        localStorage.setItem('accountsList',   JSON.stringify(accountsList))
-        localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts))
-
-        const preferred = accounts.find(a => a.account_type !== 'demo') || accounts[0]
-        const loginId   = preferred?.account_id || preferred?.id
-        if (loginId) {
-          localStorage.setItem('active_loginid', loginId)
-          console.log("[NEW AUTH] Phase 2: real session bootstrapped. active_loginid:", loginId)
-        }
-      }
-    } else {
-      console.warn("[NEW AUTH] Phase 2: accounts fetch failed (", res.status, ") – using Phase 1 fallback")
-    }
-  } catch (e) {
-    console.warn("[NEW AUTH] Phase 2: accounts fetch error – using Phase 1 fallback:", e)
-  }
-
-  return true
-}
-
 export function getNewToken() {
   let token = localStorage.getItem(K.token)
   let expiry = localStorage.getItem(K.expiry)
@@ -574,7 +420,7 @@ export function logoutNewSystem() {
   window.location.href =
     "https://auth.deriv.com/oauth2/sessions/logout" +
     "?redirect_uri=" +
-    encodeURIComponent(window.location.origin)
+    encodeURIComponent("https://makotitraderss.vercel.app")
 }
 
 export async function createNewWebSocket() {
@@ -788,58 +634,45 @@ export async function createNewWebSocket() {
     // net; the function is idempotent (window._newSystemTopicsSubscribed flag).
   }
   
+  // Dispatch messages to all registered handlers (survives reconnection)
   ws.addEventListener('message', (event) => {
-    let data
-
-    try {
-      data = JSON.parse(event.data)
-    } catch (e) {
-      console.warn("[NEW WS] Invalid JSON:", event.data)
-      return
-    }
-
-    // 1. Forward to registered handlers
     _newSystemHandlers.forEach(handler => {
-      try {
-        handler(event)
-      } catch (e) {
-        console.warn("[NEW WS] Handler error:", e)
-      }
+      try { handler(event) } catch(e) { console.warn("[NEW WS] Handler error:", e) }
     })
+  })
 
-    // 2. Handle balance updates safely
-    if (data?.msg_type === 'balance' && data.balance) {
-      let balanceData = data.balance
-
-      if (!balanceData.accounts && typeof balanceData.balance === 'number') {
-        const lid =
-          balanceData.loginid ||
-          localStorage.getItem('active_loginid') ||
-          'unknown'
-
-        balanceData = {
-          accounts: {
-            [lid]: {
-              balance: balanceData.balance,
-              currency: balanceData.currency || 'USD',
-              loginid: lid,
+  // Keep minimal logging for debugging
+  ws.addEventListener('message', (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.error) {
+        console.warn("[NEW WS] Error for", data.msg_type || JSON.stringify(data.echo_req).slice(0,80), ":", data.error?.message || data.error?.code)
+      } else if (data.msg_type) {
+        console.log("[NEW WS] Message:", data.msg_type)
+        // Handle balance updates — OTP WS may return single-account format instead of
+        // the multi-account { accounts: {...} } format that handleMessages expects.
+        if (data.msg_type === 'balance' && data.balance) {
+          let balanceData = data.balance
+          // Single-account format: { balance: 100, currency: 'USD', loginid: 'CR123' }
+          if (!balanceData.accounts && typeof balanceData.balance === 'number') {
+            const lid = balanceData.loginid || localStorage.getItem('active_loginid') || 'unknown'
+            balanceData = {
+              accounts: {
+                [lid]: {
+                  balance: balanceData.balance,
+                  currency: balanceData.currency || 'USD',
+                  loginid: lid,
+                }
+              }
             }
+          }
+          if (balanceData.accounts) {
+            window.dispatchEvent(new CustomEvent('new-system-balance', { detail: balanceData }))
           }
         }
       }
-
-      window.dispatchEvent(
-        new CustomEvent('new-system-balance', {
-          detail: balanceData
-        })
-      )
-    }
-
-    // 3. Optional debug logs
-    if (data?.error) {
-      console.warn("[NEW WS] Error:", data.error?.message || data.error)
-    } else if (data?.msg_type) {
-      console.log("[NEW WS]", data.msg_type)
+    } catch(e) {
+      console.warn("[NEW WS] Message parse error:", e)
     }
   })
   
@@ -850,46 +683,33 @@ export async function createNewWebSocket() {
   
   ws.onclose = () => {
     console.log("[NEW WS] Closed. Reconnecting in 3s...")
-
     window._newSystemWSReady = false
+    // Reset so balance subscription is re-sent on the new connection
     window._newSystemTopicsSubscribed = false
 
-    const err = {
-      error: {
-        code: 'DisconnectError',
-        message: 'New system WS disconnected'
-      }
-    }
-
-    _pendingRequests.forEach(r => r.reject(err))
+    // Reject all pending requests so they don't hang forever
+    const err = { error: { code: 'DisconnectError', message: 'New system WS disconnected' } }
+    _pendingRequests.forEach((entry) => entry.reject(err))
     _pendingRequests.clear()
 
-    if (!isNewLoggedIn()) return
-    if (__wsReconnecting) return
-
-    __wsReconnecting = true
+    if (!isNewLoggedIn()) return;
 
     const reconnect = (delay = 3000) => {
       setTimeout(async () => {
         try {
-          const ws = await createNewWebSocket()
-
+          const ws = await createNewWebSocket();
           if (!ws && isNewLoggedIn()) {
-            reconnect(Math.min(delay * 1.5, 30000))
-          } else {
-            __wsReconnecting = false
+            // REST call failed (accounts/OTP fetch) — retry with backoff
+            reconnect(Math.min(delay * 1.5, 30000));
           }
         } catch (e) {
           if (isNewLoggedIn()) {
-            reconnect(Math.min(delay * 1.5, 30000))
-          } else {
-            __wsReconnecting = false
+            reconnect(Math.min(delay * 1.5, 30000));
           }
         }
-      }, delay)
-    }
-
-    reconnect(3000)
+      }, delay);
+    };
+    reconnect(3000);
   }
   
   return ws

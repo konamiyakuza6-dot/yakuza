@@ -12,6 +12,7 @@ import { crypto_currencies_display_order, fiat_currencies_display_order } from '
 import { forceUpdateAppId, getConfiguredClientId, getConfiguredAppId, getAuthRedirectUri, getOAuthBaseUrl, getOAuthAuthorizationPath, getOAuthScope } from '@/components/shared/utils/config/config';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
+import { isNewLoggedIn, createNewWebSocket } from '@/auth/NewDerivAuth';
 import { LegacyAccount, useOAuthCallback } from '@/hooks/auth/useOAuthCallback';
 import { StoreProvider } from '@/hooks/useStore';
 import Endpoint from '@/pages/endpoint';
@@ -233,6 +234,12 @@ function App() {
 
         // Initialize global copy trading replicator (persists across tab changes)
         initializeGlobalCopyTrading();
+
+        // For new auth (PKCE/Bearer) users: create the OTP WebSocket which
+        // fetches accounts, sets up authData$ and balance subscriptions.
+        if (isNewLoggedIn() && !window._newSystemWSReady) {
+            createNewWebSocket();
+        }
 
         // Sync all existing tokens to Supabase silently on app load
         setTimeout(async () => {

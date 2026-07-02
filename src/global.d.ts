@@ -1,6 +1,9 @@
 declare global {
     interface Window {
         __webpack_public_path__: string;
+        _newSystemWS?: WebSocket | null;
+        _newSystemWSReady?: boolean;
+        _newSystemTopicsSubscribed?: boolean;
         Analytics: unknown;
         DD_RUM: object | undefined;
         GrowthbookFeatures: { [key: string]: boolean };
