@@ -62,27 +62,27 @@
         }
 
         &--dark {
-            background: #1e3a8a !important;
+            background: #005f5a !important;
             color: #ffffff !important;
 
             &:hover:not(.trading-bots__card--active) {
-                background: #1e40af !important;
+                background: #008079 !important;
             }
 
             &.trading-bots__card--active {
-                background: #3b82f6 !important;
-                border-color: #3b82f6 !important;
-                box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4) !important;
+                background: #f97316 !important;
+                border-color: #f97316 !important;
+                box-shadow: 0 2px 6px rgba(249, 115, 22, 0.4) !important;
             }
 
             &:not(.trading-bots__card--active) {
-                background: #1e3a8a !important;
+                background: #005f5a !important;
             }
         }
 
         &--light {
             background: #ffffff !important;
-            color: #1e3a8a !important;
+            color: #005f5a !important;
             border: 1px solid #e5e7eb !important;
 
             &:hover {

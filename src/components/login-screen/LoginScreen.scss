@@ -250,15 +250,15 @@
 
     // ── Log In button ────────────────────────────────────────────────
     &__btn--primary {
-        background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%);
+        background: linear-gradient(135deg, #008079 0%, #00a79e 60%, #f97316 100%);
         color: #ffffff;
         box-shadow:
-            0 4px 16px rgba(30, 64, 175, 0.5),
+            0 4px 16px rgba(0, 167, 158, 0.5),
             inset 0 1px 0 rgba(255, 255, 255, 0.15);
 
         &:hover:not(:disabled) {
             box-shadow:
-                0 8px 28px rgba(30, 64, 175, 0.65),
+                0 8px 28px rgba(0, 167, 158, 0.65),
                 inset 0 1px 0 rgba(255, 255, 255, 0.2);
         }
     }

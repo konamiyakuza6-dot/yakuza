@@ -1,15 +1,15 @@
 .sh-main-container {
-    --ovl-bg: #eef4fa;
+    --ovl-bg: #eef9f5;
     --ovl-surface: #ffffff;
-    --ovl-surface-soft: #f7fbff;
-    --ovl-border: rgba(114, 166, 243, 0.397);
-    --ovl-border-strong: rgba(10, 102, 194, 0.2);
-    --ovl-text: #17263c;
-    --ovl-text-soft: #60738d;
-    --ovl-text-faint: #8d9caf;
-    --ovl-primary: #0a66c2;
-    --ovl-primary-deep: #08488f;
-    --ovl-primary-soft: rgba(10, 102, 194, 0.08);
+    --ovl-surface-soft: #f0fdfb;
+    --ovl-border: rgba(0, 167, 158, 0.35);
+    --ovl-border-strong: rgba(0, 167, 158, 0.2);
+    --ovl-text: #0d2420;
+    --ovl-text-soft: #3d6b65;
+    --ovl-text-faint: #6b8c87;
+    --ovl-primary: #00a79e;
+    --ovl-primary-deep: #008079;
+    --ovl-primary-soft: rgba(0, 167, 158, 0.08);
     --ovl-success: #116e6a;
     --ovl-success-soft: rgba(21, 151, 103, 0.1);
     --ovl-danger: #da546a;
@@ -25,9 +25,9 @@
     overflow-x: hidden;
     padding: 14px 12px 20px;
     background:
-        radial-gradient(circle at top left, rgba(10, 102, 194, 0.08), transparent 25%),
-        radial-gradient(circle at top right, rgba(201, 152, 59, 0.08), transparent 18%),
-        linear-gradient(180deg, #f7fbff 0%, var(--ovl-bg) 100%);
+        radial-gradient(circle at top left, rgba(0, 167, 158, 0.08), transparent 25%),
+        radial-gradient(circle at top right, rgba(249, 115, 22, 0.08), transparent 18%),
+        linear-gradient(180deg, #f0fdfb 0%, var(--ovl-bg) 100%);
 }
 
 .sh-container,
@@ -83,7 +83,7 @@
     text-transform: uppercase !important;
     line-height: 1 !important;
     text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.04) !important;
-    background: linear-gradient(180deg, #17345b 0%, #0a66c2 70%, #3687d8 100%);
+    background: linear-gradient(180deg, #005f5a 0%, #00a79e 70%, #f97316 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -367,7 +367,7 @@
 
 .loading-new span:nth-child(2) {
     animation-delay: 0.1s;
-    background-color: #0a66c2;
+    background-color: #00a79e;
 }
 
 .loading-new span:nth-child(3) {

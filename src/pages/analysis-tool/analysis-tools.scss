@@ -65,29 +65,27 @@
         }
 
         &--dark {
-            background: #1e3a8a !important; // Dark blue background (default)
+            background: #005f5a !important;
             color: #ffffff !important;
 
             &:hover:not(.analysis-tools__card--active) {
-                background: #1e40af !important;
+                background: #008079 !important;
             }
 
-            // Only show lighter blue when THIS card is active
             &.analysis-tools__card--active {
-                background: #3b82f6 !important; // Lighter blue when active
-                border-color: #3b82f6 !important;
-                box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4) !important;
+                background: #f97316 !important;
+                border-color: #f97316 !important;
+                box-shadow: 0 2px 6px rgba(249, 115, 22, 0.4) !important;
             }
 
-            // When NOT active, ensure it stays dark blue
             &:not(.analysis-tools__card--active) {
-                background: #1e3a8a !important;
+                background: #005f5a !important;
             }
         }
 
         &--light {
             background: #ffffff !important;
-            color: #1e3a8a !important;
+            color: #005f5a !important;
             border: 1px solid #e5e7eb !important;
 
             &:hover {
@@ -96,9 +94,9 @@
 
             &.analysis-tools__card--active {
                 background: #ffffff !important;
-                border-color: #3b82f6 !important;
+                border-color: #00a79e !important;
                 border-width: 2px !important;
-                box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3) !important;
+                box-shadow: 0 2px 4px rgba(0, 167, 158, 0.3) !important;
             }
         }
 
@@ -116,7 +114,7 @@
             white-space: nowrap;
 
             .analysis-tools__card--light.analysis-tools__card--active & {
-                color: #3b82f6 !important;
+                color: #00a79e !important;
             }
         }
 
@@ -125,7 +123,7 @@
             svg,
             svg > path,
             svg > g > path {
-                fill: #3b82f6 !important;
+                fill: #00a79e !important;
             }
         }
 
@@ -134,11 +132,11 @@
             svg,
             svg > path,
             svg > g > path {
-                fill: #1e3a8a !important;
+                fill: #005f5a !important;
             }
 
             .analysis-tools__card-label {
-                color: #1e3a8a !important;
+                color: #005f5a !important;
             }
         }
     }
@@ -172,12 +170,12 @@
     &__trade-button {
         padding: 0.55rem 1.2rem;
         border-radius: 6px;
-        border: 1px solid #1e3a8a;
-        background: linear-gradient(135deg, #2563eb, #1e40af);
+        border: 1px solid #008079;
+        background: linear-gradient(135deg, #f97316, #00a79e);
         color: #ffffff;
         font-weight: 600;
         cursor: pointer;
-        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25);
+        box-shadow: 0 6px 18px rgba(0, 167, 158, 0.25);
         transition: all 0.2s ease;
 
         /* Floating button near the top-right of the analyses toolbar */

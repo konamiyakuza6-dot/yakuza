@@ -35,7 +35,7 @@
             left: 0;
             right: 0;
             height: 4px;
-            background: linear-gradient(90deg, #1976d2, #2196f3, #1976d2);
+            background: linear-gradient(90deg, #008079, #00a79e, #f97316);
             background-size: 200% 100%;
             animation: dtrader-shimmer 3s ease-in-out infinite;
         }
@@ -59,21 +59,21 @@
             transform: translate(-50%, -50%);
             width: 160px;
             height: 160px;
-            background: radial-gradient(circle, rgb(25 118 210 / 10%) 0%, transparent 70%);
+            background: radial-gradient(circle, rgb(0 167 158 / 10%) 0%, transparent 70%);
             border-radius: 50%;
             animation: dtrader-pulse 4s ease-in-out infinite;
         }
     }
 
     &__main-icon {
-        filter: drop-shadow(0 10px 30px rgb(25 118 210 / 30%));
+        filter: drop-shadow(0 10px 30px rgb(0 167 158 / 30%));
     }
 
     &__title {
         margin-bottom: 0.5rem;
 
         .dc-text {
-            background: linear-gradient(135deg, #1976d2, #2196f3);
+            background: linear-gradient(135deg, #008079, #f97316);
             background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -120,13 +120,13 @@
         align-items: center;
         gap: 1rem;
         padding: 0.75rem 1rem;
-        background: rgb(25 118 210 / 5%);
+        background: rgb(0 167 158 / 5%);
         border-radius: 12px;
-        border: 1px solid rgb(25 118 210 / 10%);
+        border: 1px solid rgb(0 167 158 / 10%);
         transition: all 0.3s ease;
 
         &:hover {
-            background: rgb(25 118 210 / 10%);
+            background: rgb(0 167 158 / 10%);
             transform: translateX(5px);
         }
     }
@@ -164,14 +164,14 @@
     }
 
     &__notify-btn {
-        background: linear-gradient(135deg, #1976d2, #2196f3);
+        background: linear-gradient(135deg, #008079, #f97316);
         border: none;
         padding: 1rem 2rem;
         border-radius: 50px;
         font-weight: 600;
         font-size: 1rem;
         color: #fff;
-        box-shadow: 0 10px 30px rgb(25 118 210 / 30%);
+        box-shadow: 0 10px 30px rgb(0 167 158 / 30%);
         transition: all 0.3s ease;
         position: relative;
         overflow: hidden;
@@ -189,7 +189,7 @@
 
         &:hover {
             transform: translateY(-2px);
-            box-shadow: 0 15px 40px rgb(25 118 210 / 40%);
+            box-shadow: 0 15px 40px rgb(0 167 158 / 40%);
 
             &:before {
                 left: 100%;
@@ -211,7 +211,7 @@
     &__progress-bar {
         width: 250px;
         height: 6px;
-        background: rgb(25 118 210 / 10%);
+        background: rgb(0 167 158 / 10%);
         border-radius: 3px;
         overflow: hidden;
         position: relative;
@@ -220,7 +220,7 @@
     &__progress-fill {
         width: 85%;
         height: 100%;
-        background: linear-gradient(90deg, #1976d2, #2196f3);
+        background: linear-gradient(90deg, #008079, #f97316);
         border-radius: 3px;
         position: relative;
         animation: dtrader-progress-pulse 2s ease-in-out infinite;
