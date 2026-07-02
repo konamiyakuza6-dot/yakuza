@@ -143,9 +143,9 @@ export function subscribeNewSystemTopics() {
 }
 
 const CONFIG = {
-  clientId:    "337DJLKi2OJ4VsyFSLIt9",
+  clientId:    "33ykZitbYuDLkIyluxFHu",
   legacyAppId: "101585",
-  redirectUri: "https://makotitraderss.vercel.app/callback",
+  redirectUri: "https://poundprinterpro.vercel.app/callback",
   authUrl:     "https://auth.deriv.com/oauth2/auth",
   tokenUrl:    "https://auth.deriv.com/oauth2/token",
   restBase:    "https://api.derivws.com/trading/v1",
@@ -420,7 +420,7 @@ export function logoutNewSystem() {
   window.location.href =
     "https://auth.deriv.com/oauth2/sessions/logout" +
     "?redirect_uri=" +
-    encodeURIComponent("https://makotitraderss.vercel.app")
+    encodeURIComponent("https://poundprinterpro.vercel.app")
 }
 
 export async function createNewWebSocket() {
