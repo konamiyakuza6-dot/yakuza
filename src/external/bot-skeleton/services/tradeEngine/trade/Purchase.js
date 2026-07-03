@@ -206,7 +206,7 @@ export default Engine =>
                     // CRITICAL: Send subscription request immediately with retry logic
                     const subscriptionPromise = doUntilDone(() => {
                         console.log('[Purchase] 📡 Sending contract subscription request...');
-                        return api_base.api.send({ proposal_open_contract: 1, contract_id: buy.contract_id });
+                        return api_base.api.send({ proposal_open_contract: 1, contract_id: buy.contract_id, subscribe: 1 });
                     });
 
                     // Wait for subscription to complete (with timeout)
@@ -223,7 +223,7 @@ export default Engine =>
                             setTimeout(() => {
                                 try {
                                     console.log('[Purchase] 🔄 Retrying contract subscription...');
-                                    api_base.api.send({ proposal_open_contract: 1, contract_id: buy.contract_id });
+                                    api_base.api.send({ proposal_open_contract: 1, contract_id: buy.contract_id, subscribe: 1 });
                                     console.log('[Purchase] ✅ Contract subscription sent (final attempt)');
                                 } catch (finalErr) {
                                     console.error('[Purchase] ❌ Final subscription attempt failed:', finalErr);
@@ -234,7 +234,7 @@ export default Engine =>
                     console.error('[Purchase] ❌ Error setting up subscription:', error);
                     // Last resort: try sending directly
                     try {
-                        api_base.api.send({ proposal_open_contract: 1, contract_id: buy.contract_id });
+                        api_base.api.send({ proposal_open_contract: 1, contract_id: buy.contract_id, subscribe: 1 });
                         console.log('[Purchase] ✅ Contract subscription sent (fallback)');
                     } catch (fallbackErr) {
                         console.error('[Purchase] ❌ Fallback subscription failed:', fallbackErr);

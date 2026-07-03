@@ -23,7 +23,12 @@ export default Engine =>
 
                     // For normal accounts: use api_base.account_info.loginid directly (like millern)
                     // For special CR accounts: account_info should already be set to demo account
-                    broadcastContract({ accountID: api_base.account_info.loginid, ...contract });
+                    // Guard against null account_info (new-auth users may not have WS authorize)
+                    const accountID =
+                        api_base.account_info?.loginid ||
+                        localStorage.getItem('active_loginid') ||
+                        '';
+                    broadcastContract({ accountID, ...contract });
 
                     if (this.isSold) {
                         this.contractId = '';

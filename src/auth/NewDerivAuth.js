@@ -634,10 +634,14 @@ export async function createNewWebSocket() {
       console.warn("[NEW WS] Could not wire legacy auth state:", e)
     }
 
-    // Subscription to balance/POC is handled by CoreStoreProvider.tsx after it
-    // registers handleMessages in the proxy bridge's otpCallbacks.
-    // _setupNewSystemApiProxy() also calls subscribeNewSystemTopics() as a safety
-    // net; the function is idempotent (window._newSystemTopicsSubscribed flag).
+    // Subscribe to balance & POC now that the OTP WS is open and
+    // _setupNewSystemApiProxy has registered the proxy bridge in _newSystemHandlers.
+    // The function is idempotent (window._newSystemTopicsSubscribed flag).
+    // We retry briefly in case _setupNewSystemApiProxy hasn't run yet.
+    if (!subscribeNewSystemTopics()) {
+      // Proxy bridge not ready yet — retry once the current call stack clears
+      setTimeout(() => subscribeNewSystemTopics(), 500)
+    }
   }
   
   // Dispatch messages to all registered handlers (survives reconnection)
