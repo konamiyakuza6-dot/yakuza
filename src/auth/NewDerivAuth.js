@@ -476,7 +476,13 @@ export async function createNewWebSocket() {
   accountsArray.forEach(acc => {
     const lid = acc.account_id || acc.id
     legacyAccountsList[lid] = lid
-    legacyClientAccounts[lid] = { loginid: lid, token: lid, currency: acc.currency || 'USD' }
+    legacyClientAccounts[lid] = {
+      loginid:    lid,
+      token:      lid,
+      currency:   acc.currency || 'USD',
+      balance:    String(parseFloat(acc.balance || '0')),
+      is_virtual: acc.account_type === 'demo' ? 1 : 0,
+    }
     legacyClientDetails.push({
       loginid: lid,
       currency: acc.currency || 'USD',

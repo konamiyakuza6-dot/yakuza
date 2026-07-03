@@ -91,13 +91,34 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
                 if (clientAccountsStr) {
                     const clientAccounts = JSON.parse(clientAccountsStr);
                     const initAccounts: Record<string, { balance: number; currency: string; loginid: string }> = {};
+                    // Pull cached_balances written by NewDerivAuth.js right after REST accounts fetch.
+                    // These are always fresher / more accurate than what clientAccounts stores.
+                    let cachedBalances: Record<string, { balance: string; currency: string; timestamp: number }> = {};
+                    try {
+                        cachedBalances = JSON.parse(sessionStorage.getItem('cached_balances') || '{}');
+                    } catch { /* ignore */ }
+
                     Object.entries(clientAccounts).forEach(([loginid, acc]: [string, any]) => {
-                        initAccounts[loginid] = {
-                            balance: parseFloat(acc.balance || '0'),
-                            currency: acc.currency || '',
-                            loginid,
-                        };
+                        const cached = cachedBalances[loginid];
+                        // Prefer cached_balances (real REST balance) over clientAccounts.balance (may be 0)
+                        const balance = cached
+                            ? parseFloat(cached.balance || '0')
+                            : parseFloat(acc.balance || '0');
+                        const currency = cached?.currency || acc.currency || '';
+                        initAccounts[loginid] = { balance, currency, loginid };
                     });
+
+                    // Also pull any extra accounts from cached_balances not yet in clientAccounts
+                    Object.entries(cachedBalances).forEach(([loginid, cached]) => {
+                        if (!initAccounts[loginid]) {
+                            initAccounts[loginid] = {
+                                balance:  parseFloat(cached.balance || '0'),
+                                currency: cached.currency || '',
+                                loginid,
+                            };
+                        }
+                    });
+
                     // Also check sessionStorage.deriv_accounts to get more details
                     const derivAccountsStr = sessionStorage.getItem('deriv_accounts');
                     if (derivAccountsStr) {
