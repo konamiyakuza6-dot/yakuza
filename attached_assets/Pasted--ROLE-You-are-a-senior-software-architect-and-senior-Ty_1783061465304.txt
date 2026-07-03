@@ -1,0 +1,549 @@
+# ROLE
+
+You are a senior software architect and senior TypeScript/React engineer specializing in the **new Deriv API**.
+
+You have been provided with the complete project as a ZIP file.
+
+Your task is **NOT** to redesign the project.
+
+Your task is to **extract, understand, and replace ONLY the Account Management and Trading architecture** using the code already present inside the uploaded project.
+
+The uploaded project is the single source of truth.
+
+---
+
+# PRIMARY OBJECTIVE
+
+Completely rebuild ONLY the Account and Trading subsystem while preserving the rest of the application.
+
+The final implementation must use the **new Deriv API only**.
+
+Do not use, restore, or reference any legacy Deriv API implementation.
+
+---
+
+# IMPORTANT
+
+Do NOT invent your own architecture.
+
+Do NOT simplify the project.
+
+Do NOT redesign the project.
+
+Instead:
+
+1. Read the uploaded project.
+2. Extract every file related to authentication, accounts, websocket trading, proposals, contracts, balances, and trading.
+3. Build a dependency graph.
+4. Replace the current implementation with the extracted architecture.
+5. Preserve compatibility with the rest of the application.
+
+The uploaded ZIP is the authoritative reference.
+
+---
+
+# ANALYSIS PHASE
+
+Before modifying anything:
+
+Perform a complete dependency analysis.
+
+Identify:
+
+• every account-related file
+
+• every trading-related file
+
+• every websocket-related file
+
+• every authentication file
+
+• every API file
+
+• every MobX store
+
+• every React hook
+
+• every utility
+
+• every service
+
+• every helper
+
+• every provider
+
+• every shared type
+
+• every constants file
+
+• every configuration file
+
+• every environment dependency
+
+• every websocket dependency
+
+• every import relationship
+
+• every export relationship
+
+Do not skip indirect dependencies.
+
+If a file is imported five levels deep, include it.
+
+Do not assume a file is unused simply because it is not directly imported by a page.
+
+---
+
+# BUILD A COMPLETE DEPENDENCY GRAPH
+
+Determine:
+
+Authentication Flow
+
+↓
+
+Access Token
+
+↓
+
+Account List
+
+↓
+
+Active Account
+
+↓
+
+OTP Generation
+
+↓
+
+Authenticated WebSocket
+
+↓
+
+Market Data
+
+↓
+
+Proposal Stream
+
+↓
+
+Purchase
+
+↓
+
+Open Contract Stream
+
+↓
+
+Portfolio
+
+↓
+
+Transaction Stream
+
+↓
+
+Balance Updates
+
+↓
+
+Logout
+
+Every dependency must be preserved.
+
+---
+
+# ACCOUNT SYSTEM
+
+Extract every file responsible for:
+
+OAuth
+
+PKCE
+
+Token Exchange
+
+Access Token
+
+Refresh Token
+
+Authorization
+
+Account Retrieval
+
+Account Switching
+
+Real Accounts
+
+Demo Accounts
+
+Account Persistence
+
+Session Persistence
+
+Active Account
+
+Logout
+
+Session Cleanup
+
+Storage
+
+Balance Synchronization
+
+Currency
+
+Permissions
+
+Landing Company
+
+Residence
+
+Authorization State
+
+Connection State
+
+MobX State
+
+Do not remove any functionality.
+
+---
+
+# TRADING SYSTEM
+
+Extract every file responsible for:
+
+WebSocket Connection
+
+WebSocket Authentication
+
+Heartbeat
+
+Reconnect Logic
+
+Proposal Requests
+
+Proposal Streams
+
+Purchase Requests
+
+Buy Requests
+
+Open Contract Stream
+
+Portfolio Stream
+
+Tick Stream
+
+Tick History
+
+Market Subscription
+
+Contract Updates
+
+Transaction Stream
+
+Balance Stream
+
+Profit/Loss
+
+Contract Status
+
+Sell
+
+Close Contract
+
+Trade History
+
+Trading Errors
+
+Subscription Cleanup
+
+---
+
+# WEBSOCKET
+
+There must be exactly one websocket connection manager.
+
+Everything else must subscribe to it.
+
+No duplicate websocket implementations.
+
+No duplicate authorization logic.
+
+No duplicate reconnect logic.
+
+No duplicate heartbeat logic.
+
+---
+
+# ACCOUNT STORE
+
+There must be one authoritative Account Store.
+
+It should own:
+
+Current Account
+
+Account List
+
+Balance
+
+Currency
+
+Login ID
+
+Authorization State
+
+Landing Company
+
+Residence
+
+Permissions
+
+No duplicated account state elsewhere.
+
+---
+
+# TRADING STORE
+
+Trading Store should own:
+
+Open Contracts
+
+Portfolio
+
+Transactions
+
+Proposals
+
+Current Proposal
+
+Current Contract
+
+Trade Status
+
+Subscriptions
+
+Purchase Status
+
+Streaming State
+
+Errors
+
+Reconnect State
+
+---
+
+# SERVICES
+
+Services should contain business logic only.
+
+Services should never contain UI logic.
+
+Services should never manipulate React components.
+
+Services should never manipulate JSX.
+
+---
+
+# COMPONENTS
+
+Components should only render data.
+
+Components should never perform business logic.
+
+Components should consume stores and services.
+
+---
+
+# HOOKS
+
+Hooks should:
+
+subscribe
+
+unsubscribe
+
+initialize
+
+cleanup
+
+never contain duplicated business logic.
+
+---
+
+# TYPES
+
+Extract every interface.
+
+Extract every type.
+
+Extract every enum.
+
+Extract every API response.
+
+Extract every websocket response.
+
+Extract every request payload.
+
+No duplicated interfaces.
+
+---
+
+# UTILITIES
+
+Extract all utilities used by Account or Trading.
+
+Examples include:
+
+storage
+
+cookies
+
+session
+
+balance formatting
+
+currency formatting
+
+proposal formatting
+
+contract formatting
+
+subscription helpers
+
+connection helpers
+
+error helpers
+
+retry helpers
+
+---
+
+# REMOVE LEGACY
+
+Remove or replace every legacy implementation.
+
+Use ONLY the new Deriv API.
+
+Do not mix legacy and new APIs.
+
+There should be exactly one authentication flow.
+
+Exactly one account flow.
+
+Exactly one websocket flow.
+
+Exactly one trading flow.
+
+---
+
+# DO NOT BREAK
+
+Do not modify unrelated UI.
+
+Do not modify pages outside Account or Trading unless required by dependencies.
+
+Do not rename public APIs unless absolutely necessary.
+
+Preserve existing behaviour.
+
+Preserve routing.
+
+Preserve MobX architecture.
+
+Preserve React architecture.
+
+---
+
+# IMPORT RULES
+
+After replacement:
+
+No broken imports.
+
+No duplicate imports.
+
+No circular imports.
+
+No unused imports.
+
+No missing exports.
+
+No duplicate exports.
+
+---
+
+# STORAGE
+
+Preserve:
+
+localStorage
+
+sessionStorage
+
+cookies
+
+token persistence
+
+account persistence
+
+active account persistence
+
+logout cleanup
+
+---
+
+# FINAL VALIDATION
+
+Before finishing, verify:
+
+✓ Project builds successfully.
+
+✓ No TypeScript errors.
+
+✓ No ESLint errors caused by replacement.
+
+✓ No unresolved imports.
+
+✓ No circular dependencies.
+
+✓ No duplicate websocket connections.
+
+✓ No duplicate account stores.
+
+✓ No duplicate trading stores.
+
+✓ Account switching works.
+
+✓ Authentication works.
+
+✓ WebSocket authorization works.
+
+✓ Proposal subscriptions work.
+
+✓ Purchase flow works.
+
+✓ Open contract streaming works.
+
+✓ Portfolio updates work.
+
+✓ Balance updates work.
+
+✓ Logout clears every relevant resource.
+
+---
+
+# OUTPUT
+
+Do not provide partial replacements.
+
+Replace the implementation completely only after dependency analysis is finished.
+
+When uncertain, prefer extracting existing logic from the uploaded project instead of generating new implementations.
+
+The uploaded ZIP is the authoritative reference. Reuse its implementation wherever possible, modernizing only as necessary to support the new Deriv API and eliminate legacy API usage.

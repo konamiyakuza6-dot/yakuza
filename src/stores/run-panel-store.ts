@@ -56,6 +56,8 @@ export default class RunPanelStore {
             setIsRunning: action,
             onRunButtonClick: action,
             is_contracy_buying_in_progress: observable,
+            is_bot_paused: observable,
+            toggleBotPause: action,
             OpenPositionLimitExceededEvent: action,
             onStopButtonClick: action,
             onClearStatClick: action,
@@ -109,6 +111,11 @@ export default class RunPanelStore {
     is_sell_requested = false;
     show_bot_stop_message = false;
     is_contracy_buying_in_progress = false;
+    is_bot_paused = false;
+
+    toggleBotPause = () => {
+        this.is_bot_paused = !this.is_bot_paused;
+    };
 
     run_id = '';
     onOkButtonClick: (() => void) | null = null;
@@ -307,6 +314,11 @@ export default class RunPanelStore {
     }
 
     onRunButtonClick = async () => {
+        if (!navigator.onLine) {
+            botNotification(localize('❌ Cannot start bot while offline. Connect to the internet first.'));
+            return;
+        }
+
         // CRITICAL: Prevent multiple simultaneous runs (especially on desktop double-clicks)
         if (this.is_running || this.is_contracy_buying_in_progress) {
             console.warn('[Run Panel] ⚠️ Bot is already running, ignoring duplicate run request');
