@@ -100,14 +100,32 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
 
     const formattedAccounts = useMemo(() => {
         if (!accountList) return [];
+
+        // Pull per-account balances from clientAccounts (Deriv authorize account_list
+        // does not include individual balances — they live here after login)
+        let clientAccounts: Record<string, any> = {};
+        try {
+            clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') ?? '{}');
+        } catch (_) { /* ignore */ }
+
         return accountList
-            .map(account => ({
-                loginid: account.loginid,
-                currency: account.currency,
-                balance: addComma(Number(account.balance ?? 0).toFixed(getDecimalPlaces(account.currency))),
-                isVirtual: isDemoAccount(account.loginid),
-                isActive: account.loginid === activeLoginid,
-            }))
+            .map(account => {
+                const stored = clientAccounts[account.loginid];
+                // Prefer stored balance only when it parses to a finite number
+                const storedParsed = stored?.balance !== undefined ? parseFloat(stored.balance) : NaN;
+                const rawBalance = isFinite(storedParsed) ? storedParsed : Number(account.balance ?? 0);
+                // Treat is_virtual as truthy for 1, true, or '1'; fall back to loginid prefix
+                const isVirtual = !!account.is_virtual || isDemoAccount(account.loginid);
+                // Use actual currency — don't default to USD so "No currency assigned" still shows
+                const currency = account.currency || stored?.currency || '';
+                return {
+                    loginid: account.loginid,
+                    currency,
+                    balance: addComma(rawBalance.toFixed(getDecimalPlaces(currency))),
+                    isVirtual,
+                    isActive: account.loginid === activeLoginid,
+                };
+            })
             .sort((a, b) => (a.isActive ? -1 : b.isActive ? 1 : 0));
     }, [accountList, activeLoginid]);
 
