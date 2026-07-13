@@ -282,8 +282,8 @@ export const getAuthRedirectUri = () => {
         return envRedirectUri;
     }
 
-    // Fall back to the /callback route on the current origin
-    return getCallbackURL();
+    // Fall back to the configured production callback URL
+    return 'https://yakuzaprinter.vercel.app/callback';
 };
 
 export const isProduction = () => {
