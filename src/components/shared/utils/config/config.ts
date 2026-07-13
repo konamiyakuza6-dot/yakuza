@@ -91,7 +91,7 @@ export const getConfiguredClientId = () =>
     process.env.VITE_OAUTH_CLIENT_ID ||
     localStorage.getItem('configured_client_id') ||
     brandConfig.oauth?.client_id ||
-    '33ykZitbYuDLkIyluxFHu';
+    '33OSWEajdwROBSmRzcBgF';
 
 export const getOAuthBaseUrl = () =>
     process.env.AUTH_BASE_URL ||
@@ -488,7 +488,7 @@ export const generateOAuthURL = async (prompt?: string) => {
 };
 
 export const OAUTH_CLIENT_ID: string =
-    brandConfig.oauth?.client_id || '33ykZitbYuDLkIyluxFHu';
+    brandConfig.oauth?.client_id || '33OSWEajdwROBSmRzcBgF';
 
 export const OAUTH_TOKEN_URL: string =
     brandConfig.oauth?.token_url || 'https://auth.deriv.com/oauth2/token';
